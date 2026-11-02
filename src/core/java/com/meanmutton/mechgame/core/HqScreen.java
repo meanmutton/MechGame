@@ -35,12 +35,14 @@ public final class HqScreen extends Screen {
         }
         float rx = lx + lw + u * 3, rw = w - rx - u * 3;
         float by = h - u * 25;
-        float bw = (rw - u * 3) / 4;
+        float bw = (rw - u * 2) / 3;
         Unit su = selected();
-        Btn refit = add(new Btn(REFIT, "Refit").set(rx, by, bw, u * 9));
-        Btn rep = add(new Btn(REPAIR, "Repair").set(rx + (bw + u), by, bw, u * 9));
-        Btn sell = add(new Btn(SELL, confirmSell ? "Confirm" : "Sell").set(rx + 2 * (bw + u), by, bw, u * 9));
-        Btn ren = add(new Btn(RENAME, "Rename").set(rx + 3 * (bw + u), by, bw, u * 9));
+        Btn refit = add(new Btn(REFIT, "CUSTOMIZE").set(rx, by - u * 11, rw, u * 10));
+        refit.sub = "weapons, armor, equipment, heat sinks, ammo";
+        refit.color = 0xFF8F6A2E;
+        Btn rep = add(new Btn(REPAIR, "Repair").set(rx, by, bw, u * 9));
+        Btn sell = add(new Btn(SELL, confirmSell ? "Confirm" : "Sell").set(rx + (bw + u), by, bw, u * 9));
+        Btn ren = add(new Btn(RENAME, "Rename").set(rx + 2 * (bw + u), by, bw, u * 9));
         refit.enabled = su != null && !su.destroyed;
         rep.enabled = su != null && su.isDamaged() && c.cash >= su.repairCost();
         if (su != null && su.isDamaged()) rep.sub = "$" + Ui.money(su.repairCost());
@@ -48,7 +50,8 @@ public final class HqScreen extends Screen {
         if (su != null) sell.sub = "+$" + Ui.money(sellValue(su));
         if (confirmSell) sell.color = 0xFF8F3A2E;
         ren.enabled = su != null;
-        rep.textSize = refit.textSize = sell.textSize = ren.textSize = u * 3f;
+        rep.textSize = sell.textSize = ren.textSize = u * 3f;
+        refit.textSize = u * 3.8f;
 
         float bbw = (w - u * 12) / 4;
         add(new Btn(MENU, c.quick ? "Quit" : "Main Menu").set(u * 3, h - u * 12, bbw, u * 9));
@@ -175,7 +178,8 @@ public final class HqScreen extends Screen {
         g.text(title, u * 3, h * 0.055f, u * 5.2f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
         String sub = c.quick ? "Difficulty " + Company.DIFFICULTY[c.difficulty] + ".  Buy units in the Market, tick up to 6 to deploy, then Fight."
                 : "Contract " + c.mission + ": " + HexMap.BIOME_NAMES[c.biome] + " region, pays $" + Ui.money(c.reward)
-                + "   |   Record " + c.wins + "W " + c.losses + "L   |   " + Company.DIFFICULTY[c.difficulty];
+                + "   |   Record " + c.wins + "W " + c.losses + "L   |   " + Company.DIFFICULTY[c.difficulty]
+                + (c.rival != null ? "   |   Enemy: $" + Ui.money(c.rival.cash) + ", " + c.rival.roster.size() + " units" : "");
         g.text(sub, u * 3, h * 0.11f, u * 2.7f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
         g.text("$" + Ui.money(c.cash), w - u * 3, h * 0.07f, u * 7, Col.MONEY, Gfx.ALIGN_RIGHT, true);
 
@@ -205,14 +209,23 @@ public final class HqScreen extends Screen {
         // detail
         Unit su = selected();
         float rx = lx + lw + u * 3, rw = w - rx - u * 3, ry = h * 0.17f;
-        Ui.panel(g, rx - u, ry, rw + u * 2, h - ry - u * 27, u * 2);
+        Ui.panel(g, rx - u, ry, rw + u * 2, h - ry - u * 38, u * 2);
         if (su != null) {
             UnitArt.draw(g, su, rx + u * 9, ry + u * 10, -40 + (float) Math.sin(t) * 10, Battle.PLAYER, u * 11, t, 1);
             g.text(su.name, rx + u * 19, ry + u * 5, u * 3.8f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
             g.text(UnitType.NAMES[su.type] + ", " + Chassis.ROLES[su.ch.role], rx + u * 19, ry + u * 9.5f, u * 2.6f, Col.TEXT, Gfx.ALIGN_LEFT, false);
             g.text("Value $" + Ui.money(su.value()), rx + u * 19, ry + u * 13.5f, u * 2.6f, Col.MONEY, Gfx.ALIGN_LEFT, false);
-            float y = Info.stats(g, su, rx + u, ry + u * 22, rw - u * 2, u * 2.4f);
-            Info.loadout(g, su, rx + u, y + u * 1.5f, rw - u * 2, u * 2.3f);
+            // compact two-column stats so the loadout fits above the Customize button
+            String[] k = {"Move", "Armor", "Structure", "Heat", "Firepower", "Range"};
+            String[] v = {su.ch.mp + " MP", su.totalArmor() + "/" + su.armorTotal, su.totalInfra() + "/" + su.totalInfraMax(),
+                    "cools " + su.dissipation() + ", cap " + su.ch.heatCap, Info.alphaDamage(su) + " dmg", Info.maxRange(su) + " hexes"};
+            float cw = (rw - u * 2) / 2;
+            for (int i = 0; i < k.length; i++) {
+                float cx = rx + u + (i % 2) * cw, cy = ry + u * 21 + (i / 2) * u * 3.1f;
+                g.text(k[i], cx, cy, u * 2.1f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+                g.text(v[i], cx + cw * 0.42f, cy, u * 2.1f, Col.TEXT, Gfx.ALIGN_LEFT, true);
+            }
+            Info.loadout(g, su, rx + u, ry + u * 29.5f, rw - u * 2, u * 1.9f);
         } else {
             g.text("Select a unit", rx + rw / 2, h * 0.4f, u * 3, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
         }

@@ -274,7 +274,7 @@ public final class RefitScreen extends Screen {
 
     public void render(Gfx g) {
         background(g);
-        g.text("WORKSHOP: " + un.name, u * 3, h * 0.055f, u * 5, Col.ACCENT, Gfx.ALIGN_LEFT, true);
+        g.text("CUSTOMIZE: " + un.name, u * 3, h * 0.055f, u * 5, Col.ACCENT, Gfx.ALIGN_LEFT, true);
         g.text(UnitType.NAMES[un.type] + " · " + Chassis.ROLES[un.ch.role] + "   |   value $" + Ui.money(un.value())
                 + "   |   weapon class up to " + Info.classTag(UnitType.MAX_CLASS[un.type]), u * 3, h * 0.105f, u * 2.6f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
         g.text("$" + Ui.money(c.cash), w - u * 3, h * 0.07f, u * 6.5f, Col.MONEY, Gfx.ALIGN_RIGHT, true);

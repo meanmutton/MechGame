@@ -43,6 +43,8 @@ public final class DesktopTest {
             shots();
         } else if (mode.equals("sim")) sim(Integer.parseInt(args[1]));
         else if (mode.equals("icons")) icons(new File(args[1]));
+        else if (mode.equals("gallery")) gallery(new File(args[1]));
+        else if (mode.equals("campaign")) campaign(Integer.parseInt(args[1]));
     }
 
     // ------------------------------------------------------------------
@@ -409,6 +411,77 @@ public final class DesktopTest {
     }
 
     // ------------------------------------------------------------------
+
+    /** Plays a campaign with the computer on both sides, checking the rival company's money and roster evolve. */
+    static void campaign(int missions) throws Exception {
+        FakePlatform fp = new FakePlatform();
+        Game g = new Game(fp, 2024);
+        g.headless = true;
+        g.newCampaign(1, 10000);
+        Company c = g.company;
+        Random r = new Random(7);
+        for (int m = 1; m <= missions; m++) {
+            // the player side: repair, then spend down to a small reserve on stock units
+            for (Unit u : c.roster) if (u.isDamaged() && c.cash >= u.repairCost()) { c.cash -= u.repairCost(); u.repairFully(); }
+            for (int tries = 0; tries < 50 && c.roster.size() < 8; tries++) {
+                Unit u = new Unit(Chassis.ALL[r.nextInt(Chassis.ALL.length)]);
+                if (u.value() <= c.cash * 3 / 4) { c.cash -= u.value(); c.roster.add(u); }
+            }
+            c.deployed.clear();
+            for (Unit u : c.roster) if (!u.destroyed && c.deployed.size() < 6) c.deployed.add(u);
+            if (c.deployed.isEmpty()) {   // the real HQ won't launch without units: buy infantry first
+                Unit u = new Unit(Chassis.ALL[0]);
+                c.cash -= u.value();
+                c.roster.add(u);
+                c.deployed.add(u);
+            }
+            int rivalCashBefore = c.rival.cash, rivalUnitsBefore = c.rival.roster.size();
+            g.prepareMission();
+            BriefingScreen bs = (BriefingScreen) g.screen();
+            java.lang.reflect.Field fm = BriefingScreen.class.getDeclaredField("map");
+            java.lang.reflect.Field fe = BriefingScreen.class.getDeclaredField("enemy");
+            fm.setAccessible(true);
+            fe.setAccessible(true);
+            @SuppressWarnings("unchecked") List<Unit> enemy = (List<Unit>) fe.get(bs);
+            for (Unit e : enemy) if (!c.rival.roster.contains(e)) throw new RuntimeException("enemy unit not from the rival roster");
+            g.startBattle((HexMap) fm.get(bs), enemy);
+            Battle b = ((BattleScreen) g.screen()).battle();
+            b.autoPlayer = true;
+            b.finishDeployment();
+            int frames = 0;
+            while (b.result == Battle.RESULT_NONE) {
+                b.update(1 / 20f);
+                if (++frames > 20 * 60 * 120) throw new RuntimeException("stalled");
+            }
+            g.finishBattle(b);
+            // the save must round-trip both companies
+            Company back = Company.parse(fp.load("company"));
+            Company rback = Company.parse(fp.load("rival"));
+            if (back == null || rback == null || rback.cash != c.rival.cash || rback.roster.size() != c.rival.roster.size())
+                throw new RuntimeException("save round trip failed");
+            String[] res = {"", "WIN", "LOSS", "DRAW", "WITHDRAW"};
+            System.out.printf("mission %2d: %-4s you $%6d %d units | rival $%6d -> $%6d, units %d -> %d, fielded %d%n", m, res[b.result],
+                    c.cash, c.roster.size(), rivalCashBefore, c.rival.cash, rivalUnitsBefore, c.rival.roster.size(), enemy.size());
+        }
+    }
+
+    /** Every design side by side, in both team colors, to check they are all distinct. */
+    static void gallery(File f) throws Exception {
+        int cols = 8, cell = 230;
+        int rows = (Chassis.ALL.length + cols - 1) / cols;
+        BufferedImage img = new BufferedImage(cols * cell, rows * cell, BufferedImage.TYPE_INT_ARGB);
+        AwtGfx g = new AwtGfx(img);
+        g.fillRect(0, 0, cols * cell, rows * cell, 0xFF5A6A4A);
+        for (int i = 0; i < Chassis.ALL.length; i++) {
+            Chassis ch = Chassis.ALL[i];
+            float cx = (i % cols) * cell + cell / 2f, cy = (i / cols) * cell + cell / 2f - 10;
+            g.fillRect((i % cols) * cell + 2, (i / cols) * cell + 2, cell - 4, cell - 4, 0xFF6E8A56);
+            UnitArt.drawChassis(g, ch, ch.stockWeapons, cx, cy, -90, i % 2 == 0 ? UnitArt.PLAYER_COLOR : UnitArt.ENEMY_COLOR, 90, 0.4f, 1, 1);
+            g.text(ch.name, cx, (i / cols) * cell + cell - 18, 17, 0xFFFFFFFF, Gfx.ALIGN_CENTER, true);
+        }
+        g.dispose();
+        ImageIO.write(img, "png", f);
+    }
 
     static void icons(File res) throws Exception {
         String[] dens = {"mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"};

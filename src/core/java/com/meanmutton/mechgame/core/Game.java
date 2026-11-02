@@ -108,7 +108,10 @@ public final class Game {
     }
 
     public void saveCompany() {
-        if (company != null && !company.quick) platform.save("company", company.serialize());
+        if (company != null && !company.quick) {
+            platform.save("company", company.serialize());
+            if (company.rival != null) platform.save("rival", company.rival.serialize());
+        }
     }
 
     public boolean hasSave() {
@@ -124,6 +127,7 @@ public final class Game {
         company.difficulty = difficulty;
         company.cash = funds;
         company.rollContract(rng);
+        company.rival = Rival.create(difficulty, funds, rng);
         saveCompany();
         setScreen(new HqScreen(this));
     }
@@ -141,6 +145,14 @@ public final class Game {
         Company c = Company.parse(platform.load("company"));
         if (c == null) return;
         company = c;
+        c.rival = Company.parse(platform.load("rival"));
+        if (c.rival == null) {
+            // saves from before rival companies existed: start one matched to this company's current worth
+            int worth = c.cash;
+            for (Unit u : c.roster) worth += u.value();
+            c.rival = Rival.create(c.difficulty, worth, rng);
+            saveCompany();
+        }
         setScreen(new HqScreen(this));
     }
 
@@ -187,8 +199,17 @@ public final class Game {
         Weather wx = Weather.random(company.biome, r);
         HexMap map = new HexMap(20, 13, company.biome, wx);
         map.generate(r);
-        List<Unit> enemy = makeEnemyForce(r);
-        setScreen(new BriefingScreen(this, map, enemy));
+        List<Unit> enemy;
+        boolean militia = false;
+        if (!company.quick && company.rival != null) {
+            militia = Rival.ensureForce(company.rival);
+            enemy = Rival.chooseForce(company.rival, company.deployedValue(), company.difficulty);
+        } else {
+            enemy = makeEnemyForce(r);
+        }
+        BriefingScreen bs = new BriefingScreen(this, map, enemy);
+        bs.militia = militia;
+        setScreen(bs);
     }
 
     public void startBattle(HexMap map, List<Unit> enemy) {
@@ -252,6 +273,40 @@ public final class Game {
             }
             if (u.destroyed) c.deployed.remove(u);
         }
+        // the rival company settles up too
+        Company rv = c.rival;
+        if (!c.quick && rv != null) {
+            float mult = Rival.incomeMult(c.difficulty);
+            // The rival's backers pay a base budget every contract, plus a bonus when it wins or draws.
+            int rpay = c.reward * 4 / 5;
+            switch (b.result) {
+                case Battle.RESULT_LOSS:
+                case Battle.RESULT_WITHDRAW: rpay += c.reward * 3 / 5; break;
+                case Battle.RESULT_DRAW: rpay += c.reward * 3 / 10; break;
+                default: break;
+            }
+            int mineLost = 0;
+            for (Unit u : b.units) if (u.team == Battle.PLAYER && u.destroyed) mineLost += u.value();
+            boolean rivalHeld = b.result != Battle.RESULT_WIN;
+            if (rivalHeld) rpay += mineLost * 15 / 100;
+            rpay = Math.round(rpay * mult);
+            rv.cash += rpay;
+            d.rivalPay = rpay;
+            for (Unit u : new ArrayList<Unit>(rv.roster)) {
+                u.shutdown = false;
+                u.staggered = false;
+                u.ionized = false;
+                u.heat = 0;
+                if (u.destroyed && !rivalHeld) {
+                    rv.roster.remove(u);   // the field is yours: its wrecks are gone
+                    d.rivalLost++;
+                }
+            }
+            rv.deployed.clear();
+            d.rivalBought.addAll(Rival.upkeep(rv, rng));
+            d.rivalCash = rv.cash;
+            d.rivalUnits = rv.roster.size();
+        }
         if (b.result == Battle.RESULT_WIN) c.wins++;
         else if (b.result == Battle.RESULT_LOSS || b.result == Battle.RESULT_WITHDRAW) c.losses++;
         c.mission++;
@@ -275,5 +330,7 @@ public final class Game {
         public final List<String> salvage = new ArrayList<String>();
         public final List<String> lost = new ArrayList<String>();
         public final List<String> wrecked = new ArrayList<String>();
+        public int rivalPay, rivalLost, rivalCash, rivalUnits;
+        public final List<String> rivalBought = new ArrayList<String>();
     }
 }

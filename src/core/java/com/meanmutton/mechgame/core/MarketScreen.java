@@ -14,6 +14,8 @@ public final class MarketScreen extends Screen {
     private boolean scrolling;
     private int scrollPointer = -1;
     private float t;
+    private String note;
+    private float noteT;
     private final List<Unit> previews = new ArrayList<Unit>();
     private float gridX, gridY, gridW, gridH;
 
@@ -74,6 +76,7 @@ public final class MarketScreen extends Screen {
     public void update(float dt) {
         super.update(dt);
         t += dt;
+        if (noteT > 0) noteT -= dt;
     }
 
     protected void onClick(Btn b) {
@@ -92,6 +95,8 @@ public final class MarketScreen extends Screen {
                 if (same > 0) u2.name = p.ch.name + " " + (same + 1);
                 c.roster.add(u2);
                 if (c.deployed.size() < Company.MAX_DEPLOY) c.deployed.add(u2);
+                note = "Bought " + u2.name + ". Customize its weapons and armor from HQ (select it, then CUSTOMIZE).";
+                noteT = 4f;
                 game.sfx(Platform.SND_BUY, 0.8f);
                 game.saveCompany();
             }
@@ -197,6 +202,11 @@ public final class MarketScreen extends Screen {
         y = Info.stats(g, p, rx + u, y, rw - u * 2, u * 2.05f);
         Info.loadout(g, p, rx + u, y + u * 0.5f, rw - u * 2, u * 2.0f);
         g.text("Double-tap a unit for full details", gridX + gridW, h * 0.11f, u * 2.4f, Col.ACCENT, Gfx.ALIGN_RIGHT, false);
+        if (noteT > 0 && note != null) {
+            float tw = g.textWidth(note, u * 2.6f, false) + u * 6;
+            g.fillRoundRect(w / 2f - tw / 2, h - u * 11, tw, u * 8, u * 2, 0xEE000000);
+            g.text(note, w / 2f, h - u * 7, u * 2.6f, Col.ACCENT, Gfx.ALIGN_CENTER, false);
+        }
         renderDetail(g);
     }
 }

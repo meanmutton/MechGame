@@ -10,6 +10,8 @@ public final class Company {
     public static final String[] DIFFICULTY = {"Easy", "Normal", "Hard"};
 
     public boolean quick;
+    /** Campaign only: the opposing company (saved separately). */
+    public Company rival;
     public int difficulty = 1;
     public int cash;
     public int mission = 1, wins, losses;

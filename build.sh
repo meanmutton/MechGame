@@ -51,6 +51,7 @@ if [ "${1:-}" = "test" ]; then
     $JAVAC -Xlint:-options -encoding UTF-8 -d "$OUT/desk" $(find src/core src/desktop -name '*.java')
     $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest validate
     $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest sim 20
+    $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest campaign 6
     $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest shots "$OUT/shots"
     echo "== screenshots in $OUT/shots"
 fi
