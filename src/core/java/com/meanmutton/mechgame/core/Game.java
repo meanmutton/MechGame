@@ -85,7 +85,7 @@ public final class Game {
                     case TOUCH_MOVE: s.touchMove((int) e[1], e[2], e[3]); break;
                     case TOUCH_UP: s.touchUp((int) e[1], e[2], e[3]); break;
                     case BACK:
-                        if (!s.back()) platform.exit();
+                        if (!s.closeOverlay() && !s.back()) platform.exit();
                         break;
                 }
             }

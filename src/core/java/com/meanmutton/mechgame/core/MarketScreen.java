@@ -100,12 +100,24 @@ public final class MarketScreen extends Screen {
             scroll = 0;
         } else if (b.id >= CARD) {
             sel = b.id - CARD;
+            if (doubleTap(Integer.valueOf(b.id))) showDetail(previews.get(sel), Battle.PLAYER, null);
         }
         relayout();
     }
 
     // drag-to-scroll the grid (a drag that starts on a card cancels the card press)
+    /** Cards scrolled under the tab row (or below the grid) must not take touches meant for other buttons. */
+    private boolean touchInGrid = true;
+
+    protected java.util.List<Btn> activeButtons() {
+        if (touchInGrid) return buttons;
+        java.util.List<Btn> l = new java.util.ArrayList<Btn>();
+        for (Btn b : buttons) if (b.id < CARD) l.add(b);
+        return l;
+    }
+
     public void touchDown(int pointer, float x, float y) {
+        touchInGrid = !(x < gridX + gridW + u && (y < gridY || y > gridY + gridH));
         downX = x;
         downY = y;
         lastY = y;
@@ -134,9 +146,11 @@ public final class MarketScreen extends Screen {
     public void touchUp(int pointer, float x, float y) {
         if (scrolling && pointer == scrollPointer) {
             scrolling = false;
+            touchInGrid = true;
             return;
         }
         super.touchUp(pointer, x, y);
+        touchInGrid = true;
     }
 
     public boolean back() {
@@ -182,5 +196,7 @@ public final class MarketScreen extends Screen {
         float y = Ui.wrap(g, p.ch.desc, rx + u, ry + u * 21, u * 2.3f, rw - u * 2, Col.TEXT) + ry + u * 21.5f;
         y = Info.stats(g, p, rx + u, y, rw - u * 2, u * 2.05f);
         Info.loadout(g, p, rx + u, y + u * 0.5f, rw - u * 2, u * 2.0f);
+        g.text("Double-tap a unit for full details", gridX + gridW, h * 0.11f, u * 2.4f, Col.ACCENT, Gfx.ALIGN_RIGHT, false);
+        renderDetail(g);
     }
 }

@@ -6,7 +6,9 @@ import java.util.List;
 /** The battlefield: map on the left (pan and pinch-zoom), unit panel on the right. */
 public final class BattleScreen extends Screen {
     private static final int END = 1, FIRE = 2, TURBO = 3, ROT_L = 4, ROT_R = 5, UNDO = 6, SMOKE = 7, COOLANT = 8,
-            REPAIR = 9, PAUSE = 10, CANCEL = 11, NEXT = 12, WROW = 100;
+            REPAIR = 9, PAUSE = 10, CANCEL = 11, NEXT = 12, START = 13, DETAILS = 14, WROW = 100, EQ = 300;
+    /** Equipment that is used by pressing a button, in button order. */
+    private static final int[] ACTIVE_EQUIP = {Equip.TURBO, Equip.SMOKE, Equip.COOLANT, Equip.REPAIR_KIT};
     private static final int P_RESUME = 201, P_WITHDRAW = 202, P_SOUND = 203, P_SPEED = 204, P_QUIT = 205, P_CONFIRM = 206;
 
     private final Battle b;
@@ -33,7 +35,11 @@ public final class BattleScreen extends Screen {
     // overlay
     private int pauseMode; // 0 none, 1 pause, 2 confirm withdraw
     private final List<Btn> overlay = new ArrayList<Btn>();
-    private Btn bEnd, bFire, bTurbo, bRotL, bRotR, bUndo, bSmoke, bCool, bRepair, bNext, bCancel;
+    private Btn bEnd, bFire, bRotL, bRotR, bUndo, bNext, bCancel, bStart, bDetails;
+    private final List<Btn> eqBtns = new ArrayList<Btn>();
+    private Unit laidOutFor;
+    private boolean laidOutDeploying;
+    private Unit deploySel;
     private float dollX, dollY, dollW, dollH, listY, rowH;
     private float flash;
 
@@ -80,22 +86,38 @@ public final class BattleScreen extends Screen {
         dollH = dollW;
         listY = dollY + dollH + u * 2;
         Unit su = panelUnit();
+        laidOutFor = su;
+        laidOutDeploying = b.deploying;
         int nw = su == null ? 0 : su.weapon.length;
-        float btnArea = u * 24;
+        // equipment buttons for the unit whose activation it is
+        List<Integer> eqIds = new ArrayList<Integer>();
+        if (su != null && su.team == Battle.PLAYER && !b.deploying) {
+            for (int id : ACTIVE_EQUIP) if (su.equipSlot(id) >= 0) eqIds.add(id);
+        }
+        float btnArea = u * 24 + (eqIds.isEmpty() ? 0 : u * 10.5f);
         rowH = nw == 0 ? 0 : Math.min(u * 6.4f, (h - listY - btnArea - u * 8) / nw);
         for (int m = 0; m < nw; m++) {
             Btn r = add(new Btn(WROW + m, "").set(x0, listY + m * rowH, pw, rowH - u * 0.5f));
             r.color = 0xFF1A2434;
         }
-        float by2 = h - u * 11, by1 = by2 - u * 11;
-        float bw5 = (pw - u * 4) / 5;
-        bTurbo = add(new Btn(TURBO, "Turbo").set(x0, by1, bw5, u * 9.5f));
-        bSmoke = add(new Btn(SMOKE, "Smoke").set(x0 + (bw5 + u), by1, bw5, u * 9.5f));
-        bRotL = add(new Btn(ROT_L, "↺").set(x0 + 2 * (bw5 + u), by1, bw5, u * 9.5f));
-        bRotR = add(new Btn(ROT_R, "↻").set(x0 + 3 * (bw5 + u), by1, bw5, u * 9.5f));
-        bUndo = add(new Btn(UNDO, "Undo").set(x0 + 4 * (bw5 + u), by1, bw5, u * 9.5f));
-        bCool = add(new Btn(COOLANT, "Coolant").set(x0 + (bw5 + u), by1, bw5, u * 9.5f));
-        bRepair = add(new Btn(REPAIR, "Patch").set(x0 + (bw5 + u), by1, bw5, u * 9.5f));
+        float by2 = h - u * 11, by1 = by2 - u * 11, by0 = by1 - u * 10.5f;
+        float bw3 = (pw - u * 2) / 3;
+        bRotL = add(new Btn(ROT_L, "↺ Turn").set(x0, by1, bw3, u * 9.5f));
+        bRotR = add(new Btn(ROT_R, "Turn ↻").set(x0 + (bw3 + u), by1, bw3, u * 9.5f));
+        bUndo = add(new Btn(UNDO, "Undo Move").set(x0 + 2 * (bw3 + u), by1, bw3, u * 9.5f));
+        eqBtns.clear();
+        if (!eqIds.isEmpty()) {
+            int n = eqIds.size();
+            float ew = (pw - u * (n - 1)) / n;
+            for (int i = 0; i < n; i++) {
+                int id = eqIds.get(i);
+                String label = id == Equip.TURBO ? "Turbo +3 MP" : (id == Equip.SMOKE ? "Smoke" : (id == Equip.COOLANT ? "Coolant -15 heat" : "Repair Kit"));
+                Btn e = add(new Btn(EQ + id, label).set(x0 + i * (ew + u), by0, ew, u * 9f));
+                e.color = 0xFF2A4A5A;
+                e.tag = id;
+                eqBtns.add(e);
+            }
+        }
         float bw2 = (pw - u) / 2;
         bFire = add(new Btn(FIRE, "FIRE").set(x0, by2, bw2, u * 9.5f));
         bFire.color = 0xFFB8322A;
@@ -103,8 +125,13 @@ public final class BattleScreen extends Screen {
         bEnd.color = 0xFF2E5D8F;
         bNext = add(new Btn(NEXT, "Next Unit").set(x0, by2, bw2, u * 9.5f));
         bCancel = add(new Btn(CANCEL, "Cancel").set(x0, by2, bw2, u * 9.5f));
+        bStart = add(new Btn(START, "START BATTLE").set(x0, by2, pw, u * 9.5f));
+        bStart.color = 0xFF2E7D4F;
+        bDetails = add(new Btn(DETAILS, "Details").set(x0 + pw - u * 16, u * 1.5f, u * 16, u * 7));
         for (Btn bb : buttons) if (bb.id < WROW) bb.textSize = u * 3f;
-        bRotL.textSize = bRotR.textSize = u * 4.5f;
+        for (Btn e : eqBtns) e.textSize = u * 2.6f;
+        bDetails.textSize = u * 2.6f;
+        bRotL.textSize = bRotR.textSize = bUndo.textSize = u * 2.8f;
         add(new Btn(PAUSE, "II").set(mapW - u * 9, u * 0.8f, u * 7.5f, u * 6.5f)).color = 0xAA1A2232;
         layoutOverlay();
         refreshButtons();
@@ -150,15 +177,13 @@ public final class BattleScreen extends Screen {
                 bb.selected = bb.enabled && m < wsel.length && wsel[m];
             }
         }
-        bTurbo.visible = mine && a.equipSlot(Equip.TURBO) >= 0;
-        bTurbo.enabled = mine && b.canTurbo(a);
-        if (bTurbo.visible) bTurbo.sub = a.eqUses[a.equipSlot(Equip.TURBO)] + " left";
-        bSmoke.visible = mine && a.equipSlot(Equip.SMOKE) >= 0;
-        bSmoke.enabled = mine && b.canUse(a, Equip.SMOKE);
-        bCool.visible = mine && !bSmoke.visible && a.equipSlot(Equip.COOLANT) >= 0;
-        bCool.enabled = mine && b.canUse(a, Equip.COOLANT);
-        bRepair.visible = mine && !bSmoke.visible && !bCool.visible && a.equipSlot(Equip.REPAIR_KIT) >= 0;
-        bRepair.enabled = mine && b.canUse(a, Equip.REPAIR_KIT);
+        for (Btn e : eqBtns) {
+            int id = (Integer) e.tag;
+            int slot = a == null ? -1 : a.equipSlot(id);
+            e.visible = mine && slot >= 0;
+            e.enabled = mine && (id == Equip.TURBO ? b.canTurbo(a) : b.canUse(a, id));
+            if (e.visible) e.sub = a.eqUses[slot] + " left";
+        }
         bRotL.visible = bRotR.visible = mine;
         bUndo.visible = mine;
         bUndo.enabled = mine && b.canUndo(a);
@@ -171,6 +196,8 @@ public final class BattleScreen extends Screen {
         bCancel.visible = false;
         bNext.visible = b.playerTurn() && b.active == null && !b.busy();
         bEnd.enabled = mine;
+        bStart.visible = b.deploying;
+        bDetails.visible = panelUnit() != null;
     }
 
     // =====================================================================
@@ -194,11 +221,7 @@ public final class BattleScreen extends Screen {
             }
         }
         // the panel layout depends on which unit is shown
-        Unit pu = panelUnit();
-        int nw = pu == null ? 0 : pu.weapon.length;
-        int rows = 0;
-        for (Btn bb : buttons) if (bb.id >= WROW) rows++;
-        if (rows != nw) layoutKeepCamera();
+        if (panelUnit() != laidOutFor || b.deploying != laidOutDeploying) layoutKeepCamera();
         refreshButtons();
     }
 
@@ -236,6 +259,14 @@ public final class BattleScreen extends Screen {
             case P_CONFIRM: pauseMode = 0; b.withdraw(); endTimer = 1.5f; return;
             case P_QUIT: game.toMenu(); return;
             case NEXT: selectNextReady(); return;
+            case DETAILS:
+                if (panelUnit() != null) showDetail(panelUnit(), panelUnit().team, b);
+                return;
+            case START:
+                b.finishDeployment();
+                deploySel = null;
+                view = null;
+                return;
             default: break;
         }
         if (!myActivation()) return;
@@ -260,6 +291,15 @@ public final class BattleScreen extends Screen {
             case ROT_R: b.rotate(a, 1); recomputeSelection(); return;
             case UNDO: b.undoMove(a); reach = null; pendingDest = -1; recomputeSelection(); return;
             default:
+                if (bt.id >= EQ) {
+                    int id = bt.id - EQ;
+                    if (id == Equip.TURBO) {
+                        b.turbo(a);
+                        reach = null;
+                        pendingDest = -1;
+                    } else b.useEquip(a, id);
+                    return;
+                }
                 if (bt.id >= WROW && bt.id < WROW + 50) {
                     int m = bt.id - WROW;
                     if (m < wsel.length) wsel[m] = !wsel[m];
@@ -332,6 +372,23 @@ public final class BattleScreen extends Screen {
         Unit at = b.unitAt(c, r);
         int k = b.map.idx(c, r);
         infoHex = -1;
+        if (at != null && doubleTap(at)) {
+            showDetail(at, at.team, b);
+            return;
+        }
+        if (b.deploying) {
+            if (at != null && at.team == Battle.PLAYER) {
+                deploySel = at;
+                view = at;
+            } else if (deploySel != null && b.canPlace(deploySel, c, r)) {
+                b.place(deploySel, c, r);
+            } else if (at != null) {
+                view = at;
+            } else {
+                infoHex = k;
+            }
+            return;
+        }
         if (b.busy()) {
             if (at != null) view = at;
             return;
@@ -542,9 +599,29 @@ public final class BattleScreen extends Screen {
             }
             for (Btn bb : overlay) Ui.button(g, bb, u);
         }
+        renderDetail(g);
     }
 
     private void renderOverlays(Gfx g) {
+        if (b.deploying) {
+            for (int c = 0; c < Math.min(Battle.DEPLOY_COLS, b.map.cols); c++) {
+                for (int r = 0; r < b.map.rows; r++) HexRender.fillHex(g, c, r, 0.94f, 0x223F8EF0);
+            }
+            if (deploySel != null) {
+                for (int c = 0; c < b.map.cols; c++) {
+                    for (int r = 0; r < b.map.rows; r++) {
+                        if (b.canPlace(deploySel, c, r) && b.unitAt(c, r) == null) HexRender.fillHex(g, c, r, 0.86f, 0x3366FF88);
+                    }
+                }
+                float p = 0.6f + 0.4f * (float) Math.sin(t * 6);
+                HexRender.strokeHex(g, deploySel.q, deploySel.r, 0.97f, 0.1f, Col.alpha(Col.ACCENT, p));
+            } else {
+                float p = 0.5f + 0.5f * (float) Math.sin(t * 5);
+                for (Unit un : b.units) {
+                    if (un.team == Battle.PLAYER && !un.destroyed) HexRender.strokeHex(g, un.q, un.r, 0.95f, 0.07f, Col.alpha(0xFF7AD8FF, 0.4f + 0.5f * p));
+                }
+            }
+        }
         Unit a = b.active;
         boolean mine = myActivation();
         if (mine && !a.moved) {
@@ -792,7 +869,8 @@ public final class BattleScreen extends Screen {
     private void renderTop(Gfx g) {
         g.fillRectVGradient(0, 0, mapW, topBar, 0xDD0A0F18, 0x880A0F18);
         String turn;
-        if (b.result != Battle.RESULT_NONE) turn = "Battle over";
+        if (b.deploying) turn = "Deployment: place your units, then Start Battle";
+        else if (b.result != Battle.RESULT_NONE) turn = "Battle over";
         else if (b.side == Battle.PLAYER) {
             int ready = 0;
             for (Unit un : b.units) if (un.team == Battle.PLAYER && !un.destroyed && !un.activated) ready++;
@@ -830,17 +908,18 @@ public final class BattleScreen extends Screen {
         Unit su = panelUnit();
         float x0 = panelX + u * 2, pw = panelW - u * 4;
         if (su == null) {
-            g.text(b.playerTurn() ? "Tap one of your units (pulsing blue)" : "Enemy is moving...", panelX + panelW / 2, h * 0.3f, u * 2.8f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
+            String msg = b.deploying ? "Tap one of your units to reposition it" : (b.playerTurn() ? "Tap one of your units (pulsing blue)" : "Enemy is moving...");
+            g.text(msg, panelX + panelW / 2, h * 0.3f, u * 2.8f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
+            if (b.deploying) g.text("Infantry can go anywhere on the map", panelX + panelW / 2, h * 0.42f, u * 2.4f, Col.ACCENT, Gfx.ALIGN_CENTER, false);
             g.text("Drag to pan, pinch to zoom", panelX + panelW / 2, h * 0.36f, u * 2.4f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
             renderButtons(g);
             return;
         }
         int tc = UnitArt.teamColor(su.team);
         g.fillRect(panelX + u * 0.4f, 0, u * 1.2f, u * 10, tc);
-        g.text(Ui.fit(g, su.name, u * 3.6f, pw - u * 10), x0 + u, u * 3.5f, u * 3.6f, Col.TEXT, Gfx.ALIGN_LEFT, true);
+        g.text(Ui.fit(g, su.name, u * 3.6f, pw - u * 19), x0 + u, u * 3.5f, u * 3.6f, Col.TEXT, Gfx.ALIGN_LEFT, true);
         g.text(UnitType.NAMES[su.type] + " · " + Chassis.ROLES[su.ch.role] + (su.team == Battle.ENEMY ? " · ENEMY" : ""),
                 x0 + u, u * 7.5f, u * 2.3f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
-        UnitArt.draw(g, su, x0 + pw - u * 4, u * 5, -90, su.team, u * 3.5f, t, 1);
         UnitArt.doll(g, su, dollX, dollY, dollW, dollH, u * 3, -1);
 
         float sx = dollX + dollW + u * 2, sw = x0 + pw - sx;
@@ -942,6 +1021,12 @@ public final class BattleScreen extends Screen {
                 b.hitChance(su, firstSel, target, why);
                 Ui.wrap(g, su.wpn(firstSel).name + ": " + why, x0, infoY + u * 4.5f, u * 1.9f, pw, Col.TEXT_DIM);
             }
+        } else if (b.deploying) {
+            String hint = deploySel == null ? "Tap one of your units to move it. Infantry can be placed on any open hex on the map; "
+                    + "other units stay in your blue zone. Double-tap any unit for full details."
+                    : (deploySel.type == UnitType.INFANTRY ? deploySel.name + ": tap any green hex on the map to place it."
+                    : deploySel.name + ": tap a green hex in your zone to place it.");
+            Ui.wrap(g, hint, x0, infoY + u, u * 2.2f, pw, Col.ACCENT);
         } else if (myActivation()) {
             String hint = !su.moved ? "Tap a green hex to move (tap twice), or tap an enemy to target it." :
                     (!su.fired ? "Tap an enemy to target it, rotate if needed, then End Turn." : "Done? Rotate or use equipment, then End Turn.");

@@ -95,6 +95,7 @@ public final class HqScreen extends Screen {
         Unit su = selected();
         if (id >= ROW && id < ROW + Company.MAX_ROSTER + 10) {
             sel = id - ROW;
+            if (doubleTap(Integer.valueOf(id)) && selected() != null) showDetail(selected(), Battle.PLAYER, null);
         } else if (id >= DEPLOY && id < DEPLOY + Company.MAX_ROSTER + 10) {
             Unit un = c.roster.get(id - DEPLOY);
             if (c.deployed.contains(un)) c.deployed.remove(un);
@@ -215,10 +216,12 @@ public final class HqScreen extends Screen {
         } else {
             g.text("Select a unit", rx + rw / 2, h * 0.4f, u * 3, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
         }
+        g.text("Double-tap a unit for full details", lx + lw, ly - u * 2.5f, u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_RIGHT, false);
         if (toastT > 0 && toast != null) {
             g.fillRoundRect(w / 2f - u * 55, h * 0.5f - u * 5, u * 110, u * 10, u * 2, 0xEE000000);
             g.text(toast, w / 2f, h * 0.5f, u * 3, Col.ACCENT, Gfx.ALIGN_CENTER, false);
         }
+        renderDetail(g);
     }
 
     private Btn find(int id) {

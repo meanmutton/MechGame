@@ -116,6 +116,13 @@ public final class DesktopTest {
         throw new RuntimeException("no button " + id + " on " + g.screen().getClass().getSimpleName());
     }
 
+    @SuppressWarnings("unchecked")
+    static List<Btn> buttonsOf(Game g) throws Exception {
+        Method m = Screen.class.getDeclaredMethod("activeButtons");
+        m.setAccessible(true);
+        return (List<Btn>) m.invoke(g.screen());
+    }
+
     static void click(Game g, int id) throws Exception {
         Btn b = find(g, id);
         tap(g, b.x + b.w / 2, b.y + b.h / 2);
@@ -150,6 +157,29 @@ public final class DesktopTest {
         click(g, 2);
         tick(g, 2);
         shot(g, "04_market");
+        // regression: after scrolling the grid, the tabs must still work
+        {
+            MarketScreen ms = (MarketScreen) g.screen();
+            Btn card = find(g, 100 + 4);
+            g.touch(Game.TOUCH_DOWN, 0, card.x + card.w / 2, card.y + card.h / 2);
+            for (int k = 1; k <= 10; k++) g.touch(Game.TOUCH_MOVE, 0, card.x + card.w / 2, card.y + card.h / 2 - k * 40);
+            g.touch(Game.TOUCH_UP, 0, card.x + card.w / 2, card.y + card.h / 2 - 400);
+            tick(g, 2);
+            shot(g, "04b_market_scrolled");
+            click(g, 12);   // "Vehicles" tab
+            boolean ok = true;
+            for (Btn b : buttonsOf(g)) if (b.id >= 100 && UnitType.isMech(Chassis.ALL[b.id - 100].type)) ok = false;
+            if (!ok) throw new RuntimeException("market tab ignored after scrolling");
+            System.out.println("market tabs after scrolling OK");
+            click(g, 10);   // back to "All"
+            // double-tap a card for the detail sheet
+            Btn c2 = find(g, 100 + 5);
+            tap(g, c2.x + c2.w / 2, c2.y + c2.h / 2);
+            c2 = find(g, 100 + 5);
+            tap(g, c2.x + c2.w / 2, c2.y + c2.h / 2);
+            shot(g, "04c_market_detail");
+            tap(g, 10, 10);   // closes
+        }
         click(g, 11);
         click(g, 100 + 29);
         shot(g, "05_market_mechs");
@@ -171,6 +201,33 @@ public final class DesktopTest {
         click(g, 2);
         BattleScreen bs = (BattleScreen) g.screen();
         Battle b = bs.battle();
+        tick(g, 20);
+        shot(g, "10_deployment");
+        // place the infantry far forward, in the middle of the map
+        Unit inf = null;
+        for (Unit un : b.units) if (un.team == Battle.PLAYER && un.type == UnitType.INFANTRY) inf = un;
+        float[] is = hexToScreen(bs, inf.q, inf.r);
+        tap(g, is[0], is[1]);
+        shot(g, "10b_deployment_infantry_selected");
+        int tc = -1, tr = -1;
+        for (int cc = b.map.cols / 2; cc < b.map.cols && tc < 0; cc++) for (int rr = 0; rr < b.map.rows && tc < 0; rr++) if (b.canPlace(inf, cc, rr) && b.unitAt(cc, rr) == null) { tc = cc; tr = rr; }
+        float[] ts0 = hexToScreen(bs, tc, tr);
+        tick(g, 40);   // avoid registering a double tap
+        tap(g, ts0[0], ts0[1]);
+        if (inf.q != tc || inf.r != tr) {
+            // the hex may be off-screen at this zoom; place it directly so the flow continues
+            b.place(inf, tc, tr);
+        }
+        System.out.println("infantry placed at " + inf.q + "," + inf.r);
+        shot(g, "10c_deployment_placed");
+        // double-tap a unit for its detail sheet
+        Unit mech = b.units.get(0);
+        float[] ms = hexToScreen(bs, mech.q, mech.r);
+        tap(g, ms[0], ms[1]);
+        tap(g, ms[0], ms[1]);
+        shot(g, "10d_unit_detail");
+        tap(g, 20, 20);
+        click(g, 13);   // start battle
         tick(g, 20);
         shot(g, "10_battle_start");
         // let the AI go if it has initiative, then select our first unit
@@ -231,6 +288,7 @@ public final class DesktopTest {
             for (int k = 0; k < 4; k++) mine.add(new Unit(Chassis.ALL[(k * 7 + i) % Chassis.ALL.length]));
             for (int k = 0; k < 4; k++) theirs.add(new Unit(Chassis.ALL[(k * 5 + 3 + i) % Chassis.ALL.length]));
             Battle bb = new Battle(g, mine, theirs, m, new Random(i), 1);
+            bb.finishDeployment();
             g.setScreen(new BattleScreen(g, bb));
             tick(g, 30);
             shot(g, "30_weather_" + Weather.NAMES[wx[i]].replace(' ', '_'));
@@ -294,13 +352,23 @@ public final class DesktopTest {
             boolean mechTest = i % 2 == 1;
             List<Unit> e = force(r, budget, mechTest ? 2 : 0);
             // value-matched: the mech side gets exactly what the vehicle side actually spent
-            List<Unit> a = force(r, mechTest ? value(e) : budget, mechTest ? 1 : 0);
+            List<Unit> a = force(r, value(e), mechTest ? 1 : 0);
+            for (int tries = 0; tries < 40 && Math.abs(value(a) - value(e)) > value(e) * 0.08f; tries++) {
+                List<Unit> alt = force(r, value(e), mechTest ? 1 : 0);
+                if (Math.abs(value(alt) - value(e)) < Math.abs(value(a) - value(e))) a = alt;
+            }
             if (a.isEmpty() || e.isEmpty()) continue;
             int biome = r.nextInt(4);
             HexMap m = new HexMap(20, 13, biome, Weather.random(biome, r));
             m.generate(r);
+            if (Boolean.getBoolean("swap")) {
+                List<Unit> tmp = a;
+                a = e;
+                e = tmp;
+            }
             Battle b = new Battle(g, a, e, m, new Random(r.nextLong()), 1);
             b.autoPlayer = true;
+            b.finishDeployment();
             int frames = 0;
             while (b.result == Battle.RESULT_NONE) {
                 long t0 = System.nanoTime();

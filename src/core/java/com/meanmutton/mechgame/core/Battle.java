@@ -72,12 +72,81 @@ public final class Battle {
             startValue[u.team] += u.value();
         }
         deploy();
-        startRound();
+        deployInfantryForward(ENEMY);
+        deploying = true;   // the player places units, then finishDeployment() starts round 1
     }
 
     // =====================================================================
     // Setup
     // =====================================================================
+
+    // =====================================================================
+    // Deployment phase
+    // =====================================================================
+
+    /** True before round 1 while the player arranges units. */
+    public boolean deploying;
+    public static final int DEPLOY_COLS = 4;
+
+    /** Infantry may be placed on any open hex; everything else stays in the home deployment zone. */
+    public boolean canPlace(Unit u, int c, int r) {
+        if (!deploying || u.team != PLAYER || u.destroyed || !map.in(c, r)) return false;
+        Unit at = unitAt(c, r);
+        if (at != null && at != u) return false;
+        if (!map.passable(u.type, c, r)) return false;
+        if (u.type == UnitType.INFANTRY) return true;
+        return c < DEPLOY_COLS;
+    }
+
+    public void place(Unit u, int c, int r) {
+        if (!canPlace(u, c, r)) return;
+        u.q = c;
+        u.r = r;
+        syncDraw(u);
+        game.sfx(Platform.SND_STEP, 0.4f);
+    }
+
+    public void finishDeployment() {
+        if (!deploying) return;
+        deploying = false;
+        if (autoPlayer) deployInfantryForward(PLAYER);
+        startRound();
+    }
+
+    /** Computer-controlled infantry dig in on cover hexes out in the field (towns and woods first). */
+    private void deployInfantryForward(int team) {
+        for (Unit u : units) {
+            if (u.team != team || u.type != UnitType.INFANTRY) continue;
+            int bestC = u.q, bestR = u.r;
+            float best = -Float.MAX_VALUE;
+            for (int c = 0; c < map.cols; c++) {
+                for (int r = 0; r < map.rows; r++) {
+                    boolean ownHalf = team == ENEMY ? c >= map.cols / 2 - 1 : c <= map.cols / 2;
+                    if (!ownHalf || unitAt(c, r) != null || !map.passable(u.type, c, r)) continue;
+                    int k = map.idx(c, r);
+                    int ter = map.terrain[k];
+                    float s = ter == HexMap.TOWN ? 6 : (ter == HexMap.HEAVY_WOODS ? 5 : (ter == HexMap.LIGHT_WOODS ? 3 : 0));
+                    s += map.elev[k] * 0.8f;
+                    int near = 99;
+                    for (Unit o : units) if (o.team != team) near = Math.min(near, HexMap.distance(c, r, o.q, o.r));
+                    if (near < 4) s -= 10;
+                    // mortars stay back; everyone else creeps toward the middle
+                    float mid = Math.abs(c - map.cols / 2f);
+                    s += u.ch.role == Chassis.R_ARTILLERY ? mid * 0.3f : -mid * 0.5f;
+                    s += rnd.nextFloat() * 2f;
+                    if (s > best) {
+                        best = s;
+                        bestC = c;
+                        bestR = r;
+                    }
+                }
+            }
+            u.q = bestC;
+            u.r = bestR;
+            u.facing = team == PLAYER ? 1 : 4;
+            syncDraw(u);
+        }
+    }
 
     private void deploy() {
         for (int team = 0; team < 2; team++) {
@@ -146,7 +215,7 @@ public final class Battle {
     }
 
     public boolean playerTurn() {
-        return result == RESULT_NONE && side == PLAYER;
+        return !deploying && result == RESULT_NONE && side == PLAYER;
     }
 
     public int mpAvailable(Unit u) {
@@ -1005,7 +1074,7 @@ public final class Battle {
         }
         if (fx.isEmpty()) fxClock = 0;
         for (Unit u : units) if (u.hitFlash > 0) u.hitFlash -= dt;
-        if (result == RESULT_NONE && (side == ENEMY || autoPlayer) && !busy()) {
+        if (!deploying && result == RESULT_NONE && (side == ENEMY || autoPlayer) && !busy()) {
             aiDelay -= dt * game.settings.aiSpeedFactor();
             if (aiDelay <= 0) Ai.step(this);
         }
