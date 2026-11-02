@@ -6,7 +6,7 @@ public final class HelpScreen extends Screen {
     private int page;
 
     private static final String[] TITLES = {"THE BASICS", "SHOOTING", "DAMAGE", "HEAT, AMMO & EQUIPMENT", "TERRAIN & WEATHER",
-            "UNITS", "CAMPAIGN", "CAMPAIGN SCENARIOS"};
+            "UNITS", "CAMPAIGN", "CAMPAIGN SCENARIOS", "TIME AND MONEY"};
     private static final String[][] PAGES = {
             {
                     "Each side fields up to 6 units on a hex map. A battle lasts up to 15 rounds.",
@@ -69,7 +69,13 @@ public final class HelpScreen extends Screen {
                     "Winning moves the front your way, usually one step (two in a Decisive Engagement, Breakthrough or Counterattack). Recon Sweeps don't move it; the winner gets the edge instead: initiative in the first round of the next battle.",
                     "Some scenarios lean toward one side: more initiative, a time-out that only asks one side to be close, a free garrison, or a bigger force allowance. The briefing says which way each one leans.",
                     "The attacker that reaches front 6 assaults the defender's base, held by garrison infantry, an armored car, a gun emplacement and a laser turret. Win, and the planet falls; lose, and it is thrown back a step. An attacker driven past its landing zone must hold its dropships in an Evacuation, or leave the planet.",
-                    "The attacker's supplies last " + Scenario.SUPPLY + " battles. After that it assaults the base if it holds front 3 or better, and falls back to its dropships if not, and that battle is the last on the planet: unless the base falls, the attacker leaves. When a planet is decided your company can move on to a new one, keeping its units and money."
+            },
+            {
+                    "Time is on the defender's side. The attacker lands with " + Scenario.ATTACKER_START + " times the starting money, but its pay stays flat, while the defender's pay grows with every battle fought on the planet, up to " + Scenario.DEFENDER_MAX_INCOME + " times.",
+                    "Money alone stops mattering once you can field your best units, so resources also become numbers: the side with more of them brings reserves beyond a scenario's unit limit. The attacker gets one extra unit in its first battles; the defender gets one once it has more resources than the attacker, and up to three as the campaign drags on.",
+                    "The enemy company's force limit follows the two sides' resources too. As the attacker, win early. As the defender, hold on: every battle makes you stronger.",
+                    "The briefing shows the battle count, both sides' income, and any reserves.",
+                    "When a planet is decided, your company can move on to a new one, on either side, keeping its units and money."
             },
     };
 

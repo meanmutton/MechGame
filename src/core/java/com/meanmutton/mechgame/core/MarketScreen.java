@@ -94,7 +94,7 @@ public final class MarketScreen extends Screen {
                 for (Unit o : c.roster) if (o.ch == p.ch) same++;
                 if (same > 0) u2.name = p.ch.name + " " + (same + 1);
                 c.roster.add(u2);
-                if (c.deployed.size() < Company.MAX_DEPLOY) c.deployed.add(u2);
+                if (c.canDeploy(u2)) c.deployed.add(u2);
                 note = "Bought " + u2.name + ". Customize its weapons and armor from HQ (select it, then CUSTOMIZE).";
                 noteT = 4f;
                 game.sfx(Platform.SND_BUY, 0.8f);
@@ -168,7 +168,7 @@ public final class MarketScreen extends Screen {
         g.text("MARKET", u * 3, h * 0.06f, u * 5.5f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
         Scenario next = game.company.next();
         if (next == null) g.text("Factory-fresh units with standard loadouts. Refit them at HQ after buying.", u * 3, h * 0.11f, u * 2.6f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
-        else g.text(Ui.fit(g, "Next: " + next.name + ". " + next.limits() + (next.force != Scenario.F_ALL ? ". \u2713 = allowed." : "."), u * 2.5f, gridW),
+        else g.text(Ui.fit(g, "Next: " + next.name + ". " + next.limits(game.company.deployLimit()) + (next.force != Scenario.F_ALL ? ". \u2713 = allowed." : "."), u * 2.5f, gridW),
                 u * 3, h * 0.11f, u * 2.5f, Col.ACCENT, Gfx.ALIGN_LEFT, false);
         g.text("$" + Ui.money(game.company.cash), w - u * 3, h * 0.07f, u * 6.5f, Col.MONEY, Gfx.ALIGN_RIGHT, true);
         g.save();

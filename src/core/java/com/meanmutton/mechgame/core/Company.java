@@ -30,7 +30,7 @@ public final class Company {
     /** 0 while the campaign runs; otherwise OUT_ATTACKER or OUT_DEFENDER, whoever took the planet. */
     public int over;
     public int planets;
-    /** Battles fought on the current planet (the attacker's supplies run out at Scenario.SUPPLY). */
+    /** Battles fought on the current planet (the defender's income grows with it). */
     public int planetBattles;
 
     // next contract
@@ -40,8 +40,8 @@ public final class Company {
 
     public void rollContract(Random r) {
         biome = r.nextInt(HexMap.BIOME_NAMES.length);
-        reward = 1600 + mission * 300 + difficulty * 400;
-        if (!quick) reward = Math.round(reward * Scenario.get(scenario).pay / 50f) * 50;
+        reward = 1600 + Math.min(mission, 20) * 300 + difficulty * 400;
+        if (!quick) reward = Math.round(reward * Scenario.get(scenario).pay * Scenario.income(side, planetBattles) / 50f) * 50;
         seed = r.nextLong();
     }
 
@@ -64,7 +64,7 @@ public final class Company {
 
     public int deployLimit() {
         Scenario s = next();
-        return s == null ? MAX_DEPLOY : Math.min(MAX_DEPLOY, s.maxUnits);
+        return s == null ? MAX_DEPLOY : s.unitLimit(side, planetBattles);
     }
 
     /** May this unit fight in the next battle? */

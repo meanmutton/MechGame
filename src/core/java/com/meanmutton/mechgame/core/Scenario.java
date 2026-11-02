@@ -18,11 +18,18 @@ public final class Scenario {
     public static final String[] SIDE_NAMES = {"Attacker", "Defender"};
     public static final int FRONT_MIN = -1, FRONT_START = 2, FRONT_BASE = 6;
     /**
-     * The attacker's supplies last this many battles on a planet. After that the campaign comes to a head:
-     * it assaults the base if it holds front 3 or better, and falls back to its dropships if not. Either way that
-     * battle is the last on the planet.
+     * Campaign economics. The attacker lands with more money (ATTACKER_START times the starting funds), but its
+     * income stays flat while the defender's grows by DEFENDER_GROWTH of a contract's pay with every battle fought
+     * on the planet (up to DEFENDER_MAX_INCOME). Resources become force: the side with more of them may field
+     * extra units beyond a scenario's limit (see extraUnits), and the enemy company's force limit follows the two
+     * sides' resources. Six top units cost about as much as a few contracts, so money alone would stop mattering;
+     * the extra units are what make a long campaign overwhelming for the defender.
      */
-    public static final int SUPPLY = 16;
+    public static final float ATTACKER_START = 1.5f, DEFENDER_GROWTH = 0.15f, DEFENDER_MAX_INCOME = 2.5f;
+    /** Most units one side can field, reserves included. */
+    public static final int MAX_FIELD = 9;
+    /** Starting funds measured in contract pays, for comparing the two sides' resources. */
+    private static final float START_IN_PAYS = 4f;
     /** What the last battle did, as the next roll sees it. */
     public static final int OUT_NONE = 0, OUT_ATTACKER = 1, OUT_DEFENDER = 2, OUT_DRAW = 3;
 
@@ -178,7 +185,12 @@ public final class Scenario {
 
     /** One-line summary of the restrictions. */
     public String limits() {
-        return "Up to " + maxUnits + " units: " + FORCE_TEXT[force] + (rounds != Battle.MAX_ROUNDS ? ", " + rounds + " rounds" : "");
+        return limits(maxUnits);
+    }
+
+    /** Restrictions with a side's own unit limit (reserves included). */
+    public String limits(int units) {
+        return "Up to " + units + " units: " + FORCE_TEXT[force] + (rounds != Battle.MAX_ROUNDS ? ", " + rounds + " rounds" : "");
     }
 
     /** Which way the scenario leans, from the player's point of view (null if it's even). */
@@ -208,11 +220,9 @@ public final class Scenario {
     }
 
     /** What a given outcome of this battle does to the campaign, in a few words. */
-    public String resultText(int front, int outcome, boolean last) {
+    public String resultText(int front, int outcome) {
         if (id == BASE_ASSAULT && outcome == OUT_ATTACKER) return "the planet falls to the attacker";
         if (id == EVACUATION && outcome == OUT_DEFENDER) return "the attacker leaves the planet";
-        if (last && id == EVACUATION && outcome == OUT_ATTACKER) return "the attacker gets away with its units, but leaves the planet";
-        if (last) return "the attacker leaves the planet";
         int f = frontAfter(front, outcome);
         if (f == front) return "the front holds";
         int steps = Math.abs(f - front);
@@ -220,23 +230,56 @@ public final class Scenario {
     }
 
     /** Stakes from the player's point of view. */
-    public String stakes(int front, int playerSide, boolean last) {
+    public String stakes(int front, int playerSide) {
         int win = playerSide == ATTACKER ? OUT_ATTACKER : OUT_DEFENDER;
         int lose = playerSide == ATTACKER ? OUT_DEFENDER : OUT_ATTACKER;
-        return (last ? "The attacker's supplies are spent: this is the last battle on this planet. " : "")
-                + "Win: " + resultText(front, win, last) + ".  Lose: " + resultText(front, lose, last) + ".";
+        return "Win: " + resultText(front, win) + ".  Lose: " + resultText(front, lose) + ".";
     }
 
-    /** With the attacker's supplies spent, a base assault or evacuation ends the campaign either way. */
-    public boolean isLast(int battlesFought) {
-        return battlesFought >= SUPPLY && (id == BASE_ASSAULT || id == EVACUATION);
+    public static float startFunds(int side) {
+        return side == ATTACKER ? ATTACKER_START : 1f;
+    }
+
+    /** Pay multiplier for a side in a planet's n-th battle (counting from 0). */
+    public static float income(int side, int battle) {
+        return side == ATTACKER ? 1f : Math.min(DEFENDER_MAX_INCOME, 1f + DEFENDER_GROWTH * battle);
+    }
+
+    /** A side's resources after this many battles: starting funds plus income so far, in contract pays. */
+    public static float resources(int side, int battles) {
+        float r = START_IN_PAYS * startFunds(side);
+        for (int i = 0; i < battles; i++) r += income(side, i);
+        return r;
+    }
+
+    /** Attacker's resources divided by the defender's after this many battles. */
+    public static float attackerRatio(int battles) {
+        return resources(ATTACKER, battles) / resources(DEFENDER, battles);
+    }
+
+    /** Reserves: extra units a side may field beyond a scenario's limit, from its share of the resources. */
+    public static int extraUnits(int side, int battles) {
+        float r = attackerRatio(battles);
+        if (side == ATTACKER) return r >= 1.4f ? 1 : 0;
+        return r < 0.65f ? 3 : (r < 0.8f ? 2 : (r < 1f ? 1 : 0));
+    }
+
+    /** How many units a side may field in this scenario, reserves included. */
+    public int unitLimit(int side, int battles) {
+        return Math.min(MAX_FIELD, maxUnits + extraUnits(side, battles));
+    }
+
+    /** Multiplier on the enemy company's force limit: its side's resources relative to yours. */
+    public static float forceFactor(int rivalSide, int battles) {
+        float ratio = attackerRatio(battles);
+        float f = rivalSide == ATTACKER ? ratio : 1f / ratio;
+        return Math.max(0.6f, Math.min(1.6f, f));
     }
 
     /** Rolls the next scenario from the front, what just happened, and a random roll. */
-    public static int roll(int front, int lastOutcome, int lastId, int battlesFought, Random r) {
+    public static int roll(int front, int lastOutcome, int lastId, Random r) {
         if (front >= FRONT_BASE) return BASE_ASSAULT;
         if (front < 0) return EVACUATION;
-        if (battlesFought >= SUPPLY) return front >= 3 ? BASE_ASSAULT : EVACUATION;
         List<Scenario> pool = new ArrayList<Scenario>();
         List<Integer> weights = new ArrayList<Integer>();
         int total = 0;

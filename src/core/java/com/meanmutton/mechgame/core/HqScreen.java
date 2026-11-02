@@ -192,7 +192,7 @@ public final class HqScreen extends Screen {
         Scenario sc = c.next();
         if (sc != null) {
             String next = "You are the " + Scenario.SIDE_NAMES[c.side].toLowerCase() + ", front " + Scenario.frontName(c.front)
-                    + ".   Next: " + sc.name + ". " + sc.limits() + ".";
+                    + ".   Next: " + sc.name + ". " + sc.limits(c.deployLimit()) + ".";
             g.text(Ui.fit(g, next, u * 2.6f, w - u * 6), u * 3, h * 0.15f, u * 2.6f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
         }
         g.text("$" + Ui.money(c.cash), w - u * 3, h * 0.07f, u * 7, Col.MONEY, Gfx.ALIGN_RIGHT, true);

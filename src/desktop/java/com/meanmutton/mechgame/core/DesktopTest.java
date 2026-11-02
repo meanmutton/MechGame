@@ -48,8 +48,13 @@ public final class DesktopTest {
         else if (mode.equals("gallery")) gallery(new File(args[1]));
         else if (mode.equals("campaign")) campaign(Integer.parseInt(args[1]));
         else if (mode.equals("odds")) {
-            scenarioOdds(2000, 0.5f);
-            scenarioOdds(2000, 0.6f);
+            System.out.print("attacker/defender resources by battle:");
+            for (int b = 0; b <= 24; b += 2) System.out.printf(" %d: %.2f%s", b, Scenario.attackerRatio(b),
+                    Scenario.extraUnits(0, b) > 0 ? " (A+" + Scenario.extraUnits(0, b) + ")" : (Scenario.extraUnits(1, b) > 0 ? " (D+" + Scenario.extraUnits(1, b) + ")" : ""));
+            System.out.println();
+            scenarioOdds(4000, 0f, false);
+            scenarioOdds(4000, 1f, false);
+            scenarioOdds(4000, 2f, true);
         }
     }
 
@@ -409,6 +414,8 @@ public final class DesktopTest {
             g.setScreen(hs);
             for (int k = 0; k < 7; k++) click(g, 3);
             shot(g, "47_help_scenarios");
+            click(g, 3);
+            shot(g, "48_help_time_and_money");
         }
         // weather variety on a smaller screen
         W = 1600;
@@ -568,12 +575,31 @@ public final class DesktopTest {
             for (Unit u : c.roster) if (u.isDamaged() && c.cash >= u.repairCost()) { c.cash -= u.repairCost(); u.repairFully(); }
             int allowed = 0;
             for (Unit u : c.roster) if (!u.destroyed && c.allowed(u)) allowed++;
-            for (int tries = 0; tries < 80 && c.roster.size() < 10 && allowed < sc.maxUnits; tries++) {
-                Chassis ch = Chassis.SHOP[r.nextInt(Chassis.SHOP.length)];
-                if (!sc.allows(ch)) continue;
-                Unit u = new Unit(ch);
-                if (u.value() <= c.cash * 3 / 4) { c.cash -= u.value(); c.roster.add(u); allowed++; }
+            // buy the best allowed unit it can afford with most of its cash, a few times; with a full roster,
+            // sell the cheapest unit to make room for one at least twice as valuable (so money turns into strength)
+            for (int buys = 0; buys < 4 && allowed < c.deployLimit() + 1; buys++) {
+                Unit best = null;
+                for (Chassis ch : Chassis.SHOP) {
+                    if (!sc.allows(ch)) continue;
+                    Unit u = new Unit(ch);
+                    if (u.value() <= c.cash * 0.7f && (best == null || u.value() > best.value()) && r.nextFloat() < 0.8f) best = u;
+                }
+                if (best == null) break;
+                if (c.roster.size() >= 10) {
+                    Unit cheapest = null;
+                    for (Unit u : c.roster) if (cheapest == null || u.value() < cheapest.value()) cheapest = u;
+                    if (cheapest.value() * 2 > best.value()) break;
+                    c.cash += cheapest.destroyed ? cheapest.value() / 5 : cheapest.value() / 2;
+                    c.roster.remove(cheapest);
+                    c.deployed.remove(cheapest);
+                }
+                c.cash -= best.value();
+                c.roster.add(best);
+                allowed++;
             }
+            java.util.Collections.sort(c.roster, new java.util.Comparator<Unit>() {
+                public int compare(Unit x, Unit y) { return y.value() - x.value(); }
+            });
             if (c.noneAllowed() && !c.mustForfeit()) {   // the HQ won't offer a forfeit while one is affordable: buy the cheapest
                 Unit cheapest = null;
                 for (Chassis ch : Chassis.SHOP) {
@@ -612,7 +638,7 @@ public final class DesktopTest {
                         if (!sc.allows(e)) throw new RuntimeException("enemy " + e.name + " not allowed in " + sc.name);
                     }
                 }
-                if (fielded > sc.maxUnits) throw new RuntimeException("enemy over the unit limit");
+                if (fielded > sc.unitLimit(1 - c.side, c.planetBattles)) throw new RuntimeException("enemy over the unit limit");
                 if (fielded == 0) throw new RuntimeException("enemy fielded nothing");
                 g.startBattle((HexMap) fm.get(bs), enemy, allies);
                 Battle b = ((BattleScreen) g.screen()).battle();
@@ -642,7 +668,8 @@ public final class DesktopTest {
                 throw new RuntimeException("save round trip failed");
             if (c.over != 0) {
                 boolean playerWon = c.over == (c.side == Scenario.ATTACKER ? Scenario.OUT_ATTACKER : Scenario.OUT_DEFENDER);
-                System.out.println("== planet decided after " + (m - planetStart + 1) + " battles: " + (c.over == Scenario.OUT_ATTACKER
+                System.out.println("== planet decided after " + (m - planetStart + 1) + " battles (attacker/defender resources "
+                        + String.format(java.util.Locale.US, "%.2f", Scenario.attackerRatio(m - planetStart + 1)) + "): " + (c.over == Scenario.OUT_ATTACKER
                         ? "the attacker took it" : "the attacker left") + " (you were the " + Scenario.SIDE_NAMES[c.side].toLowerCase()
                         + ", " + (playerWon ? "won" : "lost") + ")");
                 won[c.side][c.over == Scenario.OUT_ATTACKER ? 1 : 0]++;
@@ -658,32 +685,48 @@ public final class DesktopTest {
                 + ", attacker left " + (won[0][0] + won[1][0]) + "; forfeits " + forfeits);
     }
 
-    /** Rolls many campaigns' worth of scenario sequences with coin-flip results to show how often each comes up. */
-    static void scenarioOdds(int campaigns, float attackerWinChance) {
+    /**
+     * Rolls many campaigns' worth of scenario sequences to show how often each comes up, how long campaigns run,
+     * and who takes the planet. A rough model of the economy decides each battle: the attacker's chance follows
+     * its share of the two sides' resources, R^k / (1 + R^k), where R is Scenario.attackerRatio and k says how
+     * much money matters. 10% of battles are draws.
+     */
+    static void scenarioOdds(int campaigns, float k, boolean verbose) {
         Random r = new Random(99);
         int[] seen = new int[Scenario.ALL.length];
-        int attackerTook = 0, total = 0, unfinished = 0;
-        for (int k = 0; k < campaigns; k++) {
-            int front = Scenario.FRONT_START, id = Scenario.INITIAL_DROP, last = -1;
+        int attackerTook = 0, total = 0, unfinished = 0, longest = 0;
+        int[] lengths = new int[61];
+        for (int c = 0; c < campaigns; c++) {
+            int front = Scenario.FRONT_START, id = Scenario.INITIAL_DROP, last = -1, m = 0;
             boolean done = false;
-            for (int m = 0; m < 60 && !done; m++) {
+            for (; m < 60 && !done; m++) {
                 seen[id]++;
                 total++;
+                double rk = Math.pow(Scenario.attackerRatio(m), k);
+                float p = (float) (rk / (1 + rk));
                 float roll = r.nextFloat();
-                int out = roll < 0.1f ? Scenario.OUT_DRAW : (roll < 0.1f + 0.9f * attackerWinChance ? Scenario.OUT_ATTACKER : Scenario.OUT_DEFENDER);
+                int out = roll < 0.1f ? Scenario.OUT_DRAW : (roll < 0.1f + 0.9f * p ? Scenario.OUT_ATTACKER : Scenario.OUT_DEFENDER);
                 Scenario sc = Scenario.get(id);
-                if (id == Scenario.BASE_ASSAULT && out == Scenario.OUT_ATTACKER) { attackerTook++; done = true; break; }
-                if (id == Scenario.EVACUATION && out == Scenario.OUT_DEFENDER) { done = true; break; }
-                if (sc.isLast(m)) { done = true; break; }
-                front = sc.frontAfter(front, out);
-                last = id;
-                id = Scenario.roll(front, out, last, m + 1, r);
+                if (id == Scenario.BASE_ASSAULT && out == Scenario.OUT_ATTACKER) { attackerTook++; done = true; }
+                else if (id == Scenario.EVACUATION && out == Scenario.OUT_DEFENDER) done = true;
+                else {
+                    front = sc.frontAfter(front, out);
+                    last = id;
+                    id = Scenario.roll(front, out, last, r);
+                }
             }
             if (!done) unfinished++;
+            longest = Math.max(longest, m);
+            lengths[m]++;
         }
-        System.out.printf("attacker wins %.0f%% of battles: attacker took %d of %d planets, %.1f battles per campaign, %d unfinished%n",
-                attackerWinChance * 100, attackerTook, campaigns, total / (float) campaigns, unfinished);
-        for (Scenario s : Scenario.ALL) System.out.printf("  %-22s %5.1f%%%n", s.name, seen[s.id] * 100f / total);
+        int median = 0, acc = 0;
+        while (acc + lengths[median] < campaigns / 2) acc += lengths[median++];
+        int p90 = 0;
+        acc = 0;
+        while (acc + lengths[p90] < campaigns * 9 / 10) acc += lengths[p90++];
+        System.out.printf("money weight k=%.1f: attacker took %4.1f%% of planets; battles per planet: mean %.1f, median %d, 90%% within %d, longest %d; %d unfinished at 60%n",
+                k, attackerTook * 100f / campaigns, total / (float) campaigns, median, p90, longest, unfinished);
+        if (verbose) for (Scenario s : Scenario.ALL) System.out.printf("  %-22s %5.1f%%%n", s.name, seen[s.id] * 100f / total);
     }
 
     /** Every design side by side, in both team colors, to check they are all distinct. */

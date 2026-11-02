@@ -22,15 +22,21 @@ public final class Rival {
     }
 
     /** With a full roster and money to spare, trade the weakest unit for something much better. */
-    private static void upgrade(Company rv, List<String> bought) {
+    private static void upgrade(Company rv, List<String> bought, Scenario next) {
         for (int guard = 0; guard < 3 && rv.roster.size() >= MAX_ROSTER; guard++) {
+            // trade away what the next battle can't use first; buy only what it can
             Unit weakest = null;
-            for (Unit u : rv.roster) if (weakest == null || u.value() < weakest.value()) weakest = u;
+            for (Unit u : rv.roster) {
+                boolean better = weakest == null || (next != null && next.allows(weakest) && !next.allows(u))
+                        || ((next == null || next.allows(weakest) == next.allows(u)) && u.value() < weakest.value());
+                if (better) weakest = u;
+            }
             if (weakest == null) return;
             int budget = rv.cash * 4 / 5 + weakest.value() / 2;
             Unit pick = null;
             for (Chassis ch : Chassis.SHOP) {
                 Unit u = new Unit(ch);
+                if (next != null && !next.allows(ch)) continue;
                 if (u.value() <= budget && u.value() > weakest.value() * 1.6f && (pick == null || u.value() > pick.value())) pick = u;
             }
             if (pick == null) return;
@@ -81,13 +87,14 @@ public final class Rival {
 
     /**
      * The rival's force for a campaign scenario: only units the scenario allows, no more than its unit limit,
-     * within the engagement limit (shifted by the scenario's lean). If it owns fewer than two units that may
+     * within the engagement limit (shifted by the scenario's lean and by the two sides' resources). If it owns fewer than two units that may
      * fight, it hires stock units for this battle only, within the same limit.
      */
-    public static List<Unit> chooseForce(Company rv, int playerValue, int difficulty, Scenario sc, boolean rivalAttacks, Random r) {
-        float lean = rivalAttacks ? 1f + sc.capLean : 1f - sc.capLean;
+    public static List<Unit> chooseForce(Company rv, int playerValue, int difficulty, Scenario sc, boolean rivalAttacks, int battles, Random r) {
+        float lean = (rivalAttacks ? 1f + sc.capLean : 1f - sc.capLean)
+                * Scenario.forceFactor(rivalAttacks ? Scenario.ATTACKER : Scenario.DEFENDER, battles);
         int cap = Math.max(1200, Math.round(playerValue * engagementLimit(difficulty) * lean));
-        int want = Math.min(Company.MAX_DEPLOY, sc.maxUnits);
+        int want = sc.unitLimit(rivalAttacks ? Scenario.ATTACKER : Scenario.DEFENDER, battles);
         List<Unit> best = chooseForce(rv, Company.MAX_ROSTER);
         List<Unit> out = new ArrayList<Unit>();
         int total = 0;
@@ -99,9 +106,13 @@ public final class Rival {
         }
         rv.deployed.clear();
         rv.deployed.addAll(out);
+        // Fewer than two units that may fight: hire stock units for free. With money to spare, it also hires
+        // (for a third of their value) to fill out its limit, as long as the force limit leaves room.
         int minimum = Math.min(2, want);
-        for (int guard = 0; guard < 40 && out.size() < minimum; guard++) {
-            int room = Math.max(0, cap - total) / Math.max(1, minimum - out.size());
+        for (int guard = 0; guard < 40 && out.size() < want; guard++) {
+            boolean free = out.size() < minimum;
+            if (!free && total >= cap * 0.9f) break;
+            int room = Math.max(0, cap - total) / Math.max(1, (free ? minimum : want) - out.size());
             Unit pick = null;
             for (int tries = 0; tries < 30; tries++) {
                 Chassis ch = Chassis.SHOP[r.nextInt(Chassis.SHOP.length)];
@@ -113,6 +124,10 @@ public final class Rival {
                         || (!fits && !pickFits && u.value() < pick.value())) pick = u;
             }
             if (pick == null) break;
+            if (!free) {
+                if (pick.value() > room * 1.2f || rv.cash < pick.value() / 3) break;
+                rv.cash -= pick.value() / 3;
+            }
             pick.tag = "hired";
             out.add(pick);
             total += pick.value();
@@ -180,7 +195,15 @@ public final class Rival {
     private static void shop(Company rv, Random r, List<String> bought, Scenario next) {
         int ready = 0;
         if (next != null) for (Unit u : rv.roster) if (!u.destroyed && next.allows(u)) ready++;
-        upgrade(rv, bought);
+        // A full roster with too few units the next battle allows: sell the cheapest ones it doesn't, to make room.
+        for (int guard = 0; next != null && guard < 2 && rv.roster.size() >= MAX_ROSTER && ready < next.maxUnits; guard++) {
+            Unit sell = null;
+            for (Unit u : rv.roster) if (!next.allows(u) && (sell == null || u.value() < sell.value())) sell = u;
+            if (sell == null) break;
+            rv.roster.remove(sell);
+            rv.cash += sell.destroyed ? sell.value() / 5 : sell.value() / 2;
+        }
+        upgrade(rv, bought, next);
         for (int guard = 0; guard < 12 && rv.roster.size() < MAX_ROSTER; guard++) {
             int reserve = rv.roster.size() >= 4 ? rv.cash / 6 : 0;   // keep something back for repairs
             int budget = rv.cash - reserve;

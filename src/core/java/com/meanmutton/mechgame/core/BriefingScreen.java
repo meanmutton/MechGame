@@ -85,7 +85,8 @@ public final class BriefingScreen extends Screen {
         g.text("You deploy on the west (blue), the enemy on the east (red).", mx, by, u * 2.3f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
         if (sc != null) {
             g.text("Front: " + Scenario.frontName(c.front), mx, by + u * 3.5f, u * 2.4f, Col.TEXT, Gfx.ALIGN_LEFT, true);
-            g.text("Attacker's supplies: battle " + Math.min(Scenario.SUPPLY, c.planetBattles + 1) + " of " + Scenario.SUPPLY,
+            g.text("Battle " + (c.planetBattles + 1) + " here. Income: attacker x" + fmt(Scenario.income(Scenario.ATTACKER, c.planetBattles))
+                            + ", defender x" + fmt(Scenario.income(Scenario.DEFENDER, c.planetBattles)),
                     mx + mw, by + u * 3.5f, u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_RIGHT, false);
             Ui.frontTrack(g, mx, by + u * 5.5f, mw, u, c.front, c.side);
         }
@@ -97,8 +98,16 @@ public final class BriefingScreen extends Screen {
         y += u * 2.5f;
         y += Ui.wrap(g, map.weather.desc, rx + u, y + u, u * 2.2f, rw - u * 2, Col.TEXT) + u;
         if (sc != null) {
-            g.text(sc.limits(), rx + u, y + u * 0.5f, u * 2.2f, Col.TEXT, Gfx.ALIGN_LEFT, true);
+            g.text(sc.limits(c.deployLimit()), rx + u, y + u * 0.5f, u * 2.2f, Col.TEXT, Gfx.ALIGN_LEFT, true);
             y += u * 3;
+            int mine = Scenario.extraUnits(c.side, c.planetBattles), theirs = Scenario.extraUnits(1 - c.side, c.planetBattles);
+            if (mine > 0 || theirs > 0) {
+                String res = mine > 0 ? "Your resources bring " + mine + " reserve unit" + (mine > 1 ? "s" : "") + " beyond the scenario limit"
+                        : "The enemy's resources let it field " + theirs + " extra unit" + (theirs > 1 ? "s" : "") + " (up to "
+                        + sc.unitLimit(1 - c.side, c.planetBattles) + ")";
+                g.text(res, rx + u, y + u * 0.5f, u * 2.2f, mine > 0 ? Col.GOOD : Col.BAD, Gfx.ALIGN_LEFT, false);
+                y += u * 3;
+            }
             String lean = sc.leanText(c.side);
             if (lean != null) {
                 g.text(lean, rx + u, y + u * 0.5f, u * 2.2f, Col.ACCENT, Gfx.ALIGN_LEFT, false);
@@ -109,7 +118,7 @@ public final class BriefingScreen extends Screen {
                         u * 2.2f, c.edge == c.side ? Col.GOOD : Col.BAD, Gfx.ALIGN_LEFT, false);
                 y += u * 3;
             }
-            y += Ui.wrap(g, sc.stakes(c.front, c.side, sc.isLast(c.planetBattles)), rx + u, y + u * 0.5f, u * 2.2f, rw - u * 2, Col.TEXT) + u;
+            y += Ui.wrap(g, sc.stakes(c.front, c.side), rx + u, y + u * 0.5f, u * 2.2f, rw - u * 2, Col.TEXT) + u;
         }
         g.text("Enemy force (" + enemy.size() + ")", rx + u, y + u, u * 2.8f, Col.BAD, Gfx.ALIGN_LEFT, true);
         y += u * 4.5f;
@@ -156,8 +165,13 @@ public final class BriefingScreen extends Screen {
         renderButtons(g);
     }
 
+    static String fmt(float f) {
+        return String.format(java.util.Locale.US, "%.2f", f);
+    }
+
     private static int rivalCap(Company c, Scenario sc) {
-        float lean = sc == null ? 1f : (c.side == Scenario.DEFENDER ? 1f + sc.capLean : 1f - sc.capLean);
+        float lean = sc == null ? 1f : (c.side == Scenario.DEFENDER ? 1f + sc.capLean : 1f - sc.capLean)
+                * Scenario.forceFactor(1 - c.side, c.planetBattles);
         return Math.round(c.deployedValue() * Rival.engagementLimit(c.difficulty) * lean);
     }
 }

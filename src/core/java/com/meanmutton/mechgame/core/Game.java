@@ -129,10 +129,11 @@ public final class Game {
     public void newCampaign(int difficulty, int funds, int side) {
         company = new Company();
         company.difficulty = difficulty;
-        company.cash = funds;
         company.side = side;
+        // the attacker lands with more money; the defender's income grows faster (see Scenario)
+        company.cash = Math.round(funds * Scenario.startFunds(side));
         company.rollContract(rng);
-        company.rival = Rival.create(difficulty, funds, rng);
+        company.rival = Rival.create(difficulty, Math.round(funds * Scenario.startFunds(1 - side)), rng);
         saveCompany();
         setScreen(new HqScreen(this));
     }
@@ -151,7 +152,8 @@ public final class Game {
         c.planetBattles = 0;
         int worth = c.cash;
         for (Unit u : c.roster) worth += u.value();
-        c.rival = Rival.create(c.difficulty, worth, rng);
+        // a fresh enemy matched to your company's worth, scaled by which side has the bigger starting purse
+        c.rival = Rival.create(c.difficulty, Math.round(worth * Scenario.startFunds(1 - side) / Scenario.startFunds(side)), rng);
         c.rollContract(rng);
         c.fitDeployment();
         saveCompany();
@@ -239,7 +241,7 @@ public final class Game {
         if (sc != null && c.rival != null) {
             militia = Rival.ensureForce(c.rival);
             boolean attacking = c.side == Scenario.ATTACKER;
-            enemy = new ArrayList<Unit>(Rival.chooseForce(c.rival, c.deployedValue(), c.difficulty, sc, !attacking, r));
+            enemy = new ArrayList<Unit>(Rival.chooseForce(c.rival, c.deployedValue(), c.difficulty, sc, !attacking, c.planetBattles, r));
             allies.addAll(Scenario.garrison(attacking ? sc.attackerGarrison : sc.defenderGarrison));
             enemy.addAll(Scenario.garrison(attacking ? sc.defenderGarrison : sc.attackerGarrison));
         } else {
@@ -359,6 +361,7 @@ public final class Game {
     private void settle(Debrief d, int result, int mineLost, Battle b) {
         Company c = company;
         Company rv = c.rival;
+        int battle = c.planetBattles;
         if (!c.quick) {
             Scenario sc = c.next();
             int out = c.outcome(result);
@@ -367,14 +370,13 @@ public final class Game {
             d.frontBefore = c.front;
             if (sc.id == Scenario.BASE_ASSAULT && out == Scenario.OUT_ATTACKER) c.over = Scenario.OUT_ATTACKER;
             else if (sc.id == Scenario.EVACUATION && out == Scenario.OUT_DEFENDER) c.over = Scenario.OUT_DEFENDER;
-            else if (sc.isLast(c.planetBattles)) c.over = Scenario.OUT_DEFENDER;   // out of supplies: the attacker goes home
             else c.front = sc.frontAfter(c.front, out);
             c.edge = sc.intel && (out == Scenario.OUT_ATTACKER || out == Scenario.OUT_DEFENDER)
                     ? (out == Scenario.OUT_ATTACKER ? Scenario.ATTACKER : Scenario.DEFENDER) : -1;
             c.lastScenario = sc.id;
             c.lastOutcome = out;
             c.planetBattles++;
-            if (c.over == 0) c.scenario = Scenario.roll(c.front, out, sc.id, c.planetBattles, rng);
+            if (c.over == 0) c.scenario = Scenario.roll(c.front, out, sc.id, rng);
             d.frontAfter = c.front;
             d.over = c.over;
             boolean wonPlanet = c.over == (c.side == Scenario.ATTACKER ? Scenario.OUT_ATTACKER : Scenario.OUT_DEFENDER);
@@ -386,11 +388,14 @@ public final class Game {
         if (!c.quick && rv != null) {
             float mult = Rival.incomeMult(c.difficulty);
             // The rival's backers pay a base budget every contract, plus a bonus when it wins or draws.
-            int rpay = c.reward * 4 / 5;
+            // Your contract pay carries your side's income rate; the rival is paid at its own side's rate.
+            int base = c.reward;
+            if (!c.quick) base = Math.round(base * Scenario.income(1 - c.side, battle) / Scenario.income(c.side, battle));
+            int rpay = base * 4 / 5;
             switch (result) {
                 case Battle.RESULT_LOSS:
-                case Battle.RESULT_WITHDRAW: rpay += c.reward * 3 / 5; break;
-                case Battle.RESULT_DRAW: rpay += c.reward * 3 / 10; break;
+                case Battle.RESULT_WITHDRAW: rpay += base * 3 / 5; break;
+                case Battle.RESULT_DRAW: rpay += base * 3 / 10; break;
                 default: break;
             }
             if (result != Battle.RESULT_WIN) rpay += mineLost * 15 / 100;
