@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Builds release/Hexfront.apk without Gradle or Android Studio.
+#
+# Needs a JDK (8 or newer) plus these Debian/Ubuntu packages:
+#   sudo apt-get install aapt dalvik-exchange apksigner zipalign android-sdk-platform-23
+#
+# Usage:
+#   ./build.sh            build and sign the APK
+#   ./build.sh test       also run the desktop simulation tests and render screenshots
+set -euo pipefail
+cd "$(dirname "$0")"
+
+ANDROID_JAR=${ANDROID_JAR:-/usr/lib/android-sdk/platforms/android-23/android.jar}
+OUT=build
+APK=release/Hexfront.apk
+KEYSTORE=keystore/hexfront.keystore
+
+# javac does not need the proxy settings some environments inject.
+JAVAC="env -u JAVA_TOOL_OPTIONS javac"
+JAVA="env -u JAVA_TOOL_OPTIONS java"
+
+rm -rf "$OUT"
+mkdir -p "$OUT/classes" "$OUT/gen" release keystore
+
+echo "== compiling resources"
+aapt package -f -m -J "$OUT/gen" -M android/AndroidManifest.xml -S android/res -I "$ANDROID_JAR" \
+    -F "$OUT/unsigned.apk" -0 arsc
+
+echo "== compiling Java"
+$JAVAC -source 8 -target 8 -Xlint:-options -encoding UTF-8 -bootclasspath "$ANDROID_JAR" -d "$OUT/classes" \
+    $(find src/core src/android "$OUT/gen" -name '*.java')
+
+echo "== converting to dex"
+dalvik-exchange --dex --min-sdk-version=21 --output="$OUT/classes.dex" "$OUT/classes"
+(cd "$OUT" && aapt add unsigned.apk classes.dex > /dev/null)
+
+echo "== aligning and signing"
+if [ ! -f "$KEYSTORE" ]; then
+    keytool -genkeypair -keystore "$KEYSTORE" -storepass hexfront -keypass hexfront -alias hexfront \
+        -dname "CN=Hexfront" -keyalg RSA -keysize 2048 -validity 20000 > /dev/null 2>&1
+fi
+zipalign -f -p 4 "$OUT/unsigned.apk" "$OUT/aligned.apk"
+apksigner sign --ks "$KEYSTORE" --ks-pass pass:hexfront --key-pass pass:hexfront \
+    --out "$APK" "$OUT/aligned.apk"
+apksigner verify "$APK"
+echo "== built $APK ($(du -k "$APK" | cut -f1) KB)"
+
+if [ "${1:-}" = "test" ]; then
+    echo "== desktop tests"
+    mkdir -p "$OUT/desk"
+    $JAVAC -Xlint:-options -encoding UTF-8 -d "$OUT/desk" $(find src/core src/desktop -name '*.java')
+    $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest validate
+    $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest sim 20
+    $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest shots "$OUT/shots"
+    echo "== screenshots in $OUT/shots"
+fi

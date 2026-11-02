@@ -1,0 +1,3 @@
+build/
+*.class
+release/*.idsig
