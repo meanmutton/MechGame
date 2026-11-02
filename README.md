@@ -55,7 +55,7 @@ Armor follows your spec: tracked tanks and assault mechs carry the most, wheeled
 - **Energy:** Light Laser, Light Burst Laser, Laser, Burst Laser, Heavy Laser, Plasma Caster (heats the target), Ion Lance (scrambles targeting)
 - **Ballistic:** Chaingun, Light Cannon, Battle Cannon, Flak Repeater (anti-air), Siege Cannon, Rail Driver (armor-piercing)
 - **Missile:** Light Rocket Pod, Rocket Pod, Heavy Rocket Pod, Light / standard / Heavy Volley Missiles (long range), Seeker Rockets (lock-on)
-- **Artillery** (indirect fire on anything a friendly unit can see, with splash): Field Mortar, Howitzer, Siege Howitzer
+- **Artillery** (indirect fire on anything a friendly unit can see, with splash; most accurate at long range, very inaccurate up close): Field Mortar, Howitzer, Siege Howitzer
 - **Melee** (mechs only): Vibro Blade, Arc Sword, Battle Axe, Great Axe, Thunder Hammer (staggers)
 - **Infantry:** Assault Rifles, Satchel Charges, AT Missile Team
 

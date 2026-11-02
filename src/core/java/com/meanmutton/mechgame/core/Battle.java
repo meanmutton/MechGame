@@ -477,9 +477,16 @@ public final class Battle {
             if (a.staggered) chance += mod(why, -15, "staggered");
             return clamp(chance, 10, 95);
         }
-        if (d <= w.rShort) { /* short range */ } else if (d <= w.rMed) chance += mod(why, -15, "medium range");
-        else chance += mod(why, -30, "long range");
-        if (d < w.rMin) chance += mod(why, -15 * (w.rMin - d), "minimum range");
+        if (w.family == Wpn.F_ARTILLERY) {
+            // Artillery is the reverse of direct fire: deadly at long range, wild up close.
+            if (d < w.rMin) chance += mod(why, -55 - 10 * (w.rMin - d), "artillery inside minimum range");
+            else if (d <= w.rShort) chance += mod(why, -40, "artillery at short range");
+            else if (d <= w.rMed) chance += mod(why, -10, "artillery at medium range");
+        } else {
+            if (d <= w.rShort) { /* short range */ } else if (d <= w.rMed) chance += mod(why, -15, "medium range");
+            else chance += mod(why, -30, "long range");
+            if (d < w.rMin) chance += mod(why, -15 * (w.rMin - d), "minimum range");
+        }
         if (indirect) chance += mod(why, -20, "indirect fire");
         chance += mod(why, map.weather.hitAll, Weather.NAMES[map.weather.id].toLowerCase());
         if (d > w.rShort && d <= w.rMed) chance += mod(why, map.weather.hitMed, Weather.NAMES[map.weather.id].toLowerCase());

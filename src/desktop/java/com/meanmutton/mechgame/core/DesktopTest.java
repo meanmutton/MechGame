@@ -70,6 +70,39 @@ public final class DesktopTest {
                 bad++;
             }
         }
+        // artillery must get more accurate with range; direct fire the other way round
+        {
+            FakePlatform fp = new FakePlatform();
+            Game g = new Game(fp, 1);
+            g.headless = true;
+            HexMap m = new HexMap(20, 13, 0, new Weather(Weather.CLEAR));   // flat open ground, clear sight
+            Unit spg = new Unit(Chassis.ALL[6]);        // Thunder SPG: siege howitzer, min 4 / 5 / 11 / 18
+            Unit tank = new Unit(Chassis.ALL[4]);       // Ironhide: battle cannon 3/6/9
+            Unit target = new Unit(Chassis.ALL[15]);
+            List<Unit> mine = new ArrayList<Unit>(), theirs = new ArrayList<Unit>();
+            mine.add(spg);
+            mine.add(tank);
+            theirs.add(target);
+            Battle b = new Battle(g, mine, theirs, m, new Random(1), 1);
+            b.finishDeployment();
+            target.q = 19;
+            target.r = 6;
+            target.movedHexes = 0;
+            int[] dists = {2, 4, 8, 16};
+            int[] arty = new int[dists.length], gun = new int[dists.length];
+            for (int i = 0; i < dists.length; i++) {
+                spg.q = tank.q = 19 - dists[i];
+                spg.r = tank.r = 6;
+                spg.facing = tank.facing = 1;
+                spg.moved = tank.moved = false;
+                arty[i] = b.hitChance(spg, 0, target, null);
+                gun[i] = b.hitChance(tank, 0, target, null);
+            }
+            System.out.println("siege howitzer hit % at 2/4/8/16 hexes: " + arty[0] + " " + arty[1] + " " + arty[2] + " " + arty[3]);
+            System.out.println("battle cannon  hit % at 2/4/8/16 hexes: " + gun[0] + " " + gun[1] + " " + gun[2] + " " + gun[3]);
+            if (!(arty[3] > arty[2] && arty[2] > arty[1] && arty[1] > arty[0])) throw new RuntimeException("artillery accuracy should rise with range");
+            if (!(gun[0] > gun[2])) throw new RuntimeException("direct fire should fall with range");
+        }
         if (bad > 0) throw new RuntimeException(bad + " invalid designs");
         System.out.println("all " + Chassis.ALL.length + " designs valid");
     }
