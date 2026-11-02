@@ -360,6 +360,15 @@ public final class DesktopTest {
         }
         // campaign scenarios: restrictions at HQ, a base assault with garrison and emplacements, the end screen
         {
+            // a big roster: two columns at HQ, deployed up to the full-size limits
+            c.scenario = 4;
+            for (int id : new int[]{25, 29, 0, 1, 2, 14, 15, 16, 30, 12, 0}) c.roster.add(new Unit(Chassis.ALL[id]));
+            c.deployed.clear();
+            for (Unit un : c.roster) if (c.canDeploy(un)) c.deployed.add(un);
+            if (!c.limits().holds(c.deployed) || c.deployed.size() != c.deployLimit()) throw new RuntimeException("full-size deployment wrong: " + c.deployed.size());
+            g.toHq();
+            tick(g, 2);
+            shot(g, "39_hq_big_roster");
             c.scenario = Scenario.INITIAL_DROP;
             c.front = Scenario.FRONT_START;
             c.fitDeployment();
@@ -575,17 +584,22 @@ public final class DesktopTest {
             for (Unit u : c.roster) if (u.isDamaged() && c.cash >= u.repairCost()) { c.cash -= u.repairCost(); u.repairFully(); }
             int allowed = 0;
             for (Unit u : c.roster) if (!u.destroyed && c.allowed(u)) allowed++;
-            // buy the best allowed unit it can afford with most of its cash, a few times; with a full roster,
-            // sell the cheapest unit to make room for one at least twice as valuable (so money turns into strength)
-            for (int buys = 0; buys < 4 && allowed < c.deployLimit() + 1; buys++) {
+            // buy for the open slots: the best allowed unit of each kind (mech, vehicle, infantry) it can afford with
+            // a share of its cash; with a full roster, sell the cheapest unit to make room for a much better one
+            Limits lim = c.limits();
+            for (int buys = 0; buys < 5; buys++) {
+                int[] have = new int[4];
+                for (Unit u : c.roster) if (!u.destroyed && c.allowed(u)) have[Limits.kind(u.type)]++;
+                int[] room = {lim.mechs - have[0], lim.heavy - Math.min(have[0], lim.mechs) - have[1], lim.infantry - have[2], 0};
                 Unit best = null;
                 for (Chassis ch : Chassis.SHOP) {
-                    if (!sc.allows(ch)) continue;
+                    int k = Limits.kind(ch.type);
+                    if (!sc.allows(ch) || room[k] <= 0 || (k == Limits.MECH && room[1] + room[0] <= 0)) continue;
                     Unit u = new Unit(ch);
-                    if (u.value() <= c.cash * 0.7f && (best == null || u.value() > best.value()) && r.nextFloat() < 0.8f) best = u;
+                    if (u.value() <= c.cash * 0.5f && (best == null || u.value() > best.value()) && r.nextFloat() < 0.8f) best = u;
                 }
                 if (best == null) break;
-                if (c.roster.size() >= 10) {
+                if (c.roster.size() >= Company.MAX_ROSTER - 1) {
                     Unit cheapest = null;
                     for (Unit u : c.roster) if (cheapest == null || u.value() < cheapest.value()) cheapest = u;
                     if (cheapest.value() * 2 > best.value()) break;
@@ -595,7 +609,6 @@ public final class DesktopTest {
                 }
                 c.cash -= best.value();
                 c.roster.add(best);
-                allowed++;
             }
             java.util.Collections.sort(c.roster, new java.util.Comparator<Unit>() {
                 public int compare(Unit x, Unit y) { return y.value() - x.value(); }
@@ -611,7 +624,7 @@ public final class DesktopTest {
             }
             c.deployed.clear();
             for (Unit u : c.roster) if (c.canDeploy(u) && !c.deployed.contains(u)) c.deployed.add(u);
-            if (c.deployed.size() > c.deployLimit()) throw new RuntimeException("deployed past the scenario limit");
+            if (!c.limits().holds(c.deployed)) throw new RuntimeException("deployed past the scenario limits");
             for (Unit u : c.deployed) if (!sc.allows(u)) throw new RuntimeException(u.name + " deployed in " + sc.name);
             int rivalCashBefore = c.rival.cash, rivalUnitsBefore = c.rival.roster.size(), frontBefore = c.front;
             if (c.deployed.isEmpty()) {
@@ -638,7 +651,7 @@ public final class DesktopTest {
                         if (!sc.allows(e)) throw new RuntimeException("enemy " + e.name + " not allowed in " + sc.name);
                     }
                 }
-                if (fielded > sc.unitLimit(1 - c.side, c.planetBattles)) throw new RuntimeException("enemy over the unit limit");
+                if (!sc.limitsFor(1 - c.side, c.planetBattles).holds(enemy)) throw new RuntimeException("enemy over the unit limits");
                 if (fielded == 0) throw new RuntimeException("enemy fielded nothing");
                 g.startBattle((HexMap) fm.get(bs), enemy, allies);
                 Battle b = ((BattleScreen) g.screen()).battle();

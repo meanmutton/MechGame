@@ -98,13 +98,13 @@ public final class BriefingScreen extends Screen {
         y += u * 2.5f;
         y += Ui.wrap(g, map.weather.desc, rx + u, y + u, u * 2.2f, rw - u * 2, Col.TEXT) + u;
         if (sc != null) {
-            g.text(sc.limits(c.deployLimit()), rx + u, y + u * 0.5f, u * 2.2f, Col.TEXT, Gfx.ALIGN_LEFT, true);
+            g.text(sc.limits(c.limits()), rx + u, y + u * 0.5f, u * 2.2f, Col.TEXT, Gfx.ALIGN_LEFT, true);
             y += u * 3;
             int mine = Scenario.extraUnits(c.side, c.planetBattles), theirs = Scenario.extraUnits(1 - c.side, c.planetBattles);
             if (mine > 0 || theirs > 0) {
                 String res = mine > 0 ? "Your resources bring " + mine + " reserve unit" + (mine > 1 ? "s" : "") + " beyond the scenario limit"
                         : "The enemy's resources let it field " + theirs + " extra unit" + (theirs > 1 ? "s" : "") + " (up to "
-                        + sc.unitLimit(1 - c.side, c.planetBattles) + ")";
+                        + sc.limitsFor(1 - c.side, c.planetBattles).total() + ")";
                 g.text(res, rx + u, y + u * 0.5f, u * 2.2f, mine > 0 ? Col.GOOD : Col.BAD, Gfx.ALIGN_LEFT, false);
                 y += u * 3;
             }
@@ -125,7 +125,7 @@ public final class BriefingScreen extends Screen {
         int ev = 0;
         boolean twoCols = enemy.size() > 5;
         float colW = twoCols ? (rw - u) / 2 : rw;
-        float rowH = twoCols ? u * 3.6f : u * 4.2f;
+        float rowH = twoCols ? (enemy.size() > 12 ? u * 2.8f : u * 3.6f) : u * 4.2f;
         for (int i = 0; i < enemy.size(); i++) {
             Unit e = enemy.get(i);
             float ex = rx + (twoCols ? (i % 2) * colW : 0), ey = y + (twoCols ? i / 2 : i) * rowH;
@@ -147,7 +147,8 @@ public final class BriefingScreen extends Screen {
             y += Ui.wrap(g, an.toString(), rx + u, y, u * 2.1f, rw - u * 2, Col.ACCENT);
         }
         g.text("Value: yours $" + Ui.money(c.deployedValue()) + "  vs  theirs $" + Ui.money(ev)
-                + (c.quick ? "" : "  (pay $" + Ui.money(c.reward) + " for a win)"), rx + u, y + u, u * 2.1f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+                + (c.quick || c.rival == null ? "" : " (capped at $" + Ui.money(rivalCap(c, sc)) + ")")
+                + (c.quick ? "" : ".  Pay $" + Ui.money(c.reward) + " for a win"), rx + u, y + u, u * 2.1f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
         y += u * 3.5f;
         if (!c.quick && c.rival != null) {
             int damaged = 0, hired = 0;
@@ -157,8 +158,7 @@ public final class BriefingScreen extends Screen {
             }
             String rs = "Enemy company: $" + Ui.money(c.rival.cash) + ", " + c.rival.roster.size() + " units"
                     + (damaged > 0 ? " (" + damaged + " fielded damaged)" : "")
-                    + (hired > 0 ? "; it hired " + hired + " for this fight" : "")
-                    + ". Its force is capped at $" + Ui.money(rivalCap(c, sc)) + ".";
+                    + (hired > 0 ? "; it hired " + hired + " for this fight" : "") + ".";
             y += Ui.wrap(g, rs, rx + u, y, u * 2.1f, rw - u * 2, Col.TEXT_DIM);
             if (militia) g.text("Broke and beaten, the enemy has scraped together a militia.", rx + u, y, u * 2.1f, Col.ACCENT, Gfx.ALIGN_LEFT, false);
         }

@@ -192,7 +192,7 @@ public final class Game {
         float mult = c.difficulty == 0 ? 0.75f : (c.difficulty == 1 ? 0.95f : 1.2f);
         if (!c.quick) mult *= 1f + Math.min(0.5f, (c.mission - 1) * 0.04f);
         int budget = Math.max(1500, Math.round(c.deployedValue() * mult));
-        int count = Math.min(Company.MAX_DEPLOY, Math.max(2, c.deployed.size() + (c.difficulty == 2 ? 1 : 0) + (r.nextBoolean() ? 1 : 0) - 1));
+        int count = Math.min(Limits.FULL.total(), Math.max(2, c.deployed.size() + (c.difficulty == 2 ? 1 : 0) + (r.nextBoolean() ? 1 : 0) - 1));
         List<Unit> out = new ArrayList<Unit>();
         int[] roleCount = new int[Chassis.ROLES.length];
         int remaining = budget;
@@ -204,7 +204,7 @@ public final class Game {
                 Chassis ch = Chassis.SHOP[r.nextInt(Chassis.SHOP.length)];
                 Unit u = new Unit(ch);
                 int v = u.value();
-                if (v > remaining) continue;
+                if (v > remaining || !Limits.FULL.fits(out, u)) continue;
                 float fit = 1f - Math.abs(v - per) / (float) Math.max(1, per);
                 if (roleCount[ch.role] >= 2) fit -= 0.6f;
                 if (slot == 0 && ch.role != Chassis.R_LINE && ch.role != Chassis.R_BRAWLER) fit -= 0.3f;

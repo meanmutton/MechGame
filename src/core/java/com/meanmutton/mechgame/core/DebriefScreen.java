@@ -86,7 +86,7 @@ public final class DebriefScreen extends Screen {
         y += u * 5;
         int mine = 0;
         if (b != null) for (Unit un : b.units) if (un.team == Battle.PLAYER) mine++;
-        float step = mine > 6 ? u * 3.4f : u * 5;
+        float step = Math.min(u * 5, u * 44 / Math.max(1, mine));
         for (Unit un : b == null ? new java.util.ArrayList<Unit>() : b.units) {
             if (un.team != Battle.PLAYER) continue;
             UnitArt.draw(g, un, rx + u * 3, y, -30, Battle.PLAYER, u * 2.2f, t, 1);

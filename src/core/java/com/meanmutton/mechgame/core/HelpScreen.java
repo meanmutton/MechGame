@@ -9,7 +9,7 @@ public final class HelpScreen extends Screen {
             "UNITS", "CAMPAIGN", "CAMPAIGN SCENARIOS", "TIME AND MONEY"};
     private static final String[][] PAGES = {
             {
-                    "Each side fields up to 6 units on a hex map. A battle lasts up to 15 rounds.",
+                    "Each side fields up to 4 mechs, 6 mechs and vehicles in all (VTOLs count as vehicles), and 4 infantry, on a hex map. A full-size battle lasts up to 20 rounds; campaign scenarios may set smaller limits and shorter battles.",
                     "Before the first round you deploy: tap a unit, then a green hex. Infantry can be placed on any open hex on the map (ambushes!); everything else starts in your blue zone. Then press Start Battle.",
                     "Double-tap any unit (on the map, in HQ or in the Market) for its full detail sheet: every location's armor and structure, every weapon's numbers, and what each piece of equipment does. The Details button in the battle panel does the same.",
                     "Every round, one side wins initiative. Then the sides take turns activating one unit at a time until every unit has gone.",
@@ -56,7 +56,7 @@ public final class HelpScreen extends Screen {
             },
             {
                     "Your company carries over from battle to battle: money, units, damage and spare parts.",
-                    "At HQ, tick up to 6 units to deploy, repair damage, and launch the next contract. Win to collect the full pay plus a bonus for what you destroyed, and salvage enemy weapons into your spare parts.",
+                    "At HQ, tick the units to deploy (up to the battle's limits), repair damage, and launch the next contract. Win to collect the full pay plus a bonus for what you destroyed, and salvage enemy weapons into your spare parts.",
                     "Units destroyed in a battle you win (or draw) are recovered as wrecks you can repair. Lose or withdraw and they are gone for good.",
                     "The enemy is a company too. It starts with funds like yours, is paid after every battle (more when it wins), repairs what it can afford, loses units left on a field it lost, and buys reinforcements. Beat it down and it gets poorer; let it win and it grows. HQ and the briefing show its money and roster.",
                     "To customize a unit, select it at HQ and press CUSTOMIZE. Tap any weapon mount or equipment slot to swap what's in it, and use - / + to change armor, heat sinks and ammunition, all within the unit's weight limit. Removed parts go to your spares for free reuse. The Market sells new units with factory loadouts.",

@@ -6,7 +6,9 @@ import java.util.Random;
 
 /** The player's company: money, units, spare parts, and the next contract. Saved between sessions. */
 public final class Company {
-    public static final int MAX_ROSTER = 12, MAX_DEPLOY = 6;
+    public static final int MAX_ROSTER = 18;
+    /** Most units one side can deploy: Limits.FULL plus the largest reserve. */
+    public static final int MAX_DEPLOY = 13;
     public static final String[] DIFFICULTY = {"Easy", "Normal", "Hard"};
 
     public boolean quick;
@@ -62,9 +64,23 @@ public final class Company {
         return quick ? null : Scenario.get(scenario);
     }
 
-    public int deployLimit() {
+    /** What you may deploy in the next battle (quick battles use the full-size limits). */
+    public Limits limits() {
         Scenario s = next();
-        return s == null ? MAX_DEPLOY : s.unitLimit(side, planetBattles);
+        return s == null ? Limits.FULL : s.limitsFor(side, planetBattles);
+    }
+
+    public int deployLimit() {
+        return limits().total();
+    }
+
+    /** Null if the unit may be deployed now, otherwise why not. */
+    public String deployRefusal(Unit u) {
+        if (u.destroyed) return u.name + " is wrecked.";
+        if (!allowed(u)) return u.name + " can't take part in " + next().name + ".";
+        if (deployed.contains(u)) return null;
+        String why = limits().refuse(deployed, u);
+        return why == null ? null : (next() != null ? next().name + ": " : "") + why + ".";
     }
 
     /** May this unit fight in the next battle? */
@@ -74,13 +90,16 @@ public final class Company {
     }
 
     public boolean canDeploy(Unit u) {
-        return !u.destroyed && allowed(u) && (deployed.contains(u) || deployed.size() < deployLimit());
+        return deployRefusal(u) == null;
     }
 
     /** Drops deployed units the next scenario doesn't allow, and any over its unit limit. */
     public void fitDeployment() {
-        for (Unit u : new ArrayList<Unit>(deployed)) if (u.destroyed || !allowed(u)) deployed.remove(u);
-        while (deployed.size() > deployLimit()) deployed.remove(deployed.size() - 1);
+        List<Unit> keep = new ArrayList<Unit>();
+        Limits l = limits();
+        for (Unit u : deployed) if (!u.destroyed && allowed(u) && l.fits(keep, u)) keep.add(u);
+        deployed.clear();
+        deployed.addAll(keep);
     }
 
     /** True if no unit on the roster may fight in the next scenario and none the Market sells is affordable: only a forfeit is left. */

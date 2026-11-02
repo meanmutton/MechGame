@@ -22,12 +22,10 @@ public final class Scenario {
      * income stays flat while the defender's grows by DEFENDER_GROWTH of a contract's pay with every battle fought
      * on the planet (up to DEFENDER_MAX_INCOME). Resources become force: the side with more of them may field
      * extra units beyond a scenario's limit (see extraUnits), and the enemy company's force limit follows the two
-     * sides' resources. Six top units cost about as much as a few contracts, so money alone would stop mattering;
+     * sides' resources. A force of top units costs about as much as a few contracts, so money alone would stop mattering;
      * the extra units are what make a long campaign overwhelming for the defender.
      */
     public static final float ATTACKER_START = 1.5f, DEFENDER_GROWTH = 0.15f, DEFENDER_MAX_INCOME = 2.5f;
-    /** Most units one side can field, reserves included. */
-    public static final int MAX_FIELD = 9;
     /** Starting funds measured in contract pays, for comparing the two sides' resources. */
     private static final float START_IN_PAYS = 4f;
     /** What the last battle did, as the next roll sees it. */
@@ -50,7 +48,9 @@ public final class Scenario {
 
     public final int id;
     public final String name, desc;
-    public final int force, maxUnits;
+    public final int force;
+    /** How many mechs, mechs and vehicles, and infantry each side may field (before reserves). */
+    public final Limits caps;
     private final int frontMin, frontMax, weight;
     private int cond = ANY;
     /** Chance the attacker wins initiative each round (0.5 is even). */
@@ -69,11 +69,11 @@ public final class Scenario {
     public boolean intel;
     public boolean river, town;
 
-    private Scenario(int id, String name, int force, int maxUnits, int frontMin, int frontMax, int weight, String desc) {
+    private Scenario(int id, String name, int force, Limits caps, int frontMin, int frontMax, int weight, String desc) {
         this.id = id;
         this.name = name;
         this.force = force;
-        this.maxUnits = maxUnits;
+        this.caps = caps;
         this.frontMin = frontMin;
         this.frontMax = frontMax;
         this.weight = weight;
@@ -97,66 +97,66 @@ public final class Scenario {
     public static final int INITIAL_DROP = 0, BASE_ASSAULT = 19, EVACUATION = 20;
 
     public static final Scenario[] ALL = {
-            new Scenario(0, "Initial Drop", F_DROP, 5, 99, 99, 0,
+            new Scenario(0, "Initial Drop", F_DROP, new Limits(3, 5, 0), 99, 99, 0,
                     "The attacker's dropships come down and the defender rushes to meet them. Only what lands or arrives fast is in the fight.")
-                    .rounds(12),
-            new Scenario(1, "Recon Sweep", F_SCOUT, 4, 0, 5, 10,
+                    .rounds(15),
+            new Scenario(1, "Recon Sweep", F_SCOUT, new Limits(2, 3, 2), 0, 5, 10,
                     "Scouts feel out the other side's positions. The front doesn't move, but the winner has the edge in the next battle: initiative in its first round.")
-                    .rounds(10).shift(0, 0).intel(),
-            new Scenario(2, "Probing Attack", F_LIGHT, 4, 1, 5, 8,
+                    .rounds(12).shift(0, 0).intel(),
+            new Scenario(2, "Probing Attack", F_LIGHT, new Limits(2, 4, 2), 1, 5, 8,
                     "Light forces test the defender's line. The attacker picks the moment, so it wins initiative a little more often.")
-                    .rounds(12).init(0.6f),
-            new Scenario(3, "Skirmish", F_LIGHT, 5, 0, 5, 8,
-                    "Light units clash over the ground between the lines."),
-            new Scenario(4, "Pitched Battle", F_ALL, 6, 0, 5, 14,
+                    .rounds(15).init(0.6f),
+            new Scenario(3, "Skirmish", F_LIGHT, new Limits(3, 5, 3), 0, 5, 8,
+                    "Light units clash over the ground between the lines.").rounds(15),
+            new Scenario(4, "Pitched Battle", F_ALL, new Limits(4, 6, 4), 0, 5, 14,
                     "Both sides commit their main forces."),
-            new Scenario(5, "Decisive Engagement", F_ALL, 6, 1, 4, 7,
+            new Scenario(5, "Decisive Engagement", F_ALL, new Limits(4, 6, 4), 1, 4, 7,
                     "Everything rides on this one. The front moves two steps either way, and the pay is higher.")
                     .shift(2, -2).pay(1.5f),
-            new Scenario(6, "Hold the Ridge", F_ALL, 6, 1, 5, 7,
+            new Scenario(6, "Hold the Ridge", F_ALL, new Limits(4, 6, 4), 1, 5, 7,
                     "The defender is dug in on high ground with a garrison rifle platoon. If time runs out, the defender only has to be close.")
                     .defGarrison(0).time(0.10f),
-            new Scenario(7, "Breakthrough", F_ALL, 6, 2, 5, 13,
+            new Scenario(7, "Breakthrough", F_ALL, new Limits(4, 6, 4), 2, 5, 13,
                     "The attacker presses its last win. It wins initiative more often, and the enemy's force limit shifts 15% in the attacker's favor. A win moves the front two steps.")
                     .after(AFTER_ATTACKER_WIN).init(0.6f).cap(0.15f).shift(2, -1),
-            new Scenario(8, "Counterattack", F_ALL, 6, 1, 4, 13,
+            new Scenario(8, "Counterattack", F_ALL, new Limits(4, 6, 4), 1, 4, 13,
                     "The defender strikes back while the attacker is off balance, winning initiative more often. A defender win moves the front two steps.")
                     .after(AFTER_DEFENDER_WIN).init(0.4f).shift(1, -2),
-            new Scenario(9, "Supply Raid", F_LIGHT, 4, 1, 5, 6,
+            new Scenario(9, "Supply Raid", F_LIGHT, new Limits(2, 4, 2), 1, 5, 6,
                     "Raiders hit the defender's supply lines. If time runs out, the attacker only has to be close.")
-                    .rounds(10).init(0.55f).time(-0.10f),
-            new Scenario(10, "Night Raid", F_ALL, 4, 1, 5, 5,
+                    .rounds(12).init(0.55f).time(-0.10f),
+            new Scenario(10, "Night Raid", F_ALL, new Limits(2, 4, 2), 1, 5, 5,
                     "A strike under cover of darkness. The attacker wins initiative more often.")
-                    .weather(Weather.NIGHT).init(0.6f).rounds(12),
-            new Scenario(11, "River Crossing", F_GROUND, 6, 1, 5, 6,
+                    .weather(Weather.NIGHT).init(0.6f).rounds(15),
+            new Scenario(11, "River Crossing", F_GROUND, new Limits(4, 6, 4), 1, 5, 6,
                     "The defender holds a river line. It wins initiative a little more often, and if time runs out it only has to be close.")
                     .river().init(0.45f).time(0.05f),
-            new Scenario(12, "Lance Clash", F_MECHS, 4, 1, 5, 5,
-                    "Mech against mech, nothing else on the field."),
-            new Scenario(13, "Armored Thrust", F_ARMOR, 6, 1, 5, 6,
+            new Scenario(12, "Lance Clash", F_MECHS, new Limits(4, 4, 0), 1, 5, 5,
+                    "Mech against mech, nothing else on the field.").rounds(15),
+            new Scenario(13, "Armored Thrust", F_ARMOR, new Limits(0, 6, 4), 1, 5, 6,
                     "Tanks, cars and infantry, no mechs. The enemy's force limit shifts 10% in the attacker's favor.")
                     .cap(0.10f),
-            new Scenario(14, "Air Assault", F_AIR, 4, 2, 5, 5,
+            new Scenario(14, "Air Assault", F_AIR, new Limits(0, 4, 3), 2, 5, 5,
                     "The attacker leaps ahead by air. It wins initiative more often.")
-                    .init(0.6f).rounds(10),
-            new Scenario(15, "Street Fight", F_GROUND, 5, 3, 5, 6,
+                    .init(0.6f).rounds(12),
+            new Scenario(15, "Street Fight", F_GROUND, new Limits(3, 5, 4), 3, 5, 6,
                     "A fight for a town. The defender has two garrison squads, and if time runs out it only has to be close.")
-                    .town().defGarrison(0, 1).time(0.05f),
-            new Scenario(16, "Siege Lines", F_ALL, 6, 4, 5, 6,
+                    .town().defGarrison(0, 1).time(0.05f).rounds(15),
+            new Scenario(16, "Siege Lines", F_ALL, new Limits(4, 6, 4), 4, 5, 6,
                     "The defender's outer works, covered by a gun emplacement.")
                     .defGarrison(33),
-            new Scenario(17, "Hold the Landing Zone", F_ALL, 5, 0, 1, 9,
+            new Scenario(17, "Hold the Landing Zone", F_ALL, new Limits(3, 5, 3), 0, 1, 9,
                     "Backed up against its dropships, the attacker digs in with a garrison rifle platoon. If time runs out, the attacker only has to be close.")
-                    .attGarrison(0).time(-0.10f),
-            new Scenario(18, "Storm Front", F_GROUND, 6, 0, 5, 4,
+                    .attGarrison(0).time(-0.10f).rounds(15),
+            new Scenario(18, "Storm Front", F_GROUND, new Limits(4, 6, 4), 0, 5, 4,
                     "A thunderstorm grounds the VTOLs. Everything else fights.")
                     .weather(Weather.STORM),
-            new Scenario(19, "Base Assault", F_ALL, 6, 99, 99, 0,
+            new Scenario(19, "Base Assault", F_ALL, new Limits(4, 6, 4), 99, 99, 0,
                     "The attacker reaches the defender's base: two garrison squads, an armored car, a gun emplacement and a laser turret stand with the defender. If the attacker wins, the planet falls. If not, it is thrown back a step.")
                     .defGarrison(0, 1, 15, 33, 35).shift(0, -1).pay(2f),
-            new Scenario(20, "Evacuation", F_ALL, 6, 99, 99, 0,
+            new Scenario(20, "Evacuation", F_ALL, new Limits(4, 6, 4), 99, 99, 0,
                     "The attacker is pushed back to its dropships. If the defender wins, the attacker leaves the planet. If the attacker holds (and if time runs out it only has to be close), reinforcements land and it can try again from the landing zone.")
-                    .rounds(12).time(-0.10f).shift(1, 0).pay(1.5f),
+                    .rounds(15).time(-0.10f).shift(1, 0).pay(1.5f),
     };
 
     public static Scenario get(int id) {
@@ -185,12 +185,20 @@ public final class Scenario {
 
     /** One-line summary of the restrictions. */
     public String limits() {
-        return limits(maxUnits);
+        return limits(caps);
     }
 
-    /** Restrictions with a side's own unit limit (reserves included). */
-    public String limits(int units) {
-        return "Up to " + units + " units: " + FORCE_TEXT[force] + (rounds != Battle.MAX_ROUNDS ? ", " + rounds + " rounds" : "");
+    /** Restrictions with a side's own limits (reserves included). */
+    public String limits(Limits l) {
+        boolean m = false, v = false, inf = false;
+        for (Chassis ch : Chassis.SHOP) {
+            if (!allows(ch)) continue;
+            int k = Limits.kind(ch.type);
+            if (k == Limits.MECH) m = true;
+            else if (k == Limits.VEHICLE) v = true;
+            else if (k == Limits.INFANTRY) inf = true;
+        }
+        return "Up to " + l.text(m, v, inf) + ": " + FORCE_TEXT[force] + (rounds != Battle.MAX_ROUNDS ? ", " + rounds + " rounds" : "");
     }
 
     /** Which way the scenario leans, from the player's point of view (null if it's even). */
@@ -264,9 +272,9 @@ public final class Scenario {
         return r < 0.65f ? 3 : (r < 0.8f ? 2 : (r < 1f ? 1 : 0));
     }
 
-    /** How many units a side may field in this scenario, reserves included. */
-    public int unitLimit(int side, int battles) {
-        return Math.min(MAX_FIELD, maxUnits + extraUnits(side, battles));
+    /** What a side may field in this scenario, reserves included. */
+    public Limits limitsFor(int side, int battles) {
+        return caps.plus(extraUnits(side, battles));
     }
 
     /** Multiplier on the enemy company's force limit: its side's resources relative to yours. */

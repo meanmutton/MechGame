@@ -22,14 +22,17 @@ public final class HqScreen extends Screen {
         if (sel >= n) sel = n - 1;
         if (sel < 0 && n > 0) sel = 0;
         float lx = u * 3, ly = listTop(), lw = w * 0.56f;
-        float rowH = Math.min(u * 10, (h - u * 14 - ly) / Math.max(6, n));
+        // a long roster goes into two columns
+        int cols = n > 8 ? 2 : 1, rows = (n + cols - 1) / cols;
+        float colW = (lw - u * (cols - 1)) / cols;
+        float rowH = Math.min(u * 10, (h - u * 14 - ly) / Math.max(6, rows));
         for (int i = 0; i < n; i++) {
             Unit un = c.roster.get(i);
-            float y = ly + i * rowH;
-            Btn row = add(new Btn(ROW + i, "").set(lx + rowH * 1.1f, y + u * 0.3f, lw - rowH * 1.1f, rowH - u * 0.6f));
+            float x = lx + (i / Math.max(1, rows)) * (colW + u), y = ly + (i % Math.max(1, rows)) * rowH;
+            Btn row = add(new Btn(ROW + i, "").set(x + rowH * 1.1f, y + u * 0.3f, colW - rowH * 1.1f, rowH - u * 0.6f));
             row.selected = sel == i;
             row.color = 0xFF1E2A3C;
-            Btn dep = add(new Btn(DEPLOY + i, c.deployed.contains(un) ? "✓" : "").set(lx, y + u * 0.3f, rowH - u * 0.6f, rowH - u * 0.6f));
+            Btn dep = add(new Btn(DEPLOY + i, c.deployed.contains(un) ? "✓" : "").set(x, y + u * 0.3f, rowH - u * 0.6f, rowH - u * 0.6f));
             dep.color = c.deployed.contains(un) ? 0xFF2E7D4F : (c.canDeploy(un) ? 0xFF2A3346 : 0xFF171D29);
             dep.enabled = !un.destroyed;   // tapping one that can't go explains why
         }
@@ -111,8 +114,7 @@ public final class HqScreen extends Screen {
             else if (c.canDeploy(un)) {
                 c.deployed.add(un);
                 if (un.isDamaged()) toast(un.name + " is damaged. Repair it before the fight if you can.");
-            } else if (!c.allowed(un)) toast(un.name + " can't take part in " + c.next().name + ".");
-            else if (!un.destroyed) toast(c.next() != null ? c.next().name + " allows only " + c.deployLimit() + " units." : "Six units at most.");
+            } else if (c.deployRefusal(un) != null) toast(c.deployRefusal(un));
             sel = id - DEPLOY;
             game.saveCompany();
         } else if (id == MENU) {
@@ -184,7 +186,7 @@ public final class HqScreen extends Screen {
         background(g);
         String title = c.quick ? "QUICK BATTLE: BUILD YOUR FORCE" : "COMPANY HQ";
         g.text(title, u * 3, h * 0.055f, u * 5.2f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
-        String sub = c.quick ? "Difficulty " + Company.DIFFICULTY[c.difficulty] + ".  Buy units in the Market, tick up to 6 to deploy, then Fight."
+        String sub = c.quick ? "Difficulty " + Company.DIFFICULTY[c.difficulty] + ".  Buy units in the Market, tick up to " + Limits.FULL.text() + " to deploy, then Fight."
                 : "Contract " + c.mission + ": " + HexMap.BIOME_NAMES[c.biome] + " region, pays $" + Ui.money(c.reward)
                 + "   |   Record " + c.wins + "W " + c.losses + "L   |   " + Company.DIFFICULTY[c.difficulty]
                 + (c.rival != null ? "   |   Enemy: $" + Ui.money(c.rival.cash) + ", " + c.rival.roster.size() + " units" : "");
@@ -192,7 +194,7 @@ public final class HqScreen extends Screen {
         Scenario sc = c.next();
         if (sc != null) {
             String next = "You are the " + Scenario.SIDE_NAMES[c.side].toLowerCase() + ", front " + Scenario.frontName(c.front)
-                    + ".   Next: " + sc.name + ". " + sc.limits(c.deployLimit()) + ".";
+                    + ".   Next: " + sc.name + ". " + sc.limits(c.limits()) + ".";
             g.text(Ui.fit(g, next, u * 2.6f, w - u * 6), u * 3, h * 0.15f, u * 2.6f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
         }
         g.text("$" + Ui.money(c.cash), w - u * 3, h * 0.07f, u * 7, Col.MONEY, Gfx.ALIGN_RIGHT, true);
@@ -212,14 +214,19 @@ public final class HqScreen extends Screen {
             float cy = row.y + row.h / 2;
             UnitArt.draw(g, un, row.x + row.h * 0.6f, cy, -30, Battle.PLAYER, row.h * 0.62f, t, un.condition());
             float tx = row.x + row.h * 1.3f;
-            g.text(un.name, tx, cy - row.h * 0.18f, u * 3f, un.destroyed ? Col.BAD : Col.TEXT, Gfx.ALIGN_LEFT, true);
-            g.text(UnitType.NAMES[un.type] + " · " + Chassis.ROLES[un.ch.role] + (un.name.equals(un.ch.name) ? "" : " · " + un.ch.name),
-                    tx, cy + row.h * 0.22f, u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+            boolean compact = row.w < u * 60;
+            float ns = Math.min(u * 3f, row.h * 0.36f), ss = Math.min(u * 2.2f, row.h * 0.27f), sts = Math.min(u * 2.5f, row.h * 0.3f);
+            float barW = compact ? u * 9 : u * 16;
             boolean ok = c.allowed(un);
             String state = un.destroyed ? "WRECKED" : (!ok ? "Not allowed" : (un.isDamaged() ? "Damaged" : "Ready"));
             int stc = un.destroyed ? Col.BAD : (!ok ? Col.TEXT_DIM : (un.isDamaged() ? Col.ACCENT : Col.GOOD));
-            g.text(state, row.x + row.w - u * 2, cy - row.h * 0.18f, u * 2.5f, stc, Gfx.ALIGN_RIGHT, true);
-            Ui.bar(g, row.x + row.w - u * 18, cy + row.h * 0.12f, u * 16, u * 1.4f, un.condition(), un.destroyed ? Col.BAD : (un.isDamaged() ? Col.ACCENT : Col.GOOD));
+            float stateW = g.textWidth(state, sts, true) + u * 3;
+            g.text(Ui.fit(g, un.name, ns, row.x + row.w - stateW - tx), tx, cy - row.h * 0.18f, ns, un.destroyed ? Col.BAD : Col.TEXT, Gfx.ALIGN_LEFT, true);
+            String line2 = (compact ? UnitType.SHORT[un.type] : UnitType.NAMES[un.type]) + " · " + Chassis.ROLES[un.ch.role]
+                    + (un.name.equals(un.ch.name) || compact ? "" : " · " + un.ch.name);
+            g.text(Ui.fit(g, line2, ss, row.x + row.w - barW - u * 3 - tx), tx, cy + row.h * 0.22f, ss, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+            g.text(state, row.x + row.w - u * 2, cy - row.h * 0.18f, sts, stc, Gfx.ALIGN_RIGHT, true);
+            Ui.bar(g, row.x + row.w - barW - u * 2, cy + row.h * 0.12f, barW, u * 1.4f, un.condition(), un.destroyed ? Col.BAD : (un.isDamaged() ? Col.ACCENT : Col.GOOD));
         }
         // detail
         Unit su = selected();

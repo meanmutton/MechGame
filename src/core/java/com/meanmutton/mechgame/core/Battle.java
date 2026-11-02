@@ -12,7 +12,7 @@ import java.util.Random;
  */
 public final class Battle {
     public static final int PLAYER = 0, ENEMY = 1;
-    public static final int MAX_ROUNDS = 15;
+    public static final int MAX_ROUNDS = 20;
     public static final int RESULT_NONE = 0, RESULT_WIN = 1, RESULT_LOSS = 2, RESULT_DRAW = 3, RESULT_WITHDRAW = 4;
 
     public final Game game;

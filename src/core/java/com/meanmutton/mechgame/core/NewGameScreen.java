@@ -81,7 +81,7 @@ public final class NewGameScreen extends Screen {
         g.text("Difficulty", px1 + u * 3, py + u * 14, u * 2.6f, Col.TEXT, Gfx.ALIGN_LEFT, true);
         g.text("Starting funds", px1 + u * 3, py + u * 34, u * 2.6f, Col.TEXT, Gfx.ALIGN_LEFT, true);
         g.text("Quick Battle", px2 + u * 3, py + u * 5, u * 4.6f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
-        g.text("Spend a budget on up to 6 units and fight one battle.", px2 + u * 3, py + u * 10, u * 2.5f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+        g.text("Spend a budget on a force and fight one battle.", px2 + u * 3, py + u * 10, u * 2.5f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
         g.text("Difficulty", px2 + u * 3, py + u * 14, u * 2.6f, Col.TEXT, Gfx.ALIGN_LEFT, true);
         g.text("Budget", px2 + u * 3, py + u * 34, u * 2.6f, Col.TEXT, Gfx.ALIGN_LEFT, true);
         String[] diffText = {"Smaller enemy forces; the computer takes more risks.",
