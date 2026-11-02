@@ -297,6 +297,8 @@ final class Ai {
         float focus = b.difficulty == 2 ? 2.2f : 1.4f;
         float worth = 1f + focus * (1f - t.condition());
         worth *= 0.7f + Math.min(1.5f, t.value() / 3000f) * 0.4f;
+        // finishing a fragile target this turn is worth a lot (glass cannons, crippled units)
+        if (total >= (t.totalArmor() + t.totalInfra()) * 0.6f) worth *= 1.6f;
         return total * worth;
     }
 

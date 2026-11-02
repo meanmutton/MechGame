@@ -23,7 +23,7 @@ public final class HelpScreen extends Screen {
                     "Line of sight is blocked by hills taller than the line between the two units, by towns, and by 3 or more points of woods or smoke (light woods 1, heavy woods 2, smoke 3). Each point of woods costs 10%.",
                     "Mechs stand taller than vehicles and see over low hills and light woods more easily. VTOLs fly and see almost everything, but they are also seen by everything.",
                     "Weapons fire within an arc: mech weapons cover a wide 240 degrees, vehicle hull weapons a 120-degree front arc, and turrets all around.",
-                    "Artillery fires indirectly: it can hit anything any friendly unit can see. ECM stops spotting unless the spotter has a Sensor Suite. Shells that miss land in a neighboring hex, and all artillery splashes onto adjacent hexes, friends included.",
+                    "Artillery is the opposite of other weapons: most accurate at long range, a little worse at medium range, and very inaccurate at short range or inside its minimum range. It fires indirectly: it can hit anything any friendly unit can see. ECM stops spotting unless the spotter has a Sensor Suite. Shells that miss land in a neighboring hex, and all artillery splashes onto adjacent hexes, friends included.",
                     "Melee weapons (mechs only) strike adjacent units. Only one melee weapon swings per activation."
             },
             {
@@ -31,8 +31,9 @@ public final class HelpScreen extends Screen {
                     "Hits on a location that is already destroyed (a mech's lost arm or leg, a vehicle's lost turret) carry through to the core (a vehicle's front hull) at half damage, as does any damage left over when a limb is blown off.",
                     "Where you hit depends on the angle: attacks from the front mostly hit the front (or a mech's core and limbs); side attacks hit that side; rear attacks hit the thin rear armor. A random roll picks the exact location.",
                     "Mechs die when the core or cockpit is destroyed. Losing a leg halves movement; losing both immobilizes the mech. Vehicles die when any hull side is breached, and their motive systems can be damaged by any hit.",
+                    "When a unit is hit, the battle panel switches to its hit-location diagram: each hit flashes on the location it struck (yellow for armor, red for structure) with the damage, and the combat log at the bottom lists the damage by location.",
                     "Infrastructure damage can cause critical hits: destroyed weapons or equipment, damaged cooling, stunned vehicle crews, and ammunition explosions.",
-                    "Missiles spread across several locations. Lasers and cannons hit one. Infantry shrug off half the damage from big guns, but chainguns, missiles and artillery hurt them fully."
+                    "Missiles spread across several locations. Lasers and cannons hit one. Infantry shrug off half the damage from big guns, but chainguns, missiles and artillery hurt them fully. The exception is the Mortar Section: a glass cannon whose crew works in the open and takes full damage from everything."
             },
             {
                     "Energy weapons make heat. Ballistic weapons use ammunition. Missiles use both but are light. Each unit sheds heat every round through its heat sinks; standing in water adds cooling.",

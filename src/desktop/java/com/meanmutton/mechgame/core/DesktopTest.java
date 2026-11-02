@@ -70,6 +70,39 @@ public final class DesktopTest {
                 bad++;
             }
         }
+        // artillery must get more accurate with range; direct fire the other way round
+        {
+            FakePlatform fp = new FakePlatform();
+            Game g = new Game(fp, 1);
+            g.headless = true;
+            HexMap m = new HexMap(20, 13, 0, new Weather(Weather.CLEAR));   // flat open ground, clear sight
+            Unit spg = new Unit(Chassis.ALL[6]);        // Thunder SPG: siege howitzer, min 4 / 5 / 11 / 18
+            Unit tank = new Unit(Chassis.ALL[4]);       // Ironhide: battle cannon 3/6/9
+            Unit target = new Unit(Chassis.ALL[15]);
+            List<Unit> mine = new ArrayList<Unit>(), theirs = new ArrayList<Unit>();
+            mine.add(spg);
+            mine.add(tank);
+            theirs.add(target);
+            Battle b = new Battle(g, mine, theirs, m, new Random(1), 1);
+            b.finishDeployment();
+            target.q = 19;
+            target.r = 6;
+            target.movedHexes = 0;
+            int[] dists = {2, 4, 8, 16};
+            int[] arty = new int[dists.length], gun = new int[dists.length];
+            for (int i = 0; i < dists.length; i++) {
+                spg.q = tank.q = 19 - dists[i];
+                spg.r = tank.r = 6;
+                spg.facing = tank.facing = 1;
+                spg.moved = tank.moved = false;
+                arty[i] = b.hitChance(spg, 0, target, null);
+                gun[i] = b.hitChance(tank, 0, target, null);
+            }
+            System.out.println("siege howitzer hit % at 2/4/8/16 hexes: " + arty[0] + " " + arty[1] + " " + arty[2] + " " + arty[3]);
+            System.out.println("battle cannon  hit % at 2/4/8/16 hexes: " + gun[0] + " " + gun[1] + " " + gun[2] + " " + gun[3]);
+            if (!(arty[3] > arty[2] && arty[2] > arty[1] && arty[1] > arty[0])) throw new RuntimeException("artillery accuracy should rise with range");
+            if (!(gun[0] > gun[2])) throw new RuntimeException("direct fire should fall with range");
+        }
         if (bad > 0) throw new RuntimeException(bad + " invalid designs");
         System.out.println("all " + Chassis.ALL.length + " designs valid");
     }
@@ -259,6 +292,8 @@ public final class DesktopTest {
         click(g, 2); // fire
         tick(g, 25);
         shot(g, "14_battle_firing");
+        tick(g, 20);
+        shot(g, "14b_battle_impacts");
         tick(g, 120);
         click(g, 1); // end turn
         // play the rest automatically, taking a few snapshots
@@ -277,6 +312,38 @@ public final class DesktopTest {
             g.setScreen(hs);
             for (int k = 0; k < p; k++) click(g, 3);
             if (p == 0 || p == 2 || p == 5) shot(g, "20_help_" + p);
+        }
+        // a close-range exchange to show the hit feedback: impact panel, map bursts and the per-location log
+        {
+            HexMap m = new HexMap(20, 13, 0, new Weather(Weather.CLEAR));
+            m.generate(new Random(5));
+            List<Unit> mine = new ArrayList<Unit>(), theirs = new ArrayList<Unit>();
+            Unit shooter = new Unit(Chassis.ALL[29]);   // Monolith
+            Unit victim = new Unit(Chassis.ALL[21]);    // Halberd
+            mine.add(shooter);
+            theirs.add(victim);
+            Battle bb = new Battle(g, mine, theirs, m, new Random(3), 1);
+            bb.finishDeployment();
+            for (int cc = 6; cc < 8; cc++) for (int rr = 5; rr < 7; rr++) { m.terrain[m.idx(cc, rr)] = HexMap.CLEAR; m.elev[m.idx(cc, rr)] = 0; }
+            shooter.q = 6; shooter.r = 6; victim.q = 7; victim.r = 6;
+            shooter.facing = 1; victim.facing = 4;
+            bb.syncDraw(shooter);
+            bb.syncDraw(victim);
+            bb.side = Battle.PLAYER;
+            bb.beginActivation(shooter);
+            BattleScreen dbs = new BattleScreen(g, bb);
+            g.setScreen(dbs);
+            tick(g, 5);
+            boolean[] all = new boolean[shooter.weapon.length];
+            for (int k = 0; k < all.length; k++) all[k] = true;
+            bb.fire(shooter, victim, all);
+            for (int k = 0; k < 40; k++) {
+                tick(g, 1);
+                if (k == 22) shot(g, "14c_impact_panel");
+            }
+            tick(g, 120);
+            shot(g, "14d_impact_log");
+            System.out.println("last log: " + bb.log.get(bb.log.size() - 1));
         }
         // weather variety on a smaller screen
         W = 1600;

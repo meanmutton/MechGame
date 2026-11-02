@@ -42,6 +42,11 @@ public final class BattleScreen extends Screen {
     private Unit deploySel;
     private float dollX, dollY, dollW, dollH, listY, rowH;
     private float flash;
+    // impact view: which unit is shown, the running total of this attack, and a short linger after the last hit
+    private Unit impactShown;
+    private int impactTotal;
+    private float impactLinger;
+    private final java.util.Set<Battle.Fx> counted = new java.util.HashSet<Battle.Fx>();
 
     public BattleScreen(Game game, Battle b) {
         super(game);
@@ -210,6 +215,24 @@ public final class BattleScreen extends Screen {
         if (flash > 0) flash -= dt;
         if (pauseMode != 0) return;
         b.update(dt);
+        Unit cur = impactUnit();
+        if (cur != null) {
+            if (cur != impactShown) {
+                impactShown = cur;
+                impactTotal = 0;
+                counted.clear();
+            }
+            for (Battle.Fx f : b.fx) {
+                if (f.kind == Battle.Fx.HITMARK && f.started && f.unit == cur && counted.add(f)) impactTotal += f.dmg;
+            }
+            impactLinger = 1.3f;
+        } else if (impactShown != null) {
+            impactLinger -= dt;
+            if (impactLinger <= 0) {
+                impactShown = null;
+                counted.clear();
+            }
+        }
         if (b.active != null && b.active.team == Battle.ENEMY) view = b.active;
         if (target != null && (target.destroyed || b.active == null || b.active.team != Battle.PLAYER)) target = null;
         if (b.result != Battle.RESULT_NONE && !b.busy()) {
@@ -799,6 +822,19 @@ public final class BattleScreen extends Screen {
                     }
                     break;
                 }
+                case Battle.Fx.BURST: {
+                    float a = 1 - k;
+                    float r = f.size * (0.5f + k * 0.9f);
+                    g.fillRadial(f.x1, f.y1, r * 1.5f, Col.alpha(0xFFFF8A2A, a * 0.8f), 0x00FF4A00);
+                    g.fillRadial(f.x1, f.y1, r * 0.7f, Col.alpha(0xFFFFFFFF, a), Col.alpha(0xFFFFD27A, a * 0.5f));
+                    for (int i = 0; i < 5; i++) {
+                        float ang = i * 1.256f + f.size * 10;
+                        float d = r * (0.6f + k * 0.8f);
+                        g.line(f.x1 + (float) Math.cos(ang) * d * 0.4f, f.y1 + (float) Math.sin(ang) * d * 0.4f,
+                                f.x1 + (float) Math.cos(ang) * d, f.y1 + (float) Math.sin(ang) * d, 0.035f, Col.alpha(0xFFFFE0A0, a));
+                    }
+                    break;
+                }
                 case Battle.Fx.TEXT: {
                     float a = Math.min(1f, (1 - k) * 2.5f);
                     float y = f.y1 - k * 0.9f;
@@ -891,15 +927,94 @@ public final class BattleScreen extends Screen {
 
     private void renderLog(Gfx g) {
         int n = Math.min(4, b.log.size());
+        float ts = u * 2.3f, lh = u * 3.1f, maxW = mapW - u * 6;
         float y = h - u * 2.5f;
         for (int i = 0; i < n; i++) {
             String s = b.log.get(b.log.size() - 1 - i);
+            List<String> lines = wrapLines(g, s, ts, maxW, 3);
             float a = 1f - i * 0.2f;
-            float tw = Math.min(mapW - u * 4, g.textWidth(s, u * 2.3f, false) + u * 2);
-            g.fillRoundRect(u * 1.5f, y - u * 2, tw, u * 4, u, Col.alpha(0xAA000000, a));
-            g.text(Ui.fit(g, s, u * 2.3f, mapW - u * 6), u * 2.5f, y, u * 2.3f, Col.alpha(0xFFE8EEF8, a), Gfx.ALIGN_LEFT, false);
-            y -= u * 4.4f;
+            float tw = 0;
+            for (String l : lines) tw = Math.max(tw, g.textWidth(l, ts, false));
+            float bh = lines.size() * lh + u;
+            float boxTop = y + u * 2 - bh;
+            g.fillRoundRect(u * 1.5f, boxTop, tw + u * 2, bh, u, Col.alpha(0xB0000000, a));
+            int col = s.contains(" fired at ") ? 0xFFE8EEF8 : (s.contains("destroyed") ? 0xFFFF8A7A : 0xFFFFD27A);
+            for (int k = 0; k < lines.size(); k++) {
+                g.text(lines.get(k), u * 2.5f, boxTop + u * 0.5f + lh * (k + 0.5f), ts, Col.alpha(col, a), Gfx.ALIGN_LEFT, false);
+            }
+            y = boxTop - u * 0.6f;
         }
+    }
+
+    private static List<String> wrapLines(Gfx g, String s, float size, float maxW, int maxLines) {
+        List<String> out = new ArrayList<String>();
+        StringBuilder line = new StringBuilder();
+        for (String word : s.split(" ")) {
+            String cand = line.length() == 0 ? word : line + " " + word;
+            if (g.textWidth(cand, size, false) > maxW && line.length() > 0) {
+                out.add(line.toString());
+                line = new StringBuilder(word);
+            } else line = new StringBuilder(cand);
+        }
+        if (line.length() > 0) out.add(line.toString());
+        while (out.size() > maxLines) {
+            out.remove(out.size() - 1);
+            String last = out.get(out.size() - 1);
+            out.set(out.size() - 1, last + " ...");
+        }
+        return out;
+    }
+
+    /** The unit currently taking hits (most recent hit marker still showing), or null. */
+    private Unit impactUnit() {
+        Unit u = null;
+        float latest = -1;
+        for (Battle.Fx f : b.fx) {
+            if (f.kind == Battle.Fx.HITMARK && f.started && f.start > latest) {
+                latest = f.start;
+                u = f.unit;
+            }
+        }
+        return u;
+    }
+
+    /** Replaces the top of the panel with the target's hit diagram while it is being hit. */
+    private void renderImpact(Gfx g, Unit tu) {
+        float x0 = panelX + u * 1.2f, pw = panelW - u * 2.4f;
+        float top = u * 10.5f, bottom = h - u * 24;   // covers the weapon list while hits land
+        g.fillRoundRect(x0, top, pw, bottom - top, u * 1.5f, 0xFF140E10);
+        g.strokeRoundRect(x0, top, pw, bottom - top, u * 1.5f, u * 0.3f, 0xFFB8322A);
+        int total = impactTotal;
+        boolean mine = tu.team == Battle.PLAYER;
+        g.text(mine ? "YOUR UNIT HIT" : "TARGET HIT", x0 + u * 1.5f, top + u * 2.6f, u * 2.2f, mine ? 0xFFFF6A5A : Col.ACCENT, Gfx.ALIGN_LEFT, true);
+        g.text(Ui.fit(g, tu.name, u * 3f, pw * 0.6f), x0 + u * 1.5f, top + u * 6f, u * 3f, Col.TEXT, Gfx.ALIGN_LEFT, true);
+        g.text("-" + total, x0 + pw - u * 1.5f, top + u * 4.5f, u * 5.5f, 0xFFFF5A3A, Gfx.ALIGN_RIGHT, true);
+        float ds = Math.min(pw * 0.7f, bottom - top - u * 14);
+        float dx = x0 + (pw - ds) / 2, dy = top + u * 9;
+        UnitArt.doll(g, tu, dx, dy, ds, ds, u * 3.4f, -1);
+        for (Battle.Fx f : b.fx) {
+            if (f.kind != Battle.Fx.HITMARK || !f.started || f.unit != tu) continue;
+            float[] r = UnitArt.locRect(tu.type, f.loc, dx, dy, ds, ds);
+            float cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2;
+            float k = f.age / f.dur;
+            // flash and burst on the box
+            if (k < 0.35f) {
+                float kk = k / 0.35f;
+                g.fillRoundRect(r[0], r[1], r[2], r[3], u, Col.alpha(f.structure ? 0xFFFF3A2A : 0xFFFFD27A, 0.55f * (1 - kk)));
+                float br = Math.max(r[2], r[3]) * (0.4f + kk * 0.6f);
+                g.fillRadial(cx, cy, br, Col.alpha(0xFFFFFFFF, 1 - kk), Col.alpha(0xFFFF8A2A, 0));
+            }
+            g.strokeRoundRect(r[0], r[1], r[2], r[3], u, u * 0.5f, Col.alpha(f.structure ? 0xFFFF3A2A : 0xFFFFD27A, 1 - k));
+            // damage number rising out of the box
+            float a = Math.min(1f, (1 - k) * 2.2f);
+            float ty = r[1] - u * 2.2f - k * u * 6;
+            String s = "-" + f.dmg;
+            g.text(s, cx + u * 0.25f, ty + u * 0.25f, u * 4f, Col.alpha(0xFF000000, a), Gfx.ALIGN_CENTER, true);
+            g.text(s, cx, ty, u * 4f, Col.alpha(f.structure ? 0xFFFF5A3A : 0xFFFFE08A, a), Gfx.ALIGN_CENTER, true);
+            if (f.locLost) g.text("DESTROYED", cx, cy + u * 2.2f, u * 2.2f, Col.alpha(0xFFFF3A2A, a), Gfx.ALIGN_CENTER, true);
+        }
+        g.text("total this attack", x0 + pw - u * 1.5f, top + u * 8.2f, u * 1.8f, Col.TEXT_DIM, Gfx.ALIGN_RIGHT, false);
+        g.text("yellow flash = armor hit,  red flash = structure hit", x0 + pw / 2, bottom - u * 2, u * 2f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
     }
 
     private void renderPanel(Gfx g) {
@@ -913,6 +1028,7 @@ public final class BattleScreen extends Screen {
             if (b.deploying) g.text("Infantry can go anywhere on the map", panelX + panelW / 2, h * 0.42f, u * 2.4f, Col.ACCENT, Gfx.ALIGN_CENTER, false);
             g.text("Drag to pan, pinch to zoom", panelX + panelW / 2, h * 0.36f, u * 2.4f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
             renderButtons(g);
+            if (impactShown != null) renderImpact(g, impactShown);
             return;
         }
         int tc = UnitArt.teamColor(su.team);
@@ -1032,5 +1148,6 @@ public final class BattleScreen extends Screen {
                     (!su.fired ? "Tap an enemy to target it, rotate if needed, then End Turn." : "Done? Rotate or use equipment, then End Turn.");
             Ui.wrap(g, hint, x0, infoY + u, u * 2.2f, pw, Col.TEXT_DIM);
         }
+        if (impactShown != null) renderImpact(g, impactShown);
     }
 }

@@ -514,6 +514,21 @@ public final class UnitArt {
                 {1, 1, 3, 3}};  // turret/rotor
     }
 
+    /** Screen rectangle {x, y, w, h} of one location's box in a diagram drawn at (x, y, w, h). */
+    public static float[] locRect(int type, int i, float x, float y, float w, float h) {
+        int[] c = layout(type)[i];
+        float cw = w / 5f, chh = h / 5f, gap = Math.min(cw, chh) * 0.08f;
+        float bx = x + c[0] * cw + gap, by = y + c[1] * chh + gap;
+        float bw = c[2] * cw - gap * 2, bh = c[3] * chh - gap * 2;
+        if (!UnitType.isMech(type) && type != UnitType.INFANTRY && i == UnitType.V_TOP) {
+            bx += cw * 0.35f;
+            by += chh * 0.35f;
+            bw -= cw * 0.7f;
+            bh -= chh * 0.7f;
+        }
+        return new float[]{bx, by, bw, bh};
+    }
+
     public static void doll(Gfx g, Unit u, float x, float y, float w, float h, float textSize, int highlightLoc) {
         int[][] lay = layout(u.type);
         float cw = w / 5f, chh = h / 5f, gap = Math.min(cw, chh) * 0.08f;
