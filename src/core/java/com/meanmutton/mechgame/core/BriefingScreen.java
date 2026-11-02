@@ -8,6 +8,8 @@ public final class BriefingScreen extends Screen {
     private final HexMap map;
     private final List<Unit> enemy;
     private float t;
+    /** The rival had nothing left and fields a scratch militia. */
+    public boolean militia;
 
     public BriefingScreen(Game game, HexMap map, List<Unit> enemy) {
         super(game);
@@ -84,6 +86,16 @@ public final class BriefingScreen extends Screen {
         y += Ui.wrap(g, names.toString(), rx + u, y, u * 2.3f, rw - u * 2, Col.TEXT);
         g.text("Value: yours $" + Ui.money(c.deployedValue()) + "  vs  theirs $" + Ui.money(ev), rx + u, y + u * 2, u * 2.3f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
         if (!c.quick) g.text("Pay: $" + Ui.money(c.reward) + " for a win", rx + u, y + u * 6, u * 2.6f, Col.MONEY, Gfx.ALIGN_LEFT, true);
+        if (!c.quick && c.rival != null) {
+            int damaged = 0;
+            for (Unit e : enemy) if (e.isDamaged()) damaged++;
+            String rs = "Enemy company: $" + Ui.money(c.rival.cash) + " in reserve, " + c.rival.roster.size() + " units"
+                    + (damaged > 0 ? " (" + damaged + " fielded damaged)" : "");
+            g.text(rs, rx + u, y + u * 10, u * 2.3f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+            g.text("Contract limits the enemy to $" + Ui.money(Math.round(c.deployedValue() * Rival.engagementLimit(c.difficulty)))
+                    + " of units (it fields its best within that)", rx + u, y + u * 17, u * 2.1f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+            if (militia) g.text("Broke and beaten, the enemy has scraped together a militia.", rx + u, y + u * 13.5f, u * 2.3f, Col.ACCENT, Gfx.ALIGN_LEFT, false);
+        }
         renderButtons(g);
     }
 }

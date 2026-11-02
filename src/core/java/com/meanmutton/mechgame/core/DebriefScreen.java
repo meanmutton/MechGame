@@ -78,7 +78,14 @@ public final class DebriefScreen extends Screen {
             y += u * 5;
         }
         y += u * 2;
-        if (!d.enemyLost.isEmpty()) Ui.wrap(g, "Enemy destroyed: " + join(d.enemyLost), rx + u, y, u * 2.3f, cw - u * 2, Col.TEXT_DIM);
+        if (!d.enemyLost.isEmpty()) y += Ui.wrap(g, "Enemy destroyed: " + join(d.enemyLost), rx + u, y, u * 2.3f, cw - u * 2, Col.TEXT_DIM) + u;
+        if (!game.company.quick && game.company.rival != null) {
+            String s = "Enemy company was paid $" + Ui.money(d.rivalPay)
+                    + (d.rivalLost > 0 ? ", lost " + d.rivalLost + " wreck" + (d.rivalLost > 1 ? "s" : "") + " on the field" : "")
+                    + (d.rivalBought.isEmpty() ? "" : ", and bought " + join(d.rivalBought))
+                    + ". It now has $" + Ui.money(d.rivalCash) + " and " + d.rivalUnits + " units.";
+            Ui.wrap(g, s, rx + u, y, u * 2.3f, cw - u * 2, Col.ACCENT);
+        }
         renderButtons(g);
     }
 

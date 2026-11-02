@@ -28,6 +28,7 @@ public final class HelpScreen extends Screen {
             },
             {
                     "Every unit has hit locations, each with armor and infrastructure. Damage strips armor first, then infrastructure. A location with no infrastructure left is destroyed, along with the weapons mounted there.",
+                    "Hits on a location that is already destroyed (a mech's lost arm or leg, a vehicle's lost turret) carry through to the core (a vehicle's front hull) at half damage, as does any damage left over when a limb is blown off.",
                     "Where you hit depends on the angle: attacks from the front mostly hit the front (or a mech's core and limbs); side attacks hit that side; rear attacks hit the thin rear armor. A random roll picks the exact location.",
                     "Mechs die when the core or cockpit is destroyed. Losing a leg halves movement; losing both immobilizes the mech. Vehicles die when any hull side is breached, and their motive systems can be damaged by any hit.",
                     "Infrastructure damage can cause critical hits: destroyed weapons or equipment, damaged cooling, stunned vehicle crews, and ammunition explosions.",
@@ -56,7 +57,8 @@ public final class HelpScreen extends Screen {
                     "Your company carries over from battle to battle: money, units, damage and spare parts.",
                     "At HQ, tick up to 6 units to deploy, repair damage, and launch the next contract. Win to collect the full pay plus a bonus for what you destroyed, and salvage enemy weapons into your spare parts.",
                     "Units destroyed in a battle you win (or draw) are recovered as wrecks you can repair. Lose or withdraw and they are gone for good.",
-                    "Use the Workshop (Refit) to swap weapons and equipment, change armor, heat sinks and ammunition. Removed parts go to your spares for free reuse. The Market sells new units with factory loadouts.",
+                    "The enemy is a company too. It starts with funds like yours, is paid after every battle (more when it wins), repairs what it can afford, loses units left on a field it lost, and buys reinforcements. Beat it down and it gets poorer; let it win and it grows. HQ and the briefing show its money and roster.",
+                    "To customize a unit, select it at HQ and press CUSTOMIZE. Tap any weapon mount or equipment slot to swap what's in it, and use - / + to change armor, heat sinks and ammunition, all within the unit's weight limit. Removed parts go to your spares for free reuse. The Market sells new units with factory loadouts.",
                     "Quick Battle gives you a budget, lets you buy and refit a force, and fights a single battle."
             },
     };

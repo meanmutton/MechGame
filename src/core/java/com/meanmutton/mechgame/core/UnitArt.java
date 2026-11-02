@@ -41,7 +41,7 @@ public final class UnitArt {
         }
         g.rotate(angle);
         switch (ch.type) {
-            case UnitType.INFANTRY: infantry(g, team, strength, time); break;
+            case UnitType.INFANTRY: infantry(g, ch, team, strength, time); break;
             case UnitType.TRACKED: tank(g, ch, weapons, body, dark, light, lw); break;
             case UnitType.HOVER: hover(g, ch, body, dark, light, lw, time); break;
             case UnitType.VTOL: vtol(g, ch, body, dark, light, lw, time); break;
@@ -56,59 +56,214 @@ public final class UnitArt {
         g.fillRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0), c);
     }
 
+    // =====================================================================
+    // Per-design looks. Every mech and vehicle combines these parts differently.
+    // =====================================================================
+
+    // mech parts
+    private static final int T_BOX = 0, T_WEDGE = 1, T_HEX = 2, T_WIDE = 3, T_DOME = 4;
+    private static final int S_NONE = 0, S_PADS = 1, S_SPIKES = 2, S_ROUND = 3;
+    private static final int B_NONE = 0, B_RACK = 1, B_FINS = 2, B_RADAR = 3, B_THRUST = 4, B_TWINRACK = 5, B_ANTENNA = 6;
+    private static final int L_HUMAN = 0, L_BIRD = 1, L_STOMP = 2;
+    private static final int C_ROUND = 0, C_VISOR = 1, C_OFFSET = 2, C_TWIN = 3;
+
+    /** {torso, shoulders, back, legs, cockpit, accent color} by chassis id (18..32). */
+    private static final int[][] MECH_LOOK = {
+            {T_WEDGE, S_NONE, B_ANTENNA, L_BIRD, C_VISOR, 0xFFF5D33B},     // Skitter
+            {T_HEX, S_ROUND, B_THRUST, L_HUMAN, C_TWIN, 0xFFE84A3C},       // Needle
+            {T_DOME, S_NONE, B_RADAR, L_BIRD, C_ROUND, 0xFF45C8F0},        // Lantern
+            {T_BOX, S_PADS, B_NONE, L_HUMAN, C_ROUND, 0xFFEDEDED},         // Halberd
+            {T_WEDGE, S_ROUND, B_THRUST, L_BIRD, C_VISOR, 0xFFFF8E2B},     // Ricochet
+            {T_WIDE, S_PADS, B_RACK, L_HUMAN, C_OFFSET, 0xFF9BE043},       // Cinder
+            {T_HEX, S_SPIKES, B_FINS, L_HUMAN, C_TWIN, 0xFFB07AFF},        // Sabre Dancer
+            {T_BOX, S_SPIKES, B_FINS, L_STOMP, C_VISOR, 0xFFDDDDDD},       // Bastille
+            {T_WEDGE, S_PADS, B_RADAR, L_HUMAN, C_OFFSET, 0xFF3F8EF0},     // Overwatch
+            {T_HEX, S_SPIKES, B_THRUST, L_STOMP, C_TWIN, 0xFFE84A3C},      // Cleaver
+            {T_WIDE, S_ROUND, B_NONE, L_STOMP, C_ROUND, 0xFFF5D33B},       // Rainmaker
+            {T_BOX, S_PADS, B_FINS, L_STOMP, C_VISOR, 0xFFB0B8C0},         // Monolith
+            {T_DOME, S_SPIKES, B_THRUST, L_STOMP, C_TWIN, 0xFFFF8E2B},     // Pulverizer
+            {T_WIDE, S_ROUND, B_TWINRACK, L_STOMP, C_VISOR, 0xFF9BE043},   // Skyfall
+            {T_HEX, S_PADS, B_RADAR, L_STOMP, C_ROUND, 0xFF45C8F0},        // Aegis
+    };
+
+    private static void poly(Gfx g, int color, float... pts) {
+        int n = pts.length / 2;
+        for (int i = 0; i < n; i++) {
+            PX[i] = pts[i * 2];
+            PY[i] = pts[i * 2 + 1];
+        }
+        g.fillPoly(PX, PY, n, color);
+    }
+
     private static void mech(Gfx g, Chassis ch, int[] weapons, int body, int dark, int light, float lw, float time) {
-        float s = ch.type == UnitType.LIGHT_MECH ? 0.62f : (ch.type == UnitType.MEDIUM_MECH ? 0.72f : (ch.type == UnitType.HEAVY_MECH ? 0.8f : 0.88f));
+        float s = ch.type == UnitType.LIGHT_MECH ? 0.74f : (ch.type == UnitType.MEDIUM_MECH ? 0.85f : (ch.type == UnitType.HEAVY_MECH ? 0.94f : 1.02f));
+        int[] look = ch.id >= 18 && ch.id - 18 < MECH_LOOK.length ? MECH_LOOK[ch.id - 18] : MECH_LOOK[3];
+        int torso = look[0], shoulders = look[1], back = look[2], legs = look[3], cockpit = look[4], accent = look[5];
         g.scale(s, s);
-        // legs (stride animates slightly)
         float stride = (float) Math.sin(time * 3 + ch.id) * 0.06f;
-        g.fillRoundRect(-0.28f + stride, -0.38f, 0.5f, 0.2f, 0.08f, dark);
-        g.fillRoundRect(-0.28f - stride, 0.18f, 0.5f, 0.2f, 0.08f, dark);
-        // arms and their weapons
+        // legs
+        if (legs == L_BIRD) {
+            for (int side = -1; side <= 1; side += 2) {
+                float st = side * stride;
+                g.line(-0.1f, side * 0.2f, -0.42f + st, side * 0.3f, 0.12f, dark);
+                g.line(-0.42f + st, side * 0.3f, -0.2f + st, side * 0.36f, 0.1f, dark);
+                poly(g, Col.darker(dark, 0.2f), -0.24f + st, side * 0.28f, -0.06f + st, side * 0.32f, -0.08f + st, side * 0.44f, -0.26f + st, side * 0.42f);
+            }
+        } else if (legs == L_STOMP) {
+            g.fillRoundRect(-0.32f + stride, -0.44f, 0.58f, 0.26f, 0.06f, dark);
+            g.fillRoundRect(-0.32f - stride, 0.18f, 0.58f, 0.26f, 0.06f, dark);
+            g.fillRect(0.14f + stride, -0.44f, 0.1f, 0.26f, Col.darker(dark, 0.3f));
+            g.fillRect(0.14f - stride, 0.18f, 0.1f, 0.26f, Col.darker(dark, 0.3f));
+        } else {
+            g.fillRoundRect(-0.28f + stride, -0.38f, 0.5f, 0.2f, 0.08f, dark);
+            g.fillRoundRect(-0.28f - stride, 0.18f, 0.5f, 0.2f, 0.08f, dark);
+        }
+        // back equipment (drawn under the torso edge)
+        switch (back) {
+            case B_RACK:
+            case B_TWINRACK: {
+                int racks = back == B_TWINRACK ? 2 : 1;
+                for (int i = 0; i < racks; i++) {
+                    float ry = racks == 1 ? -0.17f : (i == 0 ? -0.36f : 0.04f);
+                    g.fillRoundRect(-0.5f, ry, 0.26f, 0.34f, 0.04f, 0xFF3A3E46);
+                    for (int k = 0; k < 4; k++) g.fillCircle(-0.43f + (k % 2) * 0.12f, ry + 0.09f + (k / 2) * 0.16f, 0.035f, 0xFF15181E);
+                }
+                break;
+            }
+            case B_FINS:
+                for (int side = -1; side <= 1; side += 2) poly(g, Col.darker(body, 0.3f), -0.3f, side * 0.12f, -0.6f, side * 0.3f, -0.55f, side * 0.38f, -0.25f, side * 0.26f);
+                break;
+            case B_RADAR:
+                g.fillCircle(-0.38f, 0.12f, 0.17f, 0xFFC8CCD4);
+                g.strokeCircle(-0.38f, 0.12f, 0.17f, lw, dark);
+                g.line(-0.38f, 0.12f, -0.38f + (float) Math.cos(time * 2) * 0.15f, 0.12f + (float) Math.sin(time * 2) * 0.15f, 0.03f, dark);
+                break;
+            case B_THRUST:
+                for (int side = -1; side <= 1; side += 2) {
+                    g.fillRoundRect(-0.52f, side * 0.17f - 0.08f, 0.2f, 0.16f, 0.05f, 0xFF3A3E46);
+                    g.fillRadial(-0.56f, side * 0.17f, 0.1f, 0xCCFFAA44, 0x00FF6A00);
+                }
+                break;
+            case B_ANTENNA:
+                g.line(-0.2f, -0.18f, -0.6f, -0.38f, 0.03f, 0xFFDDDDDD);
+                g.line(-0.2f, 0.1f, -0.55f, 0.32f, 0.03f, 0xFFDDDDDD);
+                g.fillCircle(-0.6f, -0.38f, 0.04f, 0xFFFF4A4A);
+                break;
+            default:
+                break;
+        }
+        // arms and the weapons actually mounted there
         for (int side = -1; side <= 1; side += 2) {
             float ay = side * 0.5f;
             int mountLoc = side < 0 ? UnitType.M_LARM : UnitType.M_RARM;
             int w = weaponAt(ch, weapons, mountLoc);
             g.fillRoundRect(-0.18f, ay - 0.1f, 0.48f, 0.2f, 0.07f, Col.darker(body, 0.2f));
-            if (w >= 0) {
-                Wpn wp = Wpn.ALL[w];
-                if (wp.isMelee()) {
-                    int blade = wp.id == Wpn.HAMMER ? 0xFFB0B8C8 : 0xFFE0E8F0;
-                    if (wp.id == Wpn.BATTLE_AXE || wp.id == Wpn.GREAT_AXE) {
-                        g.line(0.25f, ay, 0.75f, ay, 0.06f, 0xFF6A5A4A);
-                        PX[0] = 0.62f; PY[0] = ay; PX[1] = 0.8f; PY[1] = ay - side * 0.0f - 0.18f; PX[2] = 0.86f; PY[2] = ay + 0.18f;
-                        g.fillPoly(PX, PY, 3, blade);
-                    } else if (wp.id == Wpn.HAMMER) {
-                        g.line(0.25f, ay, 0.7f, ay, 0.06f, 0xFF6A5A4A);
-                        g.fillRoundRect(0.62f, ay - 0.14f, 0.18f, 0.28f, 0.04f, blade);
-                    } else {
-                        g.line(0.28f, ay, wp.cls >= 2 ? 0.95f : 0.7f, ay, 0.07f, blade);
-                        g.line(0.28f, ay, wp.cls >= 2 ? 0.95f : 0.7f, ay, 0.025f, 0xFF7AD8FF);
-                    }
-                } else {
-                    float len = 0.42f + wp.cls * 0.12f;
-                    g.line(0.25f, ay, 0.25f + len, ay, 0.05f + wp.cls * 0.02f, 0xFF2A2E36);
-                    if (wp.family == Wpn.F_MISSILE) g.fillRoundRect(0.12f, ay - 0.12f, 0.22f, 0.24f, 0.04f, 0xFF3A3E46);
-                }
-            }
+            if (w >= 0) drawArmWeapon(g, Wpn.ALL[w], ay);
         }
         // torso
-        g.fillRoundRect(-0.34f, -0.34f, 0.6f, 0.68f, 0.14f, body);
-        g.fillRoundRect(-0.3f, -0.3f, 0.26f, 0.6f, 0.1f, Col.darker(body, 0.15f));
-        g.strokeRoundRect(-0.34f, -0.34f, 0.6f, 0.68f, 0.14f, lw, dark);
-        // core-mounted weapons
+        int tc = body, tcd = Col.darker(body, 0.15f);
+        switch (torso) {
+            case T_WEDGE:
+                poly(g, tc, -0.34f, -0.34f, 0.08f, -0.32f, 0.36f, 0f, 0.08f, 0.32f, -0.34f, 0.34f);
+                poly(g, tcd, -0.3f, -0.28f, -0.06f, -0.27f, -0.06f, 0.27f, -0.3f, 0.28f);
+                break;
+            case T_HEX:
+                poly(g, tc, -0.32f, -0.2f, -0.14f, -0.36f, 0.16f, -0.36f, 0.3f, -0.18f, 0.3f, 0.18f, 0.16f, 0.36f, -0.14f, 0.36f, -0.32f, 0.2f);
+                poly(g, tcd, -0.28f, -0.17f, -0.12f, -0.3f, -0.04f, -0.3f, -0.04f, 0.3f, -0.12f, 0.3f, -0.28f, 0.17f);
+                break;
+            case T_WIDE:
+                g.fillRoundRect(-0.3f, -0.42f, 0.54f, 0.84f, 0.1f, tc);
+                g.fillRoundRect(-0.26f, -0.38f, 0.22f, 0.76f, 0.08f, tcd);
+                break;
+            case T_DOME:
+                g.fillCircle(-0.02f, 0, 0.38f, tc);
+                g.fillCircle(-0.1f, 0, 0.26f, tcd);
+                break;
+            default:
+                g.fillRoundRect(-0.34f, -0.34f, 0.6f, 0.68f, 0.14f, tc);
+                g.fillRoundRect(-0.3f, -0.3f, 0.26f, 0.6f, 0.1f, tcd);
+        }
+        // accent stripe
+        g.fillRect(-0.02f, -0.3f, 0.06f, 0.6f, Col.alpha(accent, 0.9f));
+        // shoulders
+        for (int side = -1; side <= 1; side += 2) {
+            float sy = side * 0.38f;
+            switch (shoulders) {
+                case S_PADS: g.fillRoundRect(-0.2f, sy - 0.11f, 0.32f, 0.22f, 0.05f, light); break;
+                case S_ROUND: g.fillCircle(-0.04f, sy, 0.14f, light); g.strokeCircle(-0.04f, sy, 0.14f, lw, dark); break;
+                case S_SPIKES:
+                    g.fillRoundRect(-0.2f, sy - 0.11f, 0.32f, 0.22f, 0.05f, light);
+                    poly(g, 0xFFD0D4DA, -0.12f, sy + side * 0.08f, -0.02f, sy + side * 0.08f, -0.07f, sy + side * 0.24f);
+                    poly(g, 0xFFD0D4DA, 0.02f, sy + side * 0.08f, 0.1f, sy + side * 0.08f, 0.06f, sy + side * 0.22f);
+                    break;
+                default: break;
+            }
+        }
+        // weapons mounted in the core
         int coreW = weaponAt(ch, weapons, UnitType.M_CORE);
         if (coreW >= 0) {
             Wpn wp = Wpn.ALL[coreW];
-            if (wp.family == Wpn.F_ARTILLERY) g.line(-0.1f, 0, 0.85f, 0, 0.12f, 0xFF2A2E36);
-            else if (wp.family == Wpn.F_MISSILE) {
+            if (wp.family == Wpn.F_ARTILLERY) {
+                g.fillRoundRect(-0.25f, -0.13f, 0.34f, 0.26f, 0.05f, 0xFF3A3E46);
+                g.line(-0.1f, 0, 0.95f, 0, 0.13f, 0xFF2A2E36);
+                g.fillRect(0.8f, -0.08f, 0.1f, 0.16f, 0xFF1A1E24);
+            } else if (wp.family == Wpn.F_MISSILE && back != B_RACK && back != B_TWINRACK) {
                 g.fillRoundRect(-0.25f, -0.2f, 0.22f, 0.4f, 0.04f, 0xFF3A3E46);
                 for (int i = 0; i < 3; i++) g.fillCircle(-0.14f, -0.12f + i * 0.12f, 0.035f, 0xFF15181E);
+            } else if (wp.family == Wpn.F_ENERGY || wp.family == Wpn.F_BALLISTIC) {
+                g.line(0.15f, 0.16f, 0.5f, 0.16f, 0.05f, 0xFF2A2E36);
             }
         }
-        // cockpit glass
-        g.fillCircle(0.12f, 0, 0.13f, 0xFF7ACBFF);
-        g.fillCircle(0.15f, -0.04f, 0.05f, 0xCCFFFFFF);
-        if (ch.role == Chassis.R_COMMAND) g.line(-0.2f, -0.25f, -0.45f, -0.45f, 0.03f, 0xFFDDDDDD);
+        // cockpit
+        switch (cockpit) {
+            case C_VISOR:
+                g.fillRoundRect(0.1f, -0.16f, 0.1f, 0.32f, 0.04f, 0xFF7ACBFF);
+                g.fillRect(0.12f, -0.12f, 0.03f, 0.12f, 0xCCFFFFFF);
+                break;
+            case C_OFFSET:
+                g.fillCircle(0.1f, -0.13f, 0.11f, 0xFF7ACBFF);
+                g.fillCircle(0.12f, -0.16f, 0.04f, 0xCCFFFFFF);
+                break;
+            case C_TWIN:
+                g.fillCircle(0.14f, -0.09f, 0.06f, 0xFFFF6A5A);
+                g.fillCircle(0.14f, 0.09f, 0.06f, 0xFFFF6A5A);
+                break;
+            default:
+                g.fillCircle(0.12f, 0, 0.13f, 0xFF7ACBFF);
+                g.fillCircle(0.15f, -0.04f, 0.05f, 0xCCFFFFFF);
+        }
+    }
+
+    private static void drawArmWeapon(Gfx g, Wpn wp, float ay) {
+        if (wp.isMelee()) {
+            int blade = wp.id == Wpn.HAMMER ? 0xFFB0B8C8 : 0xFFE0E8F0;
+            if (wp.id == Wpn.BATTLE_AXE || wp.id == Wpn.GREAT_AXE) {
+                g.line(0.25f, ay, 0.78f, ay, 0.06f, 0xFF6A5A4A);
+                float sz = wp.id == Wpn.GREAT_AXE ? 0.24f : 0.18f;
+                poly(g, blade, 0.6f, ay, 0.8f, ay - sz, 0.88f, ay + sz);
+            } else if (wp.id == Wpn.HAMMER) {
+                g.line(0.25f, ay, 0.7f, ay, 0.06f, 0xFF6A5A4A);
+                g.fillRoundRect(0.62f, ay - 0.15f, 0.2f, 0.3f, 0.04f, blade);
+            } else {
+                float len = wp.cls >= 2 ? 0.95f : 0.7f;
+                g.line(0.28f, ay, len, ay, 0.07f, blade);
+                g.line(0.28f, ay, len, ay, 0.025f, wp.id == Wpn.ARC_SWORD ? 0xFF7AD8FF : 0xFFC0C8D0);
+            }
+        } else if (wp.family == Wpn.F_MISSILE) {
+            g.fillRoundRect(0.06f, ay - 0.14f, 0.34f, 0.28f, 0.04f, 0xFF3A3E46);
+            for (int k = 0; k < 4; k++) g.fillCircle(0.15f + (k % 2) * 0.14f, ay - 0.06f + (k / 2) * 0.12f, 0.035f, 0xFF15181E);
+        } else if (wp.family == Wpn.F_ARTILLERY) {
+            g.line(0.2f, ay, 0.95f, ay, 0.1f, 0xFF2A2E36);
+        } else if (wp.family == Wpn.F_ENERGY) {
+            float len = 0.42f + wp.cls * 0.12f;
+            g.line(0.25f, ay, 0.25f + len, ay, 0.05f + wp.cls * 0.02f, 0xFF2A2E36);
+            g.fillCircle(0.25f + len, ay, 0.03f + wp.cls * 0.012f, wp.id == Wpn.PLASMA ? 0xFFFF7AD8 : 0xFFFF6A5A);
+        } else {
+            float len = 0.42f + wp.cls * 0.14f;
+            g.line(0.25f, ay, 0.25f + len, ay, 0.07f + wp.cls * 0.025f, 0xFF2A2E36);
+            if (wp.id == Wpn.RAIL) g.line(0.3f, ay, 0.25f + len, ay, 0.025f, 0xFF9AC8FF);
+            if (wp.id == Wpn.CHAINGUN || wp.id == Wpn.FLAK) g.fillCircle(0.25f + len * 0.3f, ay, 0.07f, 0xFF4A4E56);
+        }
     }
 
     private static int weaponAt(Chassis ch, int[] weapons, int loc) {
@@ -122,107 +277,217 @@ public final class UnitArt {
         return best;
     }
 
+    // ---------------- vehicles ----------------
+
     private static void tank(Gfx g, Chassis ch, int[] weapons, int body, int dark, int light, float lw) {
-        float big = ch.role == Chassis.R_BRAWLER ? 1.08f : 1f;
+        int id = ch.id;
+        float big = id == 5 ? 1.08f : 1f;
         g.scale(big, big);
-        g.fillRoundRect(-0.55f, -0.44f, 1.1f, 0.2f, 0.06f, 0xFF2A2D33);
-        g.fillRoundRect(-0.55f, 0.24f, 1.1f, 0.2f, 0.06f, 0xFF2A2D33);
-        for (int i = 0; i < 6; i++) {
-            g.fillRect(-0.5f + i * 0.18f, -0.44f, 0.05f, 0.2f, 0xFF4A4F58);
-            g.fillRect(-0.5f + i * 0.18f, 0.24f, 0.05f, 0.2f, 0xFF4A4F58);
+        float len = id == 6 ? 0.62f : 0.55f;
+        // tracks
+        g.fillRoundRect(-len, -0.44f, len * 2, 0.2f, 0.06f, 0xFF2A2D33);
+        g.fillRoundRect(-len, 0.24f, len * 2, 0.2f, 0.06f, 0xFF2A2D33);
+        for (int i = 0; i < 7; i++) {
+            g.fillRect(-len + 0.05f + i * (len * 2 - 0.1f) / 6.5f, -0.44f, 0.05f, 0.2f, 0xFF4A4F58);
+            g.fillRect(-len + 0.05f + i * (len * 2 - 0.1f) / 6.5f, 0.24f, 0.05f, 0.2f, 0xFF4A4F58);
         }
-        g.fillRoundRect(-0.5f, -0.28f, 1.0f, 0.56f, 0.08f, body);
-        g.strokeRoundRect(-0.5f, -0.28f, 1.0f, 0.56f, 0.08f, lw, dark);
-        g.fillRect(0.3f, -0.24f, 0.14f, 0.48f, Col.darker(body, 0.15f));
-        if (ch.role == Chassis.R_ARTILLERY) {
-            g.fillRoundRect(-0.38f, -0.22f, 0.46f, 0.44f, 0.08f, light);
-            g.line(-0.05f, 0, 0.95f, 0, 0.12f, 0xFF2A2E36);
-        } else if (ch.role == Chassis.R_SUPPORT) {
-            g.fillRoundRect(-0.3f, -0.24f, 0.44f, 0.48f, 0.06f, 0xFF3A3E46);
-            for (int i = 0; i < 2; i++) for (int j = 0; j < 3; j++) g.fillCircle(-0.18f + i * 0.18f, -0.14f + j * 0.14f, 0.045f, 0xFF15181E);
-        } else {
-            g.line(0, 0, 0.82f, 0, ch.role == Chassis.R_BRAWLER ? 0.12f : 0.09f, 0xFF2A2E36);
-            g.fillCircle(0, 0, 0.26f, light);
-            g.strokeCircle(0, 0, 0.26f, lw, dark);
-            g.fillCircle(-0.08f, 0.06f, 0.06f, dark);
+        switch (id) {
+            case 5: // Breaker: wedge hull, dozer blade, square turret, short thick gun
+                poly(g, body, -0.52f, -0.3f, 0.36f, -0.3f, 0.56f, 0f, 0.36f, 0.3f, -0.52f, 0.3f);
+                g.fillRoundRect(0.56f, -0.46f, 0.1f, 0.92f, 0.03f, 0xFF8A8F98);
+                g.line(-0.05f, 0, 0.62f, 0, 0.17f, 0xFF2A2E36);
+                g.fillRoundRect(-0.3f, -0.22f, 0.42f, 0.44f, 0.05f, light);
+                g.strokeRoundRect(-0.3f, -0.22f, 0.42f, 0.44f, 0.05f, lw, dark);
+                exhaust(g, -0.5f, 0.2f);
+                break;
+            case 6: // Thunder SPG: long hull, big casemate, huge barrel, rear spades
+                g.fillRoundRect(-0.58f, -0.28f, 1.16f, 0.56f, 0.06f, body);
+                g.fillRect(-0.72f, -0.32f, 0.12f, 0.1f, 0xFF5A5F68);
+                g.fillRect(-0.72f, 0.22f, 0.12f, 0.1f, 0xFF5A5F68);
+                g.fillRoundRect(-0.48f, -0.26f, 0.6f, 0.52f, 0.06f, light);
+                g.line(0f, 0, 1.0f, 0, 0.14f, 0xFF2A2E36);
+                g.fillRect(0.9f, -0.09f, 0.12f, 0.18f, 0xFF1A1E24);
+                g.line(-0.4f, -0.2f, -0.6f, -0.42f, 0.025f, 0xFFDDDDDD);
+                break;
+            case 7: // Quiver: missile carrier with twin launch boxes and radar
+                g.fillRoundRect(-0.52f, -0.28f, 1.04f, 0.56f, 0.08f, body);
+                for (int k = -1; k <= 1; k += 2) {
+                    g.fillRoundRect(-0.36f, k * 0.13f - 0.11f, 0.5f, 0.22f, 0.04f, 0xFF3A3E46);
+                    for (int i = 0; i < 4; i++) g.fillCircle(-0.28f + i * 0.12f, k * 0.13f, 0.035f, 0xFF15181E);
+                }
+                g.fillCircle(0.3f, 0, 0.12f, 0xFFC8CCD4);
+                g.strokeCircle(0.3f, 0, 0.12f, lw, dark);
+                break;
+            default: // Ironhide MBT: classic hull, side skirts, round turret, long gun
+                g.fillRoundRect(-0.5f, -0.3f, 1.0f, 0.6f, 0.08f, body);
+                g.fillRect(-0.48f, -0.34f, 0.96f, 0.06f, Col.darker(body, 0.3f));
+                g.fillRect(-0.48f, 0.28f, 0.96f, 0.06f, Col.darker(body, 0.3f));
+                g.line(0, 0, 0.88f, 0, 0.09f, 0xFF2A2E36);
+                g.fillCircle(0, 0, 0.27f, light);
+                g.strokeCircle(0, 0, 0.27f, lw, dark);
+                g.fillCircle(-0.1f, 0.08f, 0.06f, dark);
+                exhaust(g, -0.48f, -0.18f);
+                exhaust(g, -0.48f, 0.18f);
         }
+        g.strokeRoundRect(-len + 0.05f, -0.3f, len * 2 - 0.1f, 0.6f, 0.08f, lw, dark);
+    }
+
+    private static void exhaust(Gfx g, float x, float y) {
+        g.fillCircle(x, y, 0.05f, 0xFF15181E);
     }
 
     private static void hover(Gfx g, Chassis ch, int body, int dark, int light, float lw, float time) {
-        g.fillRoundRect(-0.56f, -0.4f, 1.12f, 0.8f, 0.36f, 0xFF20242A);
-        g.fillRoundRect(-0.5f, -0.34f, 1.0f, 0.68f, 0.3f, body);
-        g.strokeRoundRect(-0.5f, -0.34f, 1.0f, 0.68f, 0.3f, lw, dark);
+        int id = ch.id;
         float fan = time * 12;
-        for (int s = -1; s <= 1; s += 2) {
-            g.fillCircle(-0.3f, s * 0.18f, 0.12f, 0xFF15181E);
-            g.line(-0.3f - (float) Math.cos(fan) * 0.1f, s * 0.18f - (float) Math.sin(fan) * 0.1f,
-                    -0.3f + (float) Math.cos(fan) * 0.1f, s * 0.18f + (float) Math.sin(fan) * 0.1f, 0.03f, 0xFF7A8090);
+        if (id == 8) { // Dart: small arrowhead skimmer
+            poly(g, 0xFF20242A, -0.5f, -0.38f, 0.3f, -0.3f, 0.62f, 0f, 0.3f, 0.3f, -0.5f, 0.38f);
+            poly(g, body, -0.44f, -0.32f, 0.26f, -0.25f, 0.54f, 0f, 0.26f, 0.25f, -0.44f, 0.32f);
+            fanAt(g, -0.3f, 0, 0.14f, fan);
+            g.fillCircle(0.12f, 0, 0.1f, 0xFF7ACBFF);
+            g.line(-0.1f, 0.15f, -0.45f, 0.42f, 0.025f, 0xFFDDDDDD);
+            g.line(0.1f, -0.15f, 0.55f, -0.15f, 0.04f, 0xFF2A2E36);
+        } else if (id == 9) { // Riptide: wedge attack hover with side rocket pods
+            poly(g, 0xFF20242A, -0.56f, -0.4f, 0.4f, -0.36f, 0.62f, 0f, 0.4f, 0.36f, -0.56f, 0.4f);
+            poly(g, body, -0.5f, -0.34f, 0.36f, -0.3f, 0.54f, 0f, 0.36f, 0.3f, -0.5f, 0.34f);
+            for (int s = -1; s <= 1; s += 2) {
+                g.fillRoundRect(-0.1f, s * 0.36f - 0.08f, 0.36f, 0.16f, 0.04f, 0xFF3A3E46);
+                fanAt(g, -0.34f, s * 0.17f, 0.11f, fan);
+            }
+            poly(g, light, -0.1f, -0.17f, 0.22f, 0f, -0.1f, 0.17f);
+            g.line(0.1f, 0, 0.72f, 0, 0.06f, 0xFF2A2E36);
+        } else { // Squall: rounded missile hover with radar
+            g.fillRoundRect(-0.56f, -0.4f, 1.12f, 0.8f, 0.36f, 0xFF20242A);
+            g.fillRoundRect(-0.5f, -0.34f, 1.0f, 0.68f, 0.3f, body);
+            for (int s = -1; s <= 1; s += 2) fanAt(g, -0.32f, s * 0.18f, 0.12f, fan);
+            for (int k = -1; k <= 1; k += 2) {
+                g.fillRoundRect(-0.06f, k * 0.12f - 0.09f, 0.4f, 0.18f, 0.04f, 0xFF3A3E46);
+                for (int i = 0; i < 3; i++) g.fillCircle(0.02f + i * 0.12f, k * 0.12f, 0.03f, 0xFF15181E);
+            }
+            g.fillCircle(0.4f, 0, 0.08f, 0xFFC8CCD4);
         }
-        if (ch.role == Chassis.R_SUPPORT) {
-            g.fillRoundRect(-0.05f, -0.22f, 0.36f, 0.44f, 0.06f, 0xFF3A3E46);
-            for (int i = 0; i < 3; i++) g.fillCircle(0.06f + (i % 2) * 0.12f, -0.12f + i * 0.12f, 0.04f, 0xFF15181E);
-        } else {
-            g.line(0.1f, 0, 0.75f, 0, 0.07f, 0xFF2A2E36);
-            g.fillCircle(0.1f, 0, 0.17f, light);
-            g.strokeCircle(0.1f, 0, 0.17f, lw, dark);
-        }
+        g.strokeRoundRect(-0.5f, -0.34f, 1.0f, 0.68f, 0.3f, lw * 0.6f, Col.alpha(dark, 0.6f));
+    }
+
+    private static void fanAt(Gfx g, float x, float y, float r, float a) {
+        g.fillCircle(x, y, r, 0xFF15181E);
+        g.line(x - (float) Math.cos(a) * r * 0.8f, y - (float) Math.sin(a) * r * 0.8f,
+                x + (float) Math.cos(a) * r * 0.8f, y + (float) Math.sin(a) * r * 0.8f, 0.03f, 0xFF7A8090);
     }
 
     private static void vtol(Gfx g, Chassis ch, int body, int dark, int light, float lw, float time) {
-        g.fillRect(-0.75f, -0.05f, 0.6f, 0.1f, dark);
-        g.fillRect(-0.8f, -0.16f, 0.1f, 0.32f, dark);
+        int id = ch.id;
+        float a = time * 25;
+        if (id == 13) { // Talon: tandem-rotor gunship with wide missile stubs
+            g.fillRect(-0.6f, -0.08f, 1.1f, 0.16f, dark);
+            g.save();
+            g.scale(1f, 0.38f);
+            g.fillCircle(0f, 0, 0.55f, body);
+            g.restore();
+            g.fillRect(-0.12f, -0.48f, 0.2f, 0.96f, Col.darker(body, 0.2f));
+            for (int s = -1; s <= 1; s += 2) {
+                g.fillRoundRect(-0.12f, s * 0.48f - 0.08f, 0.32f, 0.16f, 0.04f, 0xFF3A3E46);
+            }
+            g.fillCircle(0.42f, 0, 0.09f, 0xFF7ACBFF);
+            rotor(g, 0.32f, 0, 0.45f, a);
+            rotor(g, -0.42f, 0, 0.45f, -a);
+            return;
+        }
+        // tail boom
+        g.fillRect(-0.78f, -0.05f, 0.62f, 0.1f, dark);
+        g.fillRect(-0.82f, -0.16f, 0.1f, 0.32f, dark);
         g.save();
-        g.scale(1f, 0.42f);
-        g.fillCircle(0.05f, 0, 0.42f, body);
-        g.strokeCircle(0.05f, 0, 0.42f, lw * 2, dark);
+        g.scale(1f, id == 11 ? 0.34f : 0.44f);
+        g.fillCircle(0.05f, 0, id == 11 ? 0.36f : 0.44f, body);
+        g.strokeCircle(0.05f, 0, id == 11 ? 0.36f : 0.44f, lw * 2, dark);
         g.restore();
         g.fillCircle(0.3f, 0, 0.1f, 0xFF7ACBFF);
-        if (ch.role != Chassis.R_SCOUT) {
-            g.fillRect(-0.05f, -0.32f, 0.18f, 0.64f, Col.darker(body, 0.2f));
-            g.fillCircle(0.06f, -0.32f, 0.07f, 0xFF3A3E46);
-            g.fillCircle(0.06f, 0.32f, 0.07f, 0xFF3A3E46);
+        if (id == 11) { // Mosquito: slim scout with a sensor ball
+            g.fillCircle(0.42f, 0, 0.07f, 0xFFC8CCD4);
+            g.line(-0.3f, 0, -0.5f, -0.25f, 0.025f, 0xFFDDDDDD);
+            rotor(g, 0, 0, 0.55f, a);
+        } else { // Dragonfly: stub wings with rocket pods and a chin gun
+            g.fillRect(-0.06f, -0.36f, 0.16f, 0.72f, Col.darker(body, 0.2f));
+            for (int s = -1; s <= 1; s += 2) {
+                g.fillRoundRect(-0.08f, s * 0.36f - 0.07f, 0.26f, 0.14f, 0.05f, 0xFF3A3E46);
+                g.fillCircle(0.18f, s * 0.36f, 0.04f, 0xFF15181E);
+            }
+            g.line(0.3f, 0.06f, 0.55f, 0.06f, 0.04f, 0xFF2A2E36);
+            rotor(g, 0, 0, 0.62f, a);
         }
-        // rotor
-        g.fillCircle(0.0f, 0, 0.62f, 0x22FFFFFF);
-        float a = time * 25;
+    }
+
+    private static void rotor(Gfx g, float x, float y, float r, float a) {
+        g.fillCircle(x, y, r, 0x22FFFFFF);
         for (int i = 0; i < 2; i++) {
-            float ca = (float) Math.cos(a + i * Math.PI / 2) * 0.62f, sa = (float) Math.sin(a + i * Math.PI / 2) * 0.62f;
-            g.line(-ca, -sa, ca, sa, 0.04f, 0xAA20242A);
+            float ca = (float) Math.cos(a + i * Math.PI / 2) * r, sa = (float) Math.sin(a + i * Math.PI / 2) * r;
+            g.line(x - ca, y - sa, x + ca, y + sa, 0.04f, 0xAA20242A);
         }
-        g.fillCircle(0, 0, 0.06f, 0xFF20242A);
+        g.fillCircle(x, y, 0.06f, 0xFF20242A);
+    }
+
+    private static void wheels(Gfx g, int n, float x0, float x1, float y) {
+        for (int i = 0; i < n; i++) {
+            float wx = n == 1 ? x0 : x0 + (x1 - x0) * i / (n - 1);
+            g.fillRoundRect(wx - 0.09f, -y - 0.12f, 0.18f, 0.12f, 0.04f, 0xFF15181E);
+            g.fillRoundRect(wx - 0.09f, y, 0.18f, 0.12f, 0.04f, 0xFF15181E);
+        }
     }
 
     private static void car(Gfx g, Chassis ch, int body, int dark, int light, float lw) {
-        for (int i = 0; i < 3; i++) {
-            float wx = -0.35f + i * 0.3f;
-            g.fillRoundRect(wx - 0.09f, -0.42f, 0.18f, 0.12f, 0.04f, 0xFF15181E);
-            g.fillRoundRect(wx - 0.09f, 0.3f, 0.18f, 0.12f, 0.04f, 0xFF15181E);
-        }
-        g.fillRoundRect(-0.5f, -0.32f, 1.0f, 0.64f, 0.12f, body);
-        g.strokeRoundRect(-0.5f, -0.32f, 1.0f, 0.64f, 0.12f, lw, dark);
-        g.fillRoundRect(0.22f, -0.26f, 0.22f, 0.52f, 0.06f, Col.darker(body, 0.2f));
-        if (ch.role == Chassis.R_ARTILLERY) {
-            g.line(-0.35f, 0, 0.75f, 0, 0.1f, 0xFF2A2E36);
-            g.fillRoundRect(-0.45f, -0.2f, 0.36f, 0.4f, 0.06f, light);
-        } else if (ch.role == Chassis.R_SUPPORT) {
-            g.fillRoundRect(-0.3f, -0.2f, 0.4f, 0.4f, 0.05f, 0xFF3A3E46);
-            for (int i = 0; i < 4; i++) g.fillCircle(-0.2f + (i % 2) * 0.2f, -0.1f + (i / 2) * 0.2f, 0.045f, 0xFF15181E);
-        } else {
-            g.line(-0.05f, 0, 0.62f, 0, 0.06f, 0xFF2A2E36);
-            g.fillCircle(-0.05f, 0, 0.16f, light);
-            g.strokeCircle(-0.05f, 0, 0.16f, lw, dark);
+        switch (ch.id) {
+            case 14: // Jackal: four-wheeled scout with a pointed nose
+                wheels(g, 2, -0.3f, 0.28f, 0.28f);
+                poly(g, body, -0.46f, -0.28f, 0.28f, -0.28f, 0.52f, 0f, 0.28f, 0.28f, -0.46f, 0.28f);
+                g.fillRoundRect(0.08f, -0.2f, 0.18f, 0.4f, 0.05f, 0xFF7ACBFF);
+                g.line(-0.1f, 0, 0.42f, 0, 0.045f, 0xFF2A2E36);
+                g.fillCircle(-0.1f, 0, 0.12f, light);
+                g.line(-0.35f, 0.15f, -0.6f, 0.4f, 0.025f, 0xFFDDDDDD);
+                break;
+            case 16: // Mule: truck with a cab up front and the howitzer behind
+                wheels(g, 3, -0.4f, 0.32f, 0.3f);
+                g.fillRoundRect(0.18f, -0.28f, 0.34f, 0.56f, 0.08f, light);
+                g.fillRect(0.4f, -0.22f, 0.08f, 0.44f, 0xFF7ACBFF);
+                g.fillRoundRect(-0.6f, -0.3f, 0.76f, 0.6f, 0.05f, body);
+                g.fillRect(-0.7f, -0.34f, 0.12f, 0.1f, 0xFF5A5F68);
+                g.fillRect(-0.7f, 0.24f, 0.12f, 0.1f, 0xFF5A5F68);
+                g.line(-0.35f, 0, 0.85f, 0.0f, 0.1f, 0xFF2A2E36);
+                g.fillCircle(-0.35f, 0, 0.15f, Col.darker(body, 0.2f));
+                break;
+            case 17: // Lancer: wedge tank-hunter with a missile box and laser
+                wheels(g, 3, -0.36f, 0.28f, 0.3f);
+                poly(g, body, -0.5f, -0.32f, 0.3f, -0.32f, 0.56f, -0.1f, 0.56f, 0.1f, 0.3f, 0.32f, -0.5f, 0.32f);
+                g.fillRoundRect(-0.38f, -0.24f, 0.36f, 0.48f, 0.05f, 0xFF3A3E46);
+                for (int i = 0; i < 4; i++) g.fillCircle(-0.3f + (i % 2) * 0.18f, -0.1f + (i / 2) * 0.2f, 0.04f, 0xFF15181E);
+                g.line(0.05f, 0, 0.7f, 0, 0.05f, 0xFF2A2E36);
+                g.fillCircle(0.05f, 0, 0.12f, light);
+                break;
+            default: // Rhino: six-wheeled brawler with armor plates and a big turret
+                wheels(g, 3, -0.35f, 0.3f, 0.3f);
+                g.fillRoundRect(-0.52f, -0.33f, 1.04f, 0.66f, 0.12f, body);
+                for (int i = 0; i < 3; i++) g.fillRect(-0.4f + i * 0.3f, -0.33f, 0.04f, 0.66f, Col.darker(body, 0.25f));
+                g.fillRoundRect(0.3f, -0.26f, 0.18f, 0.52f, 0.06f, 0xFF7ACBFF);
+                g.line(-0.05f, 0, 0.74f, 0, 0.09f, 0xFF2A2E36);
+                g.fillCircle(-0.05f, 0, 0.2f, light);
+                g.strokeCircle(-0.05f, 0, 0.2f, lw, dark);
         }
     }
 
-    private static void infantry(Gfx g, int team, float strength, float time) {
+    private static void infantry(Gfx g, Chassis ch, int team, float strength, float time) {
         int n = Math.max(1, Math.round(5 * strength));
         float[][] pos = {{0.25f, 0}, {-0.05f, -0.3f}, {-0.05f, 0.3f}, {-0.35f, -0.12f}, {-0.35f, 0.18f}};
+        int coat = Col.lerp(team, ch.id == 2 ? 0xFF8A7A4A : 0xFF6A7A5A, 0.35f);
         for (int i = 0; i < n; i++) {
             float bob = (float) Math.sin(time * 4 + i) * 0.02f;
             float x = pos[i][0], y = pos[i][1] + bob;
             g.fillCircle(x, y, 0.13f, 0xFF20242A);
-            g.fillCircle(x, y, 0.1f, Col.lerp(team, 0xFF6A7A5A, 0.35f));
-            g.line(x, y, x + 0.2f, y + 0.04f, 0.03f, 0xFF15181E);
+            g.fillCircle(x, y, 0.1f, coat);
+            if (ch.id == 1 && i % 2 == 0) g.line(x - 0.1f, y + 0.06f, x + 0.26f, y + 0.06f, 0.06f, 0xFF4A5040);   // rocket tube
+            else g.line(x, y, x + 0.2f, y + 0.04f, 0.03f, 0xFF15181E);
+            if (ch.id == 2 && i == 0) g.line(x - 0.05f, y, x - 0.3f, y - 0.25f, 0.02f, 0xFFDDDDDD);             // radio
+        }
+        if (ch.id == 3) { // mortar tube in the middle of the section
+            g.fillCircle(0.05f, 0.02f, 0.12f, 0xFF3A3E46);
+            g.fillCircle(0.05f, 0.02f, 0.06f, 0xFF15181E);
         }
     }
 

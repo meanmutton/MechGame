@@ -711,15 +711,11 @@ public final class Battle {
         int[] table = UnitType.hitTable(t.type, arc);
         int total = 0;
         for (int v : table) total += v;
-        for (int tries = 0; tries < 4; tries++) {
-            int roll = rnd.nextInt(total);
-            for (int i = 0; i < table.length; i++) {
-                roll -= table[i];
-                if (roll < 0) {
-                    if (!t.locDestroyed(i) || tries == 3) return i;
-                    break;
-                }
-            }
+        // Destroyed locations stay in the table: hits on them transfer to the core at half damage.
+        int roll = rnd.nextInt(total);
+        for (int i = 0; i < table.length; i++) {
+            roll -= table[i];
+            if (roll < 0) return i;
         }
         return 0;
     }
@@ -728,17 +724,19 @@ public final class Battle {
     public void applyDamage(Unit t, int loc, int dmg, Wpn w, Unit src, float when) {
         if (t.destroyed || dmg <= 0) return;
         boolean mech = UnitType.isMech(t.type);
-        // a destroyed limb passes damage inward
-        if (mech && t.locDestroyed(loc)) {
-            if (loc == UnitType.M_LARM || loc == UnitType.M_RARM || loc == UnitType.M_LLEG || loc == UnitType.M_RLEG) loc = UnitType.M_CORE;
+        // A hit on an already-destroyed location carries through to the core (a vehicle's front hull) at half damage.
+        if (transfers(t, loc) && t.locDestroyed(loc)) {
+            int half = Math.max(1, Math.round(dmg * 0.5f));
+            applyDamage(t, coreOf(t), half, w, src, when);
+            return;
         }
-        if (!mech && t.type != UnitType.INFANTRY && t.locDestroyed(loc) && loc == UnitType.V_TOP) loc = UnitType.V_FRONT;
         String locName = UnitType.locShort(t.type)[loc];
         int absorbed = Math.min(t.armor[loc], dmg);
         t.armor[loc] -= absorbed;
         int rem = dmg - absorbed;
         int il = UnitType.infraLoc(t.type, loc);
         boolean crit = false;
+        int overflow = 0;
         if (rem > 0) {
             int before = t.infra[il];
             t.infra[il] = Math.max(0, t.infra[il] - rem);
@@ -749,9 +747,7 @@ public final class Battle {
                 log(t.name + ": " + UnitType.locNames(t.type)[il] + " destroyed");
                 queue(Fx.explosion(map, t.q, t.r, when + 0.1f, 0.55f));
             }
-            if (over > 0 && mech && il != UnitType.M_CORE && il != UnitType.M_COCKPIT) {
-                t.infra[UnitType.M_CORE] = Math.max(0, t.infra[UnitType.M_CORE] - over);
-            }
+            if (over > 0 && transfers(t, loc)) overflow = Math.max(1, Math.round(over * 0.5f));
         }
         if (w != null && w.has(Wpn.AP) && rnd.nextFloat() < 0.15f) crit = true;
         queue(Fx.text("-" + dmg + " " + locName, t, when, rem > 0 ? 0xFFFF6A4A : 0xFFFFE08A));
@@ -782,6 +778,19 @@ public final class Battle {
             if (t.type == UnitType.VTOL && t.infra[UnitType.V_TOP] <= 0) dead = true;
         }
         if (dead) kill(t, src, when + 0.25f, null);
+        else if (overflow > 0) applyDamage(t, coreOf(t), overflow, w, src, when + 0.05f);
+    }
+
+    /** Locations whose loss passes later hits (and excess damage) on to the core. */
+    static boolean transfers(Unit t, int loc) {
+        if (UnitType.isMech(t.type)) {
+            return loc == UnitType.M_LARM || loc == UnitType.M_RARM || loc == UnitType.M_LLEG || loc == UnitType.M_RLEG;
+        }
+        return t.type != UnitType.INFANTRY && t.type != UnitType.VTOL && loc == UnitType.V_TOP;
+    }
+
+    static int coreOf(Unit t) {
+        return UnitType.isMech(t.type) ? UnitType.M_CORE : UnitType.V_FRONT;
     }
 
     private void critical(Unit t, int loc, float when) {
