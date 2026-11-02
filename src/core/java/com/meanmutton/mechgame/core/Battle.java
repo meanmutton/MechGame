@@ -558,7 +558,7 @@ public final class Battle {
         float m = 1f;
         if (t.type == UnitType.INFANTRY) {
             if (w.has(Wpn.VS_INF)) m *= 1.5f;
-            else if (w.family != Wpn.F_ARTILLERY && w.family != Wpn.F_MISSILE) m *= 0.5f;
+            else if (w.family != Wpn.F_ARTILLERY && w.family != Wpn.F_MISSILE && !t.ch.exposedCrew()) m *= 0.5f;
         }
         if (w.has(Wpn.VS_AIR) && t.type == UnitType.VTOL) m *= 2f;
         if (w.family == Wpn.F_ENERGY && t.hasEquip(Equip.REFLECTIVE)) m *= 0.75f;

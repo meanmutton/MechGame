@@ -56,6 +56,11 @@ public final class Chassis {
         this.desc = desc;
     }
 
+    /** Mortar crews work in the open around the gun: they don't get infantry's protection from big guns. */
+    public boolean exposedCrew() {
+        return id == 3;
+    }
+
     private static Mount parseMount(int type, String s) {
         char arcC = s.charAt(s.length() - 1);
         int cls = s.charAt(s.length() - 2) - '0';
@@ -90,9 +95,9 @@ public final class Chassis {
             new Chassis(2, "Recon Team", UnitType.INFANTRY, R_SCOUT, 120, 3f, 15, 16, 3, 0, 10, 0, 1,
                     "S1T", 10, 0, w(Wpn.RIFLES), NONE, w(Equip.SENSORS),
                     "Fast-moving spotters with sensor kits. Great for calling in artillery."),
-            new Chassis(3, "Mortar Section", UnitType.INFANTRY, R_ARTILLERY, 140, 4f, 15, 20, 2, 0, 10, 0, 1,
-                    "S1T", 10, 0, w(Wpn.MORTAR), w(1), NONE,
-                    "A portable mortar. Cheap indirect fire."),
+            new Chassis(3, "Mortar Section", UnitType.INFANTRY, R_ARTILLERY, 140, 4f, 6, 10, 2, 0, 10, 0, 1,
+                    "S1T", 4, 0, w(Wpn.MORTAR), w(1), NONE,
+                    "A glass cannon: a hard-hitting portable mortar crewed by a handful of soldiers. Keep it far back; it dies fast."),
             // ---------------- Tracked tanks ----------------
             new Chassis(4, "Ironhide MBT", UnitType.TRACKED, R_LINE, 600, 32f, 200, 42, 4, 6, 20, 4, 2,
                     "T3T F2F T1T", 180, 0, w(Wpn.BATTLE_CANNON, Wpn.ROCKETS, Wpn.CHAINGUN), w(1, 0, 0), NONE,

@@ -114,7 +114,7 @@ public final class Wpn {
                     "Fifteen missiles from across the map."),
             new Wpn(SEEKERS, "Seeker Rockets", 2, F_MISSILE, 8, 2, 3, 6, 0.5f, 0, 1, 3, 5, 2f, 160, 20, SEEKER, 0,
                     "Lock-on rockets: very accurate and all of them hit. ECM spoils the lock."),
-            new Wpn(MORTAR, "Field Mortar", 1, F_ARTILLERY, 5, 3, 1, 6, 0.5f, 2, 3, 6, 9, 2f, 90, 0, INDIRECT, 2,
+            new Wpn(MORTAR, "Field Mortar", 1, F_ARTILLERY, 6, 3, 1, 6, 0.5f, 2, 3, 6, 9, 2f, 90, 0, INDIRECT, 3,
                     "Lobs shells over obstacles at anything a friendly unit can see. Accurate at long range, wild up close."),
             new Wpn(HOWITZER, "Howitzer", 2, F_ARTILLERY, 10, 5, 2, 5, 1f, 3, 4, 9, 14, 6f, 220, 0, INDIRECT, 4,
                     "Indirect artillery with splash. Most accurate at long range, very poor at short range."),

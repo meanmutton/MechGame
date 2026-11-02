@@ -34,7 +34,7 @@ Android 5.0 or newer, landscape. No permissions, no network, no ads.
 
 | Type | Designs | Notes |
 |---|---|---|
-| Infantry | Rifle Platoon, Rocket Squad, Recon Team, Mortar Section | Cheap; hard to hurt with big guns; good in woods and towns |
+| Infantry | Rifle Platoon, Rocket Squad, Recon Team, Mortar Section | Cheap; hard to hurt with big guns; good in woods and towns. The Mortar Section is a glass cannon: big damage, easy to kill |
 | Tracked Tank | Ironhide MBT, Breaker Heavy Tank, Thunder SPG, Quiver Missile Carrier | Most armor of any vehicle; heavy weapons |
 | Hovertank | Dart Scout Hover, Riptide Strike Hover, Squall Missile Hover | Very fast, crosses water |
 | VTOL | Mosquito Recon VTOL, Dragonfly Attack VTOL, Talon Gunship | Flies over terrain; light armor; flak deals double damage to it |
