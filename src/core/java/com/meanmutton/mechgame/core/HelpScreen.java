@@ -10,6 +10,8 @@ public final class HelpScreen extends Screen {
     private static final String[][] PAGES = {
             {
                     "Each side fields up to 6 units on a hex map. A battle lasts up to 15 rounds.",
+                    "Before the first round you deploy: tap a unit, then a green hex. Infantry can be placed on any open hex on the map (ambushes!); everything else starts in your blue zone. Then press Start Battle.",
+                    "Double-tap any unit (on the map, in HQ or in the Market) for its full detail sheet: every location's armor and structure, every weapon's numbers, and what each piece of equipment does. The Details button in the battle panel does the same.",
                     "Every round, one side wins initiative. Then the sides take turns activating one unit at a time until every unit has gone.",
                     "On your activation: tap one of your units (they pulse blue), tap a green hex twice to move there, tap an enemy to target it, choose weapons, FIRE, then End Turn.",
                     "You can rotate your unit (the arrow buttons) before ending. Facing matters: you shoot out of your front, and enemies who hit your sides or rear do more harm.",
@@ -35,7 +37,8 @@ public final class HelpScreen extends Screen {
                     "Energy weapons make heat. Ballistic weapons use ammunition. Missiles use both but are light. Each unit sheds heat every round through its heat sinks; standing in water adds cooling.",
                     "Above half your heat capacity you lose 1 movement and 10% accuracy; above three quarters, 2 movement and 20%. Reaching your capacity shuts the unit down for its next activation, damages it, and may set off its ammunition.",
                     "Targeting Computer +10% for energy and ballistic weapons. ECM jams enemy missiles and spotting near your units. Sensor Suite sees through woods, night and ECM.",
-                    "Turbo Booster +3 movement for one activation. Coolant Pod dumps heat. Smoke Launcher hides you. Reflective and Reactive Plating cut energy or missile/artillery damage. Command Uplink helps nearby allies aim. Field Repair Kit patches armor."
+                    "Turbo Booster +3 movement for one activation. Coolant Pod dumps 15 heat. Smoke Launcher fills your hex with smoke. Field Repair Kit restores 15 armor to your most damaged location. These four have buttons in the battle panel during your activation.",
+                    "Reflective and Reactive Plating cut energy or missile/artillery damage by a quarter, and Command Uplink gives allies within 3 hexes +5% to hit. These work automatically; the hit-chance breakdown under the weapon list shows each modifier."
             },
             {
                     "Open ground, light woods (cover -10%), heavy woods (cover -20%), rough ground, shallow and deep water, towns (cover -15%) and roads. Hills come in levels 0 to 3; the number in a hex's corner is its height.",
