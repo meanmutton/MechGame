@@ -196,5 +196,35 @@ public final class Chassis {
                     "RA3W LA3W C2W C1W", 200, 2, w(Wpn.RAIL, Wpn.HEAVY_LASER, Wpn.ION_LANCE, Wpn.LIGHT_LASER),
                     w(1, 0, 0, 0), w(Equip.ECM, Equip.UPLINK, Equip.TARGETING, Equip.REPAIR_KIT),
                     "Command mech. Jams the enemy, sharpens your whole lance, and hits hard itself."),
+            // ---------------- Emplacements (defend bases in campaigns; can't be bought or moved) ----------------
+            new Chassis(33, "Gun Emplacement", UnitType.EMPLACEMENT, R_LINE, 450, 30f, 170, 40, 0, 6, 20, 2, 1,
+                    "T3T T1T", 160, 0, w(Wpn.SIEGE_CANNON, Wpn.CHAINGUN), w(1, 0), NONE,
+                    "A dug-in siege cannon behind thick armor. It can't move, but it covers its whole field of fire."),
+            new Chassis(34, "Missile Bunker", UnitType.EMPLACEMENT, R_SUPPORT, 450, 26f, 150, 38, 0, 7, 20, 2, 1,
+                    "T3T T2T", 150, 0, w(Wpn.HEAVY_VOLLEY, Wpn.ROCKETS), w(1, 0), NONE,
+                    "A hardened launcher that throws guided missiles across the field."),
+            new Chassis(35, "Laser Turret", UnitType.EMPLACEMENT, R_LINE, 450, 26f, 150, 38, 0, 11, 24, 2, 1,
+                    "T3T T2T", 150, 0, w(Wpn.HEAVY_LASER, Wpn.LASER), NONE, NONE,
+                    "A power-fed laser tower. Never runs out of ammunition."),
     };
+
+    /** Designs that can be bought (everything except emplacements). */
+    public static final Chassis[] SHOP = shop();
+
+    private static Chassis[] shop() {
+        int n = 0;
+        for (Chassis c : ALL) if (c.buyable()) n++;
+        Chassis[] out = new Chassis[n];
+        n = 0;
+        for (Chassis c : ALL) if (c.buyable()) out[n++] = c;
+        return out;
+    }
+
+    public boolean buyable() {
+        return type != UnitType.EMPLACEMENT;
+    }
+
+    public boolean fixed() {
+        return mp == 0;
+    }
 }

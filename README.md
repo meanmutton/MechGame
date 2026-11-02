@@ -13,7 +13,8 @@ Android 5.0 or newer, landscape. No permissions, no network, no ads.
 
 ## How it plays
 
-- **Modes.** *Campaign*: run a company through contract after contract; money, units, damage and spare parts carry over, and the game is saved. The enemy is a rival company with its own money and roster: it is paid every contract (more when it wins), repairs what it can afford, loses units left on a field it lost, and buys or upgrades units. Each contract caps the force it can field at a multiple of yours (1.1× Easy, 1.4× Normal, 1.8× Hard); a poor rival fields less. *Quick Battle*: spend a budget on up to 6 units and fight one battle.
+- **Modes.** *Campaign*: fight for a planet as the attacker or the defender (see below); money, units, damage and spare parts carry over, and the game is saved. The enemy is a rival company with its own money and roster: it is paid every contract (more when it wins), repairs what it can afford, loses units left on a field it lost, and buys or upgrades units. Each contract caps the force it can field at a multiple of yours (1.1× Easy, 1.4× Normal, 1.8× Hard); a poor rival fields less. It plays by each scenario's unit limits, buys with the next scenario in mind, and hires stopgap units when it has nothing allowed. *Quick Battle*: spend a budget on up to 6 units and fight one battle.
+- **Campaign scenarios.** A campaign is a series of battles that ends when the planet is decided. The front runs from the attacker's dropships (-1) to the defender's base (6) and starts at 2, so the defender has the upper hand. Every battle is one of 21 scenarios, each limiting which units may fight and how many: the **Initial Drop** comes first (VTOLs, wheeled vehicles, light and medium mechs), **Recon Sweeps** are for scouts and light mechs, **Pitched Battles** and **Decisive Engagements** take everything, and in between come raids, river crossings, street fights, lance clashes, armored thrusts, air assaults, storms and more. Some lean slightly toward the attacker or the defender (more initiative, a time-out that only asks one side to be close, a free garrison, a bigger force allowance), and the briefing says which. The next scenario is rolled from the last result, the front and a random roll, and is shown at HQ and in the Market *before* you repair, buy and customize. An attacker that reaches the base faces garrison infantry, an armored car, a gun emplacement and a laser turret: win and the planet falls. An attacker driven off its landing zone must hold its dropships or leave the planet. The attacker's supplies last 16 battles; after that one last battle decides it. Then your company can move on to a new planet, on either side.
 - **Deployment.** Before the first round you place your units: infantry can go on any open hex on the map, everything else starts in your home zone. The computer digs its infantry into woods and towns too.
 - **Details.** Double-tap any unit (on the map, in HQ or in the Market) for its full sheet: every location's armor and structure, every weapon's numbers, and what each piece of equipment does.
 - **Hit feedback.** Every hit bursts on the part of the unit it struck. The battle panel switches to the target's hit-location diagram, flashing each struck location with the damage (yellow for armor, red for structure) and a running total. The combat log lists damage by location, e.g. "Monolith fired at Halberd (front): 5/5 hit, 46 damage: 29 to core, 11 to left arm, 2 to right arm, 4 to right leg".
@@ -28,7 +29,7 @@ Android 5.0 or newer, landscape. No permissions, no network, no ads.
 
 ## Units
 
-9 types, 33 designs, each with its own artwork, each in a role: Scout, Front-line, Striker, Fire Support, Artillery, Brawler, Command.
+9 types, 33 designs you can buy (plus 3 fixed emplacements that defend bases), each with its own artwork, each in a role: Scout, Front-line, Striker, Fire Support, Artillery, Brawler, Command.
 
 ![All units](docs/screenshots/units.png)
 
@@ -43,6 +44,7 @@ Android 5.0 or newer, landscape. No permissions, no network, no ads.
 | Medium Mech | Halberd, Ricochet, Cinder, Sabre Dancer | |
 | Heavy Mech | Bastille, Overwatch, Cleaver, Rainmaker | Heavy weapons |
 | Assault Mech | Monolith, Pulverizer, Skyfall, Aegis | Most armor and firepower |
+| Emplacement | Gun Emplacement, Missile Bunker, Laser Turret | Campaign bases only; can't be bought or moved |
 
 Armor follows your spec: tracked tanks and assault mechs carry the most, wheeled vehicles about as much as heavy mechs, hovertanks about as much as medium mechs, light mechs and VTOLs the least. Lighter units move further.
 
@@ -67,6 +69,7 @@ To customize a unit, select it at HQ and press **CUSTOMIZE**: you swap weapons a
 |---|---|---|
 | ![HQ](docs/screenshots/hq.png) | ![Market](docs/screenshots/market.png) | ![Workshop](docs/screenshots/workshop.png) |
 | ![Weapons](docs/screenshots/weapons.png) | ![Briefing](docs/screenshots/briefing.png) | ![Firing](docs/screenshots/firing.png) |
+| ![Campaign HQ](docs/screenshots/campaign.png) | ![Base assault](docs/screenshots/base_assault.png) | ![Campaign won](docs/screenshots/campaign_end.png) |
 
 ## Building
 
@@ -84,7 +87,7 @@ That writes `release/Hexfront.apk`, signed with `keystore/hexfront.keystore` (ke
 ./build.sh test
 ```
 
-That also validates every design, plays 20 computer-vs-computer battles headless (checking for crashes and stalls, and printing balance stats), and renders every screen to `build/shots/`.
+That also validates every design, plays 20 computer-vs-computer battles headless (checking for crashes and stalls, and printing balance stats), plays a few campaign missions through the scenario system, and renders every screen to `build/shots/`.
 
 ## Code layout
 

@@ -123,11 +123,37 @@ public final class Game {
     // =====================================================================
 
     public void newCampaign(int difficulty, int funds) {
+        newCampaign(difficulty, funds, Scenario.ATTACKER);
+    }
+
+    public void newCampaign(int difficulty, int funds, int side) {
         company = new Company();
         company.difficulty = difficulty;
         company.cash = funds;
+        company.side = side;
         company.rollContract(rng);
         company.rival = Rival.create(difficulty, funds, rng);
+        saveCompany();
+        setScreen(new HqScreen(this));
+    }
+
+    /** After a campaign ends: the same company moves on to a new planet against a fresh enemy. */
+    public void nextPlanet(int side) {
+        Company c = company;
+        c.over = 0;
+        c.side = side;
+        c.front = Scenario.FRONT_START;
+        c.scenario = Scenario.INITIAL_DROP;
+        c.lastScenario = -1;
+        c.lastOutcome = Scenario.OUT_NONE;
+        c.edge = -1;
+        c.planets++;
+        c.planetBattles = 0;
+        int worth = c.cash;
+        for (Unit u : c.roster) worth += u.value();
+        c.rival = Rival.create(c.difficulty, worth, rng);
+        c.rollContract(rng);
+        c.fitDeployment();
         saveCompany();
         setScreen(new HqScreen(this));
     }
@@ -153,7 +179,9 @@ public final class Game {
             c.rival = Rival.create(c.difficulty, worth, rng);
             saveCompany();
         }
-        setScreen(new HqScreen(this));
+        c.fitDeployment();
+        if (c.over != 0) setScreen(new CampaignEndScreen(this));
+        else setScreen(new HqScreen(this));
     }
 
     /** The enemy force for the next mission, built to a budget from stock designs. */
@@ -171,7 +199,7 @@ public final class Game {
             Unit pick = null;
             float bestScore = -1;
             for (int tries = 0; tries < 60; tries++) {
-                Chassis ch = Chassis.ALL[r.nextInt(Chassis.ALL.length)];
+                Chassis ch = Chassis.SHOP[r.nextInt(Chassis.SHOP.length)];
                 Unit u = new Unit(ch);
                 int v = u.value();
                 if (v > remaining) continue;
@@ -195,27 +223,62 @@ public final class Game {
 
     /** Builds everything for the next battle and shows the briefing. */
     public void prepareMission() {
-        Random r = new Random(company.seed);
-        Weather wx = Weather.random(company.biome, r);
-        HexMap map = new HexMap(20, 13, company.biome, wx);
+        Company c = company;
+        Random r = new Random(c.seed);
+        Scenario sc = c.next();
+        Weather wx = sc != null && sc.weather >= 0 ? new Weather(sc.weather) : Weather.random(c.biome, r);
+        HexMap map = new HexMap(20, 13, c.biome, wx);
+        if (sc != null) {
+            map.forceRiver = sc.river;
+            map.forceTown = sc.town;
+        }
         map.generate(r);
         List<Unit> enemy;
+        List<Unit> allies = new ArrayList<Unit>();
         boolean militia = false;
-        if (!company.quick && company.rival != null) {
-            militia = Rival.ensureForce(company.rival);
-            enemy = Rival.chooseForce(company.rival, company.deployedValue(), company.difficulty);
+        if (sc != null && c.rival != null) {
+            militia = Rival.ensureForce(c.rival);
+            boolean attacking = c.side == Scenario.ATTACKER;
+            enemy = new ArrayList<Unit>(Rival.chooseForce(c.rival, c.deployedValue(), c.difficulty, sc, !attacking, r));
+            allies.addAll(Scenario.garrison(attacking ? sc.attackerGarrison : sc.defenderGarrison));
+            enemy.addAll(Scenario.garrison(attacking ? sc.defenderGarrison : sc.attackerGarrison));
         } else {
             enemy = makeEnemyForce(r);
         }
-        BriefingScreen bs = new BriefingScreen(this, map, enemy);
+        BriefingScreen bs = new BriefingScreen(this, map, enemy, allies);
         bs.militia = militia;
         setScreen(bs);
     }
 
     public void startBattle(HexMap map, List<Unit> enemy) {
-        List<Unit> mine = new ArrayList<Unit>(company.deployed);
-        Battle b = new Battle(this, mine, enemy, map, new Random(company.seed ^ 0x5DEECE66DL), company.difficulty);
+        startBattle(map, enemy, new ArrayList<Unit>());
+    }
+
+    public void startBattle(HexMap map, List<Unit> enemy, List<Unit> allies) {
+        Company c = company;
+        List<Unit> mine = new ArrayList<Unit>(c.deployed);
+        mine.addAll(allies);
+        Battle b = new Battle(this, mine, enemy, map, new Random(c.seed ^ 0x5DEECE66DL), c.difficulty);
+        Scenario sc = c.next();
+        if (sc != null) {
+            boolean attacking = c.side == Scenario.ATTACKER;
+            b.maxRounds = sc.rounds;
+            b.playerInitiative = attacking ? sc.attackerInitiative : 1f - sc.attackerInitiative;
+            b.timeEdge = attacking ? -sc.timeLean : sc.timeLean;
+            if (c.edge >= 0) b.firstInitiative = c.edge == c.side ? Battle.PLAYER : Battle.ENEMY;
+        }
         setScreen(new BattleScreen(this, b));
+    }
+
+    /** No unit on the roster may fight in the next scenario: the mission counts as a loss without a battle. */
+    public void forfeitMission() {
+        Company c = company;
+        Debrief d = new Debrief();
+        d.result = Battle.RESULT_WITHDRAW;
+        d.forfeit = true;
+        d.pay = c.reward / 4;
+        c.cash += d.pay;
+        settle(d, Battle.RESULT_WITHDRAW, 0, null);
     }
 
     /** Settles money, salvage, and losses after a battle, then shows the debrief. */
@@ -273,25 +336,11 @@ public final class Game {
             }
             if (u.destroyed) c.deployed.remove(u);
         }
-        // the rival company settles up too
+        int mineLost = 0;
+        for (Unit u : b.units) if (u.team == Battle.PLAYER && u.destroyed && u.tag == null) mineLost += u.value();
         Company rv = c.rival;
         if (!c.quick && rv != null) {
-            float mult = Rival.incomeMult(c.difficulty);
-            // The rival's backers pay a base budget every contract, plus a bonus when it wins or draws.
-            int rpay = c.reward * 4 / 5;
-            switch (b.result) {
-                case Battle.RESULT_LOSS:
-                case Battle.RESULT_WITHDRAW: rpay += c.reward * 3 / 5; break;
-                case Battle.RESULT_DRAW: rpay += c.reward * 3 / 10; break;
-                default: break;
-            }
-            int mineLost = 0;
-            for (Unit u : b.units) if (u.team == Battle.PLAYER && u.destroyed) mineLost += u.value();
             boolean rivalHeld = b.result != Battle.RESULT_WIN;
-            if (rivalHeld) rpay += mineLost * 15 / 100;
-            rpay = Math.round(rpay * mult);
-            rv.cash += rpay;
-            d.rivalPay = rpay;
             for (Unit u : new ArrayList<Unit>(rv.roster)) {
                 u.shutdown = false;
                 u.staggered = false;
@@ -302,15 +351,62 @@ public final class Game {
                     d.rivalLost++;
                 }
             }
+        }
+        settle(d, b.result, mineLost, b);
+    }
+
+    /** The campaign moves on: the front, the next scenario, the rival's pay and shopping, and the record. */
+    private void settle(Debrief d, int result, int mineLost, Battle b) {
+        Company c = company;
+        Company rv = c.rival;
+        if (!c.quick) {
+            Scenario sc = c.next();
+            int out = c.outcome(result);
+            d.scenario = sc.name;
+            d.outcome = out;
+            d.frontBefore = c.front;
+            if (sc.id == Scenario.BASE_ASSAULT && out == Scenario.OUT_ATTACKER) c.over = Scenario.OUT_ATTACKER;
+            else if (sc.id == Scenario.EVACUATION && out == Scenario.OUT_DEFENDER) c.over = Scenario.OUT_DEFENDER;
+            else if (sc.isLast(c.planetBattles)) c.over = Scenario.OUT_DEFENDER;   // out of supplies: the attacker goes home
+            else c.front = sc.frontAfter(c.front, out);
+            c.edge = sc.intel && (out == Scenario.OUT_ATTACKER || out == Scenario.OUT_DEFENDER)
+                    ? (out == Scenario.OUT_ATTACKER ? Scenario.ATTACKER : Scenario.DEFENDER) : -1;
+            c.lastScenario = sc.id;
+            c.lastOutcome = out;
+            c.planetBattles++;
+            if (c.over == 0) c.scenario = Scenario.roll(c.front, out, sc.id, c.planetBattles, rng);
+            d.frontAfter = c.front;
+            d.over = c.over;
+            boolean wonPlanet = c.over == (c.side == Scenario.ATTACKER ? Scenario.OUT_ATTACKER : Scenario.OUT_DEFENDER);
+            if (c.over != 0 && wonPlanet) {
+                d.campaignBonus = 3000 + 1500 * c.difficulty;
+                c.cash += d.campaignBonus;
+            }
+        }
+        if (!c.quick && rv != null) {
+            float mult = Rival.incomeMult(c.difficulty);
+            // The rival's backers pay a base budget every contract, plus a bonus when it wins or draws.
+            int rpay = c.reward * 4 / 5;
+            switch (result) {
+                case Battle.RESULT_LOSS:
+                case Battle.RESULT_WITHDRAW: rpay += c.reward * 3 / 5; break;
+                case Battle.RESULT_DRAW: rpay += c.reward * 3 / 10; break;
+                default: break;
+            }
+            if (result != Battle.RESULT_WIN) rpay += mineLost * 15 / 100;
+            rpay = Math.round(rpay * mult);
+            rv.cash += rpay;
+            d.rivalPay = rpay;
             rv.deployed.clear();
-            d.rivalBought.addAll(Rival.upkeep(rv, rng));
+            d.rivalBought.addAll(Rival.upkeep(rv, rng, c.over == 0 ? c.next() : null));
             d.rivalCash = rv.cash;
             d.rivalUnits = rv.roster.size();
         }
-        if (b.result == Battle.RESULT_WIN) c.wins++;
-        else if (b.result == Battle.RESULT_LOSS || b.result == Battle.RESULT_WITHDRAW) c.losses++;
+        if (result == Battle.RESULT_WIN) c.wins++;
+        else if (result == Battle.RESULT_LOSS || result == Battle.RESULT_WITHDRAW) c.losses++;
         c.mission++;
         c.rollContract(rng);
+        c.fitDeployment();
         d.repairCost = c.repairAllCost();
         saveCompany();
         setScreen(new DebriefScreen(this, b, d));
@@ -331,6 +427,10 @@ public final class Game {
         public final List<String> lost = new ArrayList<String>();
         public final List<String> wrecked = new ArrayList<String>();
         public int rivalPay, rivalLost, rivalCash, rivalUnits;
+        // campaign
+        public boolean forfeit;
+        public String scenario;
+        public int outcome, frontBefore, frontAfter, over, campaignBonus;
         public final List<String> rivalBought = new ArrayList<String>();
     }
 }

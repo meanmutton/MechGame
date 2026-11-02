@@ -10,6 +10,8 @@ public final class Unit {
     public final Chassis ch;
     public final int type;
     public String name;
+    /** Not part of either company: "garrison" (local troops) or "hired" (enemy stopgaps). Not saved. */
+    public String tag;
 
     // ---- loadout ----
     public final int[] weapon;   // per mount, -1 = empty
@@ -274,7 +276,8 @@ public final class Unit {
         if (destroyed) return "DESTROYED";
         if (shutdown) return "SHUT DOWN";
         StringBuilder b = new StringBuilder();
-        if (baseMp() == 0) b.append("IMMOBILE ");
+        if (ch.fixed()) b.append("FIXED ");
+        else if (baseMp() == 0) b.append("IMMOBILE ");
         if (staggered) b.append("STAGGERED ");
         if (ionized) b.append("IONIZED ");
         return b.toString().trim();

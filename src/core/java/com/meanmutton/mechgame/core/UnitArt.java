@@ -46,6 +46,7 @@ public final class UnitArt {
             case UnitType.HOVER: hover(g, ch, body, dark, light, lw, time); break;
             case UnitType.VTOL: vtol(g, ch, body, dark, light, lw, time); break;
             case UnitType.WHEELED: car(g, ch, body, dark, light, lw); break;
+            case UnitType.EMPLACEMENT: emplacement(g, ch, body, dark, light, lw); break;
             default: mech(g, ch, weapons, body, dark, light, lw, time); break;
         }
         g.restore();
@@ -278,6 +279,46 @@ public final class UnitArt {
     }
 
     // ---------------- vehicles ----------------
+
+    /** Fixed defenses: a sandbagged concrete pad with a weapon turret on top. */
+    private static void emplacement(Gfx g, Chassis ch, int body, int dark, int light, float lw) {
+        // octagonal concrete pad ringed with sandbags
+        float r = 0.56f;
+        float[] xs = new float[8], ys = new float[8];
+        for (int i = 0; i < 8; i++) {
+            double a = Math.PI / 8 + i * Math.PI / 4;
+            xs[i] = (float) Math.cos(a) * r;
+            ys[i] = (float) Math.sin(a) * r;
+        }
+        g.fillPoly(xs, ys, 8, 0xFF6E6A60);
+        for (int i = 0; i < 12; i++) {
+            double a = i * Math.PI / 6;
+            g.fillCircle((float) Math.cos(a) * 0.5f, (float) Math.sin(a) * 0.5f, 0.09f, 0xFF9C8F6E);
+        }
+        g.fillCircle(0, 0, 0.42f, 0xFF58554E);
+        switch (ch.id) {
+            case 34: // Missile Bunker: squat box with a launcher grid
+                g.fillRoundRect(-0.3f, -0.3f, 0.6f, 0.6f, 0.06f, body);
+                g.strokeRoundRect(-0.3f, -0.3f, 0.6f, 0.6f, 0.06f, lw, dark);
+                for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) g.fillCircle(-0.16f + i * 0.16f, -0.16f + j * 0.16f, 0.05f, 0xFF15181E);
+                break;
+            case 35: // Laser Turret: dome with a lens barrel and power cables
+                g.line(-0.42f, -0.3f, -0.15f, -0.1f, 0.04f, 0xFF2E86C8);
+                g.line(-0.42f, 0.3f, -0.15f, 0.1f, 0.04f, 0xFF2E86C8);
+                g.fillCircle(0, 0, 0.27f, light);
+                g.strokeCircle(0, 0, 0.27f, lw, dark);
+                g.line(0.1f, 0, 0.62f, 0, 0.1f, 0xFF3A3E46);
+                g.fillCircle(0.62f, 0, 0.07f, 0xFF7FE0FF);
+                break;
+            default: // Gun Emplacement: armored casemate with a long cannon
+                g.fillRoundRect(-0.28f, -0.26f, 0.5f, 0.52f, 0.08f, body);
+                g.strokeRoundRect(-0.28f, -0.26f, 0.5f, 0.52f, 0.08f, lw, dark);
+                g.line(0.1f, 0, 0.78f, 0, 0.13f, 0xFF2A2E36);
+                g.fillRect(0.7f, -0.08f, 0.1f, 0.16f, 0xFF1A1E24);
+                g.fillRect(-0.18f, -0.16f, 0.16f, 0.32f, light);
+                break;
+        }
+    }
 
     private static void tank(Gfx g, Chassis ch, int[] weapons, int body, int dark, int light, float lw) {
         int id = ch.id;

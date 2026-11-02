@@ -21,8 +21,8 @@ public final class HqScreen extends Screen {
         int n = c.roster.size();
         if (sel >= n) sel = n - 1;
         if (sel < 0 && n > 0) sel = 0;
-        float lx = u * 3, ly = h * 0.19f, lw = w * 0.56f;
-        float rowH = Math.min(u * 10, (h * 0.68f) / Math.max(6, n));
+        float lx = u * 3, ly = listTop(), lw = w * 0.56f;
+        float rowH = Math.min(u * 10, (h - u * 14 - ly) / Math.max(6, n));
         for (int i = 0; i < n; i++) {
             Unit un = c.roster.get(i);
             float y = ly + i * rowH;
@@ -30,8 +30,8 @@ public final class HqScreen extends Screen {
             row.selected = sel == i;
             row.color = 0xFF1E2A3C;
             Btn dep = add(new Btn(DEPLOY + i, c.deployed.contains(un) ? "✓" : "").set(lx, y + u * 0.3f, rowH - u * 0.6f, rowH - u * 0.6f));
-            dep.color = c.deployed.contains(un) ? 0xFF2E7D4F : 0xFF2A3346;
-            dep.enabled = c.canDeploy(un);
+            dep.color = c.deployed.contains(un) ? 0xFF2E7D4F : (c.canDeploy(un) ? 0xFF2A3346 : 0xFF171D29);
+            dep.enabled = !un.destroyed;   // tapping one that can't go explains why
         }
         float rx = lx + lw + u * 3, rw = w - rx - u * 3;
         float by = h - u * 25;
@@ -59,10 +59,16 @@ public final class HqScreen extends Screen {
         int rc = c.repairAllCost();
         Btn ra = add(new Btn(REPAIR_ALL, rc > 0 ? "Repair All $" + Ui.money(rc) : "All Repaired").set(u * 9 + bbw * 2, h - u * 12, bbw, u * 9));
         ra.enabled = rc > 0 && c.cash >= rc;
-        Btn launch = add(new Btn(LAUNCH, (c.quick ? "Fight" : "Launch Mission") + " (" + c.deployed.size() + "/6)")
+        boolean forfeit = !c.quick && c.deployed.isEmpty() && c.mustForfeit();
+        Btn launch = add(new Btn(LAUNCH, forfeit ? "Forfeit Mission" : (c.quick ? "Fight" : "Launch Mission") + " (" + c.deployed.size() + "/" + c.deployLimit() + ")")
                 .set(u * 12 + bbw * 3, h - u * 12, bbw, u * 9));
-        launch.color = 0xFF2E7D4F;
-        launch.enabled = !c.deployed.isEmpty();
+        launch.color = forfeit ? 0xFF8F3A2E : 0xFF2E7D4F;
+        launch.enabled = !c.deployed.isEmpty() || forfeit;
+        if (!c.quick && !forfeit && c.noneAllowed()) launch.sub = "buy an allowed unit in the Market";
+    }
+
+    private float listTop() {
+        return c.quick ? h * 0.19f : h * 0.215f;
     }
 
     private Unit selected() {
@@ -105,7 +111,8 @@ public final class HqScreen extends Screen {
             else if (c.canDeploy(un)) {
                 c.deployed.add(un);
                 if (un.isDamaged()) toast(un.name + " is damaged. Repair it before the fight if you can.");
-            }
+            } else if (!c.allowed(un)) toast(un.name + " can't take part in " + c.next().name + ".");
+            else if (!un.destroyed) toast(c.next() != null ? c.next().name + " allows only " + c.deployLimit() + " units." : "Six units at most.");
             sel = id - DEPLOY;
             game.saveCompany();
         } else if (id == MENU) {
@@ -125,7 +132,8 @@ public final class HqScreen extends Screen {
             }
         } else if (id == LAUNCH) {
             game.saveCompany();
-            game.prepareMission();
+            if (c.deployed.isEmpty()) game.forfeitMission();
+            else game.prepareMission();
             return;
         } else if (id == REFIT && su != null) {
             game.setScreen(new RefitScreen(game, su));
@@ -180,10 +188,16 @@ public final class HqScreen extends Screen {
                 : "Contract " + c.mission + ": " + HexMap.BIOME_NAMES[c.biome] + " region, pays $" + Ui.money(c.reward)
                 + "   |   Record " + c.wins + "W " + c.losses + "L   |   " + Company.DIFFICULTY[c.difficulty]
                 + (c.rival != null ? "   |   Enemy: $" + Ui.money(c.rival.cash) + ", " + c.rival.roster.size() + " units" : "");
-        g.text(sub, u * 3, h * 0.11f, u * 2.7f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+        g.text(sub, u * 3, h * 0.105f, u * 2.6f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+        Scenario sc = c.next();
+        if (sc != null) {
+            String next = "You are the " + Scenario.SIDE_NAMES[c.side].toLowerCase() + ", front " + Scenario.frontName(c.front)
+                    + ".   Next: " + sc.name + ". " + sc.limits() + ".";
+            g.text(Ui.fit(g, next, u * 2.6f, w - u * 6), u * 3, h * 0.15f, u * 2.6f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
+        }
         g.text("$" + Ui.money(c.cash), w - u * 3, h * 0.07f, u * 7, Col.MONEY, Gfx.ALIGN_RIGHT, true);
 
-        float lx = u * 3, ly = h * 0.19f, lw = w * 0.56f;
+        float lx = u * 3, ly = listTop(), lw = w * 0.56f;
         g.text("Deploy", lx, ly - u * 2.5f, u * 2.4f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
         g.text("Roster (" + c.roster.size() + "/" + Company.MAX_ROSTER + ")   Deployed value $" + Ui.money(c.deployedValue()),
                 lx + u * 12, ly - u * 2.5f, u * 2.4f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
@@ -201,14 +215,15 @@ public final class HqScreen extends Screen {
             g.text(un.name, tx, cy - row.h * 0.18f, u * 3f, un.destroyed ? Col.BAD : Col.TEXT, Gfx.ALIGN_LEFT, true);
             g.text(UnitType.NAMES[un.type] + " · " + Chassis.ROLES[un.ch.role] + (un.name.equals(un.ch.name) ? "" : " · " + un.ch.name),
                     tx, cy + row.h * 0.22f, u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
-            String state = un.destroyed ? "WRECKED" : (un.isDamaged() ? "Damaged" : "Ready");
-            int sc = un.destroyed ? Col.BAD : (un.isDamaged() ? Col.ACCENT : Col.GOOD);
-            g.text(state, row.x + row.w - u * 2, cy - row.h * 0.18f, u * 2.5f, sc, Gfx.ALIGN_RIGHT, true);
-            Ui.bar(g, row.x + row.w - u * 18, cy + row.h * 0.12f, u * 16, u * 1.4f, un.condition(), sc);
+            boolean ok = c.allowed(un);
+            String state = un.destroyed ? "WRECKED" : (!ok ? "Not allowed" : (un.isDamaged() ? "Damaged" : "Ready"));
+            int stc = un.destroyed ? Col.BAD : (!ok ? Col.TEXT_DIM : (un.isDamaged() ? Col.ACCENT : Col.GOOD));
+            g.text(state, row.x + row.w - u * 2, cy - row.h * 0.18f, u * 2.5f, stc, Gfx.ALIGN_RIGHT, true);
+            Ui.bar(g, row.x + row.w - u * 18, cy + row.h * 0.12f, u * 16, u * 1.4f, un.condition(), un.destroyed ? Col.BAD : (un.isDamaged() ? Col.ACCENT : Col.GOOD));
         }
         // detail
         Unit su = selected();
-        float rx = lx + lw + u * 3, rw = w - rx - u * 3, ry = h * 0.17f;
+        float rx = lx + lw + u * 3, rw = w - rx - u * 3, ry = ly - u * 2;
         Ui.panel(g, rx - u, ry, rw + u * 2, h - ry - u * 38, u * 2);
         if (su != null) {
             UnitArt.draw(g, su, rx + u * 9, ry + u * 10, -40 + (float) Math.sin(t) * 10, Battle.PLAYER, u * 11, t, 1);

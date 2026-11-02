@@ -14,9 +14,13 @@ public final class DebriefScreen extends Screen {
         game.sfx(d.result == Battle.RESULT_WIN ? Platform.SND_WIN : Platform.SND_LOSE, 1f);
     }
 
+    private boolean campaignOver() {
+        return !game.company.quick && game.company.over != 0;
+    }
+
     protected void layout() {
         buttons.clear();
-        add(new Btn(CONTINUE, game.company.quick ? "Main Menu" : "Return to HQ").set(w - u * 43, h - u * 12, u * 40, u * 9)).color = 0xFF2E7D4F;
+        add(new Btn(CONTINUE, game.company.quick ? "Main Menu" : (campaignOver() ? "Campaign Results" : "Return to HQ")).set(w - u * 43, h - u * 12, u * 40, u * 9)).color = 0xFF2E7D4F;
     }
 
     public void update(float dt) {
@@ -26,6 +30,7 @@ public final class DebriefScreen extends Screen {
 
     protected void onClick(Btn btn) {
         if (game.company.quick) game.toMenu();
+        else if (campaignOver()) game.setScreen(new CampaignEndScreen(game));
         else game.toHq();
     }
 
@@ -38,8 +43,12 @@ public final class DebriefScreen extends Screen {
         background(g);
         String[] titles = {"", "VICTORY", "DEFEAT", "DRAW", "WITHDRAWN"};
         int[] colors = {0, Col.GOOD, Col.BAD, Col.ACCENT, Col.TEXT_DIM};
-        Ui.title(g, titles[d.result], w / 2f, h * 0.1f, u * 10);
-        g.text("Battle lasted " + Math.min(Battle.MAX_ROUNDS, b.round) + " rounds", w / 2f, h * 0.19f, u * 2.8f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
+        Ui.title(g, d.forfeit ? "FORFEITED" : titles[d.result], w / 2f, h * 0.09f, u * 10);
+        Company co = game.company;
+        String line = b == null ? "No unit on your roster could take part, so the mission was forfeited."
+                : "Battle lasted " + Math.min(b.maxRounds, b.round) + " rounds.";
+        if (d.scenario != null) line = d.scenario + ": " + line + "  " + campaignLine(co);
+        g.text(Ui.fit(g, line, u * 2.6f, w - u * 6), w / 2f, h * 0.18f, u * 2.6f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
         float lx = u * 4, cw = (w - u * 12) / 2, y0 = h * 0.25f;
         Ui.panel(g, lx - u, y0, cw + u * 2, h * 0.6f, u * 2);
         float y = y0 + u * 5;
@@ -51,6 +60,11 @@ public final class DebriefScreen extends Screen {
         g.text("Destruction bonus", lx + u, y, u * 2.6f, Col.TEXT, Gfx.ALIGN_LEFT, false);
         g.text("$" + Ui.money(d.bonus), lx + cw - u, y, u * 2.6f, Col.MONEY, Gfx.ALIGN_RIGHT, true);
         y += u * 4;
+        if (d.campaignBonus > 0) {
+            g.text("Campaign victory bonus", lx + u, y, u * 2.6f, Col.TEXT, Gfx.ALIGN_LEFT, false);
+            g.text("$" + Ui.money(d.campaignBonus), lx + cw - u, y, u * 2.6f, Col.MONEY, Gfx.ALIGN_RIGHT, true);
+            y += u * 4;
+        }
         g.text("Repairs needed", lx + u, y, u * 2.6f, Col.TEXT, Gfx.ALIGN_LEFT, false);
         g.text("$" + Ui.money(d.repairCost), lx + cw - u, y, u * 2.6f, Col.BAD, Gfx.ALIGN_RIGHT, true);
         y += u * 4;
@@ -70,12 +84,15 @@ public final class DebriefScreen extends Screen {
         y = y0 + u * 5;
         g.text("Unit performance", rx + u, y, u * 3.2f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
         y += u * 5;
-        for (Unit un : b.units) {
+        int mine = 0;
+        if (b != null) for (Unit un : b.units) if (un.team == Battle.PLAYER) mine++;
+        float step = mine > 6 ? u * 3.4f : u * 5;
+        for (Unit un : b == null ? new java.util.ArrayList<Unit>() : b.units) {
             if (un.team != Battle.PLAYER) continue;
             UnitArt.draw(g, un, rx + u * 3, y, -30, Battle.PLAYER, u * 2.2f, t, 1);
-            g.text(un.name, rx + u * 6.5f, y, u * 2.6f, un.destroyed ? Col.BAD : Col.TEXT, Gfx.ALIGN_LEFT, true);
+            g.text(un.name + (un.tag != null ? " (" + un.tag + ")" : ""), rx + u * 6.5f, y, u * 2.6f, un.destroyed ? Col.BAD : Col.TEXT, Gfx.ALIGN_LEFT, true);
             g.text(un.kills + " kills, " + Math.round(un.damageDealt) + " dmg", rx + cw - u, y, u * 2.3f, Col.TEXT_DIM, Gfx.ALIGN_RIGHT, false);
-            y += u * 5;
+            y += step;
         }
         y += u * 2;
         if (!d.enemyLost.isEmpty()) y += Ui.wrap(g, "Enemy destroyed: " + join(d.enemyLost), rx + u, y, u * 2.3f, cw - u * 2, Col.TEXT_DIM) + u;
@@ -87,6 +104,14 @@ public final class DebriefScreen extends Screen {
             Ui.wrap(g, s, rx + u, y, u * 2.3f, cw - u * 2, Col.ACCENT);
         }
         renderButtons(g);
+    }
+
+    private String campaignLine(Company co) {
+        if (d.over == Scenario.OUT_ATTACKER) return "The planet falls to the attacker!";
+        if (d.over == Scenario.OUT_DEFENDER) return "The attacker leaves the planet!";
+        if (d.frontAfter == d.frontBefore) return "The front holds at " + d.frontAfter + ". Next: " + Scenario.get(co.scenario).name + ".";
+        return (d.frontAfter > d.frontBefore ? "The attacker" : "The defender") + " gains ground: front " + d.frontBefore + " to "
+                + d.frontAfter + ". Next: " + Scenario.get(co.scenario).name + ".";
     }
 
     static String join(java.util.List<String> l) {

@@ -29,6 +29,14 @@ public final class Battle {
     public final List<Fx> fx = new ArrayList<Fx>();
     public float fxClock;
     public final int[] startValue = new int[2];
+    /** Scenario rules (campaigns): length, initiative lean, edge, and time-out lean. */
+    public int maxRounds = MAX_ROUNDS;
+    /** Chance the player wins initiative each round. */
+    public float playerInitiative = 0.5f;
+    /** Side that wins initiative in round 1 (the scenario edge), or -1 to roll. */
+    public int firstInitiative = -1;
+    /** Added to the player's share of surviving value when time runs out. */
+    public float timeEdge;
 
     // movement animation
     public int[] movePath;
@@ -94,6 +102,7 @@ public final class Battle {
         Unit at = unitAt(c, r);
         if (at != null && at != u) return false;
         if (!map.passable(u.type, c, r)) return false;
+        if (u.ch.fixed()) return false;   // emplacements are built where they stand
         if (u.type == UnitType.INFANTRY) return true;
         return c < DEPLOY_COLS;
     }
@@ -1021,7 +1030,8 @@ public final class Battle {
         for (Unit u : units) {
             u.activated = false;
         }
-        initiative = rnd.nextInt(2);
+        float roll = rnd.nextFloat();
+        initiative = round == 1 && firstInitiative >= 0 ? firstInitiative : (roll < playerInitiative ? PLAYER : ENEMY);
         side = initiative;
         log("Round " + round + ": " + (initiative == PLAYER ? "you have" : "the enemy has") + " initiative");
         beginSideActivation();
@@ -1107,8 +1117,8 @@ public final class Battle {
         }
         for (int i = 0; i < map.smoke.length; i++) if (map.smoke[i] > 0) map.smoke[i] -= 1;
         round++;
-        if (round > MAX_ROUNDS) {
-            float p = remainingValue(PLAYER) / Math.max(1f, startValue[PLAYER]);
+        if (round > maxRounds) {
+            float p = remainingValue(PLAYER) / Math.max(1f, startValue[PLAYER]) + timeEdge;
             float e = remainingValue(ENEMY) / Math.max(1f, startValue[ENEMY]);
             result = Math.abs(p - e) < 0.05f ? RESULT_DRAW : (p > e ? RESULT_WIN : RESULT_LOSS);
             log("Time is up.");

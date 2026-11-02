@@ -6,7 +6,7 @@ public final class HelpScreen extends Screen {
     private int page;
 
     private static final String[] TITLES = {"THE BASICS", "SHOOTING", "DAMAGE", "HEAT, AMMO & EQUIPMENT", "TERRAIN & WEATHER",
-            "UNITS", "CAMPAIGN"};
+            "UNITS", "CAMPAIGN", "CAMPAIGN SCENARIOS"};
     private static final String[][] PAGES = {
             {
                     "Each side fields up to 6 units on a hex map. A battle lasts up to 15 rounds.",
@@ -61,6 +61,15 @@ public final class HelpScreen extends Screen {
                     "The enemy is a company too. It starts with funds like yours, is paid after every battle (more when it wins), repairs what it can afford, loses units left on a field it lost, and buys reinforcements. Beat it down and it gets poorer; let it win and it grows. HQ and the briefing show its money and roster.",
                     "To customize a unit, select it at HQ and press CUSTOMIZE. Tap any weapon mount or equipment slot to swap what's in it, and use - / + to change armor, heat sinks and ammunition, all within the unit's weight limit. Removed parts go to your spares for free reuse. The Market sells new units with factory loadouts.",
                     "Quick Battle gives you a budget, lets you buy and refit a force, and fights a single battle."
+            },
+            {
+                    "A campaign is the fight for one planet. You choose to attack or defend when you start. The front runs from the attacker's dropships (-1) to the defender's base (6) and starts at 2, so the defender has the upper hand.",
+                    "Every battle is a scenario. It limits which units may fight and how many: the Initial Drop allows only VTOLs, wheeled vehicles and light and medium mechs; Recon Sweeps only scouts and light mechs; Pitched Battles anything. The enemy plays by the same limits.",
+                    "The next scenario is rolled from the last result, the front and a random roll, and shown at HQ before you repair, buy and customize, so you know what you can bring. Units it doesn't allow show as Not allowed. If nothing on your roster may fight, you can only forfeit.",
+                    "Winning moves the front your way, usually one step (two in a Decisive Engagement, Breakthrough or Counterattack). Recon Sweeps don't move it; the winner gets the edge instead: initiative in the first round of the next battle.",
+                    "Some scenarios lean toward one side: more initiative, a time-out that only asks one side to be close, a free garrison, or a bigger force allowance. The briefing says which way each one leans.",
+                    "The attacker that reaches front 6 assaults the defender's base, held by garrison infantry, an armored car, a gun emplacement and a laser turret. Win, and the planet falls; lose, and it is thrown back a step. An attacker driven past its landing zone must hold its dropships in an Evacuation, or leave the planet.",
+                    "The attacker's supplies last " + Scenario.SUPPLY + " battles. After that it assaults the base if it holds front 3 or better, and falls back to its dropships if not, and that battle is the last on the planet: unless the base falls, the attacker leaves. When a planet is decided your company can move on to a new one, keeping its units and money."
             },
     };
 

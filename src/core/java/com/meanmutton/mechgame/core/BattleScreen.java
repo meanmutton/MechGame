@@ -742,7 +742,7 @@ public final class BattleScreen extends Screen {
             if (un.heat > 0 && un.ch.heatCap > 0 && un.type != UnitType.INFANTRY) {
                 g.fillRect(x - 0.55f, y + 0.88f, 1.1f * Math.min(1, un.heatFrac()), 0.07f, un.heatFrac() > 0.75f ? 0xFFFF3A2A : 0xFFFF9A3A);
             }
-            String st = un.shutdown ? "OFF" : (un.baseMp() == 0 ? "IMMOBILE" : null);
+            String st = un.shutdown ? "OFF" : (un.ch.fixed() ? null : (un.baseMp() == 0 ? "IMMOBILE" : null));
             if (st != null) g.text(st, x, y - 0.95f, 0.3f, 0xFFFFD27A, Gfx.ALIGN_CENTER, true);
         }
     }
@@ -912,7 +912,7 @@ public final class BattleScreen extends Screen {
             for (Unit un : b.units) if (un.team == Battle.PLAYER && !un.destroyed && !un.activated) ready++;
             turn = b.active != null ? "Your activation: " + b.active.name : "Your turn: pick a unit (" + ready + " ready)";
         } else turn = "Enemy activation" + (b.active != null ? ": " + b.active.name : "...");
-        g.text("Round " + Math.min(b.round, Battle.MAX_ROUNDS) + "/" + Battle.MAX_ROUNDS, u * 2, topBar / 2, u * 3, Col.TEXT, Gfx.ALIGN_LEFT, true);
+        g.text("Round " + Math.min(b.round, b.maxRounds) + "/" + b.maxRounds, u * 2, topBar / 2, u * 3, Col.TEXT, Gfx.ALIGN_LEFT, true);
         g.text(Weather.NAMES[b.map.weather.id], u * 24, topBar / 2, u * 2.8f, Col.SHIELD, Gfx.ALIGN_LEFT, false);
         g.text(turn, mapW / 2 + u * 8, topBar / 2, u * 3, b.side == Battle.PLAYER ? Col.ACCENT : 0xFFFF8A7A, Gfx.ALIGN_CENTER, true);
         g.text(b.alive(Battle.PLAYER) + " vs " + b.alive(Battle.ENEMY), mapW - u * 11, topBar / 2, u * 3, Col.TEXT, Gfx.ALIGN_RIGHT, true);
@@ -1140,6 +1140,7 @@ public final class BattleScreen extends Screen {
         } else if (b.deploying) {
             String hint = deploySel == null ? "Tap one of your units to move it. Infantry can be placed on any open hex on the map; "
                     + "other units stay in your blue zone. Double-tap any unit for full details."
+                    : deploySel.ch.fixed() ? deploySel.name + " is built where it stands and can't be moved."
                     : (deploySel.type == UnitType.INFANTRY ? deploySel.name + ": tap any green hex on the map to place it."
                     : deploySel.name + ": tap a green hex in your zone to place it.");
             Ui.wrap(g, hint, x0, infoY + u, u * 2.2f, pw, Col.ACCENT);

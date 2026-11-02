@@ -29,7 +29,7 @@ public final class Rival {
             if (weakest == null) return;
             int budget = rv.cash * 4 / 5 + weakest.value() / 2;
             Unit pick = null;
-            for (Chassis ch : Chassis.ALL) {
+            for (Chassis ch : Chassis.SHOP) {
                 Unit u = new Unit(ch);
                 if (u.value() <= budget && u.value() > weakest.value() * 1.6f && (pick == null || u.value() > pick.value())) pick = u;
             }
@@ -50,7 +50,7 @@ public final class Rival {
         rv.cash = Math.round(playerFunds * incomeMult(difficulty));
         int reserve = rv.cash / 5;   // keep a fifth back for the first round of repairs
         rv.cash -= reserve;
-        shop(rv, r, null);
+        shop(rv, r, null, Scenario.get(Scenario.INITIAL_DROP));
         rv.cash += reserve;
         return rv;
     }
@@ -79,7 +79,52 @@ public final class Rival {
         return out;
     }
 
+    /**
+     * The rival's force for a campaign scenario: only units the scenario allows, no more than its unit limit,
+     * within the engagement limit (shifted by the scenario's lean). If it owns fewer than two units that may
+     * fight, it hires stock units for this battle only, within the same limit.
+     */
+    public static List<Unit> chooseForce(Company rv, int playerValue, int difficulty, Scenario sc, boolean rivalAttacks, Random r) {
+        float lean = rivalAttacks ? 1f + sc.capLean : 1f - sc.capLean;
+        int cap = Math.max(1200, Math.round(playerValue * engagementLimit(difficulty) * lean));
+        int want = Math.min(Company.MAX_DEPLOY, sc.maxUnits);
+        List<Unit> best = chooseForce(rv, Company.MAX_ROSTER);
+        List<Unit> out = new ArrayList<Unit>();
+        int total = 0;
+        for (Unit u : best) {
+            if (out.size() >= want || !sc.allows(u)) continue;
+            if (out.size() >= 2 && total + u.value() > cap) continue;
+            out.add(u);
+            total += u.value();
+        }
+        rv.deployed.clear();
+        rv.deployed.addAll(out);
+        int minimum = Math.min(2, want);
+        for (int guard = 0; guard < 40 && out.size() < minimum; guard++) {
+            int room = Math.max(0, cap - total) / Math.max(1, minimum - out.size());
+            Unit pick = null;
+            for (int tries = 0; tries < 30; tries++) {
+                Chassis ch = Chassis.SHOP[r.nextInt(Chassis.SHOP.length)];
+                if (!sc.allows(ch)) continue;
+                Unit u = new Unit(ch);
+                // the biggest unit that fits the room left; the cheapest allowed one if nothing fits
+                boolean fits = u.value() <= room, pickFits = pick != null && pick.value() <= room;
+                if (pick == null || (fits && !pickFits) || (fits && u.value() > pick.value())
+                        || (!fits && !pickFits && u.value() < pick.value())) pick = u;
+            }
+            if (pick == null) break;
+            pick.tag = "hired";
+            out.add(pick);
+            total += pick.value();
+        }
+        return out;
+    }
+
     public static List<Unit> chooseForce(Company rv) {
+        return chooseForce(rv, Company.MAX_DEPLOY);
+    }
+
+    private static List<Unit> chooseForce(Company rv, int limit) {
         List<Unit> ready = new ArrayList<Unit>();
         for (Unit u : rv.roster) if (!u.destroyed) ready.add(u);
         Collections.sort(ready, new Comparator<Unit>() {
@@ -87,7 +132,7 @@ public final class Rival {
                 return Float.compare(b.value() * (0.4f + 0.6f * b.condition()), a.value() * (0.4f + 0.6f * a.condition()));
             }
         });
-        while (ready.size() > Company.MAX_DEPLOY) ready.remove(ready.size() - 1);
+        while (ready.size() > limit) ready.remove(ready.size() - 1);
         rv.deployed.clear();
         rv.deployed.addAll(ready);
         return ready;
@@ -103,6 +148,11 @@ public final class Rival {
 
     /** Repairs (most valuable first), then buys reinforcements. Returns names of new units. */
     public static List<String> upkeep(Company rv, Random r) {
+        return upkeep(rv, r, null);
+    }
+
+    /** Repairs and shopping, preferring units the next scenario allows. */
+    public static List<String> upkeep(Company rv, Random r, Scenario next) {
         List<Unit> byValue = new ArrayList<Unit>(rv.roster);
         Collections.sort(byValue, new Comparator<Unit>() {
             public int compare(Unit a, Unit b) {
@@ -123,11 +173,13 @@ public final class Rival {
             }
         }
         List<String> bought = new ArrayList<String>();
-        shop(rv, r, bought);
+        shop(rv, r, bought, next);
         return bought;
     }
 
-    private static void shop(Company rv, Random r, List<String> bought) {
+    private static void shop(Company rv, Random r, List<String> bought, Scenario next) {
+        int ready = 0;
+        if (next != null) for (Unit u : rv.roster) if (!u.destroyed && next.allows(u)) ready++;
         upgrade(rv, bought);
         for (int guard = 0; guard < 12 && rv.roster.size() < MAX_ROSTER; guard++) {
             int reserve = rv.roster.size() >= 4 ? rv.cash / 6 : 0;   // keep something back for repairs
@@ -138,7 +190,7 @@ public final class Rival {
             for (Unit u : rv.roster) if (!u.destroyed) healthy++;
             Unit best = null;
             float bestScore = -Float.MAX_VALUE;
-            for (Chassis ch : Chassis.ALL) {
+            for (Chassis ch : Chassis.SHOP) {
                 Unit u = new Unit(ch);
                 int v = u.value();
                 if (v > budget) continue;
@@ -149,12 +201,15 @@ public final class Rival {
                 if (roles[ch.role] >= 2) s *= 0.6f;
                 if ((ch.role == Chassis.R_LINE || ch.role == Chassis.R_BRAWLER) && roles[Chassis.R_LINE] + roles[Chassis.R_BRAWLER] < 2) s *= 1.3f;
                 if (ch.type == UnitType.INFANTRY && healthy >= 4) s *= 0.5f;
+                // with the next battle known, buy for it, above all when nothing it owns can fight there
+                if (next != null && next.allows(ch)) s *= ready < 2 ? 2.2f : (ready < next.maxUnits ? 1.4f : 1f);
                 if (s > bestScore) {
                     bestScore = s;
                     best = u;
                 }
             }
             if (best == null) break;
+            if (next != null && next.allows(best)) ready++;
             rv.cash -= best.value();
             int same = 0;
             for (Unit o : rv.roster) if (o.ch == best.ch) same++;
