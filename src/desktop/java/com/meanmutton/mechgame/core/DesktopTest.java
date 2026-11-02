@@ -259,6 +259,8 @@ public final class DesktopTest {
         click(g, 2); // fire
         tick(g, 25);
         shot(g, "14_battle_firing");
+        tick(g, 20);
+        shot(g, "14b_battle_impacts");
         tick(g, 120);
         click(g, 1); // end turn
         // play the rest automatically, taking a few snapshots
@@ -277,6 +279,38 @@ public final class DesktopTest {
             g.setScreen(hs);
             for (int k = 0; k < p; k++) click(g, 3);
             if (p == 0 || p == 2 || p == 5) shot(g, "20_help_" + p);
+        }
+        // a close-range exchange to show the hit feedback: impact panel, map bursts and the per-location log
+        {
+            HexMap m = new HexMap(20, 13, 0, new Weather(Weather.CLEAR));
+            m.generate(new Random(5));
+            List<Unit> mine = new ArrayList<Unit>(), theirs = new ArrayList<Unit>();
+            Unit shooter = new Unit(Chassis.ALL[29]);   // Monolith
+            Unit victim = new Unit(Chassis.ALL[21]);    // Halberd
+            mine.add(shooter);
+            theirs.add(victim);
+            Battle bb = new Battle(g, mine, theirs, m, new Random(3), 1);
+            bb.finishDeployment();
+            for (int cc = 6; cc < 8; cc++) for (int rr = 5; rr < 7; rr++) { m.terrain[m.idx(cc, rr)] = HexMap.CLEAR; m.elev[m.idx(cc, rr)] = 0; }
+            shooter.q = 6; shooter.r = 6; victim.q = 7; victim.r = 6;
+            shooter.facing = 1; victim.facing = 4;
+            bb.syncDraw(shooter);
+            bb.syncDraw(victim);
+            bb.side = Battle.PLAYER;
+            bb.beginActivation(shooter);
+            BattleScreen dbs = new BattleScreen(g, bb);
+            g.setScreen(dbs);
+            tick(g, 5);
+            boolean[] all = new boolean[shooter.weapon.length];
+            for (int k = 0; k < all.length; k++) all[k] = true;
+            bb.fire(shooter, victim, all);
+            for (int k = 0; k < 40; k++) {
+                tick(g, 1);
+                if (k == 22) shot(g, "14c_impact_panel");
+            }
+            tick(g, 120);
+            shot(g, "14d_impact_log");
+            System.out.println("last log: " + bb.log.get(bb.log.size() - 1));
         }
         // weather variety on a smaller screen
         W = 1600;

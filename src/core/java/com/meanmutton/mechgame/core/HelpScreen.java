@@ -31,6 +31,7 @@ public final class HelpScreen extends Screen {
                     "Hits on a location that is already destroyed (a mech's lost arm or leg, a vehicle's lost turret) carry through to the core (a vehicle's front hull) at half damage, as does any damage left over when a limb is blown off.",
                     "Where you hit depends on the angle: attacks from the front mostly hit the front (or a mech's core and limbs); side attacks hit that side; rear attacks hit the thin rear armor. A random roll picks the exact location.",
                     "Mechs die when the core or cockpit is destroyed. Losing a leg halves movement; losing both immobilizes the mech. Vehicles die when any hull side is breached, and their motive systems can be damaged by any hit.",
+                    "When a unit is hit, the battle panel switches to its hit-location diagram: each hit flashes on the location it struck (yellow for armor, red for structure) with the damage, and the combat log at the bottom lists the damage by location.",
                     "Infrastructure damage can cause critical hits: destroyed weapons or equipment, damaged cooling, stunned vehicle crews, and ammunition explosions.",
                     "Missiles spread across several locations. Lasers and cannons hit one. Infantry shrug off half the damage from big guns, but chainguns, missiles and artillery hurt them fully."
             },

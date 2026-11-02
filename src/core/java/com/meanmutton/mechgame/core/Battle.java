@@ -564,8 +564,15 @@ public final class Battle {
     // =====================================================================
 
     /** Fires the selected weapons at the target. */
+    /** Damage per location for every unit hurt during the attack being resolved (target first). */
+    private java.util.LinkedHashMap<Unit, int[]> ledger;
+    private float ledgerLast;
+
     public void fire(Unit a, Unit t, boolean[] use) {
         if (a.fired || a.destroyed) return;
+        ledger = new java.util.LinkedHashMap<Unit, int[]>();
+        ledger.put(t, new int[UnitType.locCount(t.type)]);
+        ledgerLast = 0;
         a.fired = true;
         undoAvailable = false;
         int arc = attackArc(a, t);
@@ -610,14 +617,65 @@ public final class Battle {
             }
             delay += 0.28f;
         }
-        if (shots == 0) return;
+        if (shots == 0) {
+            ledger = null;
+            return;
+        }
         a.heat += totalHeat;
-        int dealt = dmgBefore - (t.totalArmor() + t.totalInfra());
-        String sideName = UnitType.ARC_NAMES[arc];
-        log(a.name + " fired at " + t.name + " (" + sideName + "): " + hits + "/" + shots + " hit, " + Math.max(0, dealt) + " damage");
+        // "Aegis fired at Halberd (front): 3/4 hit, 24 damage: 12 to core, 8 to left arm, 4 to right leg"
+        StringBuilder msg = new StringBuilder();
+        msg.append(a.name).append(" fired at ").append(t.name).append(" (").append(UnitType.ARC_NAMES[arc]).append("): ")
+                .append(hits).append('/').append(shots).append(" hit");
+        int dealt = 0;
+        boolean first = true;
+        for (java.util.Map.Entry<Unit, int[]> en : ledger.entrySet()) {
+            Unit u = en.getKey();
+            int[] d = en.getValue();
+            int sum = 0;
+            for (int v : d) sum += v;
+            dealt += sum;
+            if (first) {
+                if (sum == 0) msg.append(hits == 0 ? "" : ", no damage");
+                else msg.append(", ").append(sum).append(" damage: ").append(breakdown(u, d));
+                first = false;
+            } else if (sum > 0) {
+                msg.append("; ").append(u == a ? "itself" : u.name).append(" caught ").append(sum).append(" splash: ").append(breakdown(u, d));
+            }
+        }
+        logAt(msg.toString(), Math.max(delay - 0.28f, ledgerLast));
+        ledger = null;
         a.damageDealt += Math.max(0, dealt);
         checkHeat(a, delay);
         checkResult();
+    }
+
+    static String breakdown(Unit u, int[] d) {
+        StringBuilder b = new StringBuilder();
+        String[] names = UnitType.locNames(u.type);
+        for (int i = 0; i < d.length; i++) {
+            if (d[i] <= 0) continue;
+            if (b.length() > 0) b.append(", ");
+            b.append(d[i]).append(" to ").append(names[i].toLowerCase());
+        }
+        return b.toString();
+    }
+
+    /** Adds a combat log line when the visuals reach it, so the log reads in the order things happen. */
+    void logAt(final String s, float when) {
+        if (when <= 0.01f) {
+            log(s);
+            return;
+        }
+        Fx f = new Fx();
+        f.kind = Fx.SOUND;
+        f.start = when;
+        f.dur = 0.01f;
+        f.onStart = new Runnable() {
+            public void run() {
+                log(s);
+            }
+        };
+        queue(f);
     }
 
     private float travelTime(Wpn w, Unit a, Unit t) {
@@ -744,13 +802,21 @@ public final class Battle {
             if (rnd.nextFloat() < 0.3f) crit = true;
             if (t.infra[il] <= 0 && before > 0) {
                 queue(Fx.text(UnitType.locNames(t.type)[il].toUpperCase() + " DESTROYED", t, when + 0.15f, 0xFFFF5A3A));
-                log(t.name + ": " + UnitType.locNames(t.type)[il] + " destroyed");
+                logAt(t.name + ": " + UnitType.locNames(t.type)[il].toLowerCase() + " destroyed", when + 0.15f);
                 queue(Fx.explosion(map, t.q, t.r, when + 0.1f, 0.55f));
             }
             if (over > 0 && transfers(t, loc)) overflow = Math.max(1, Math.round(over * 0.5f));
         }
         if (w != null && w.has(Wpn.AP) && rnd.nextFloat() < 0.15f) crit = true;
+        if (ledger != null) {
+            int[] d = ledger.get(t);
+            if (d == null) ledger.put(t, d = new int[UnitType.locCount(t.type)]);
+            d[loc] += dmg;
+            ledgerLast = Math.max(ledgerLast, when);
+        }
         queue(Fx.text("-" + dmg + " " + locName, t, when, rem > 0 ? 0xFFFF6A4A : 0xFFFFE08A));
+        queue(Fx.burst(t, loc, when, Math.min(0.55f, 0.18f + dmg * 0.02f)));
+        queue(Fx.hitmark(t, loc, dmg, rem > 0, t.infra[il] <= 0, when));
         t.hitFlash = 0.4f;
         if (crit) critical(t, il, when + 0.2f);
         // motive damage for vehicles
@@ -758,7 +824,7 @@ public final class Battle {
             int lose = t.type == UnitType.HOVER ? 2 : 1;
             t.mpLost += lose;
             queue(Fx.text("MOTIVE HIT", t, when + 0.3f, 0xFFFFB02E));
-            log(t.name + ": motive system damaged (-" + lose + " MP)");
+            logAt(t.name + ": motive system damaged (-" + lose + " MP)", when + 0.3f);
         }
         if (t.type == UnitType.VTOL && rnd.nextFloat() < 0.06f) {
             t.mpLost += 2;
@@ -810,13 +876,13 @@ public final class Battle {
             Wpn w = t.wpn(m);
             t.wpnBroken[m] = true;
             queue(Fx.text("CRIT: " + w.name, t, when, 0xFFFF9A3A));
-            log(t.name + ": critical hit, " + w.name + " destroyed");
+            logAt(t.name + ": critical hit, " + w.name + " destroyed", when);
             if (w.usesAmmo() && t.ammo[m] > 0 && rnd.nextFloat() < 0.35f) {
                 int boom = Math.min(30, Math.max(4, t.ammo[m] * w.dmg / 3));
                 t.ammo[m] = 0;
                 queue(Fx.text("AMMO EXPLOSION!", t, when + 0.25f, 0xFFFF3A2A));
                 queue(Fx.explosion(map, t.q, t.r, when + 0.25f, 1f));
-                log(t.name + ": ammunition explodes for " + boom + " damage");
+                logAt(t.name + ": ammunition explodes for " + boom + " damage", when + 0.25f);
                 int il = UnitType.infraLoc(t.type, loc);
                 t.infra[il] = Math.max(0, t.infra[il] - boom);
                 // re-run destruction checks with zero extra damage via a tiny hit
@@ -826,16 +892,16 @@ public final class Battle {
             int e = pick[1];
             t.eqBroken[e] = true;
             queue(Fx.text("CRIT: " + Equip.ALL[t.equip[e]].shortName, t, when, 0xFFFF9A3A));
-            log(t.name + ": critical hit, " + Equip.ALL[t.equip[e]].name + " destroyed");
+            logAt(t.name + ": critical hit, " + Equip.ALL[t.equip[e]].name + " destroyed", when);
         } else {
             if (UnitType.isMech(t.type)) {
                 t.sinksLost++;
                 queue(Fx.text("CRIT: COOLING", t, when, 0xFFFF9A3A));
-                log(t.name + ": critical hit, cooling damaged");
+                logAt(t.name + ": critical hit, cooling damaged", when);
             } else if (t.type != UnitType.INFANTRY) {
                 t.shutdown = true;
                 queue(Fx.text("CREW STUNNED", t, when, 0xFFFF9A3A));
-                log(t.name + ": crew stunned, loses its next activation");
+                logAt(t.name + ": crew stunned, loses its next activation", when);
             }
         }
     }
@@ -845,7 +911,7 @@ public final class Battle {
         t.destroyed = true;
         if (src != null && src.team != t.team) src.kills++;
         queue(Fx.death(map, t, when));
-        log(t.name + (how != null ? " " + how + "!" : " destroyed!") + (src != null ? " (" + src.name + ")" : ""));
+        logAt(t.name + (how != null ? " " + how + "!" : " destroyed!") + (src != null && src != t ? " (" + src.name + ")" : ""), when);
     }
 
     private void checkHeat(Unit a, float when) {
@@ -1104,7 +1170,8 @@ public final class Battle {
 
     /** A timed visual effect. Times are relative to when it was queued. */
     public static final class Fx {
-        public static final int BEAM = 0, TRACER = 1, MISSILES = 2, SHELL = 3, MELEE = 4, EXPLOSION = 5, TEXT = 6, SOUND = 7, DEATH = 8;
+        public static final int BEAM = 0, TRACER = 1, MISSILES = 2, SHELL = 3, MELEE = 4, EXPLOSION = 5, TEXT = 6, SOUND = 7, DEATH = 8,
+                HITMARK = 9, BURST = 10;
         public int kind;
         public float start, dur, age;
         public boolean started;
@@ -1117,6 +1184,49 @@ public final class Battle {
         public float volume = 0.8f;
         public Runnable onStart, onEnd;
         public int count;
+        /** HITMARK: which unit and location took how much (structure = got past the armor). */
+        public Unit unit;
+        public int loc, dmg;
+        public boolean structure, locLost;
+
+        static Fx hitmark(Unit u, int loc, int dmg, boolean structure, boolean locLost, float delay) {
+            Fx f = new Fx();
+            f.kind = HITMARK;
+            f.unit = u;
+            f.loc = loc;
+            f.dmg = dmg;
+            f.structure = structure;
+            f.locLost = locLost;
+            f.start = delay;
+            f.dur = 1.8f;
+            return f;
+        }
+
+        /** A small explosion on the part of the unit that was hit, turned to match its facing. */
+        static Fx burst(Unit u, int loc, float delay, float size) {
+            float ox, oy;
+            if (u.type == UnitType.INFANTRY) {
+                ox = (float) (Math.random() - 0.5) * 0.5f;
+                oy = (float) (Math.random() - 0.5) * 0.5f;
+            } else if (UnitType.isMech(u.type)) {
+                float[][] o = {{0.28f, 0}, {0.08f, 0}, {-0.3f, 0}, {0, -0.45f}, {0, 0.45f}, {-0.2f, -0.24f}, {-0.2f, 0.24f}};
+                ox = o[loc][0];
+                oy = o[loc][1];
+            } else {
+                float[][] o = {{0.45f, 0}, {0, -0.38f}, {0, 0.38f}, {-0.45f, 0}, {0, 0}};
+                ox = o[loc][0];
+                oy = o[loc][1];
+            }
+            double a = Math.toRadians(HexMap.DIR_ANGLE[u.facing]);
+            Fx f = new Fx();
+            f.kind = BURST;
+            f.start = delay;
+            f.dur = 0.4f;
+            f.x1 = HexMap.px(u.q, u.r) + (float) (ox * Math.cos(a) - oy * Math.sin(a));
+            f.y1 = HexMap.py(u.q, u.r) + (float) (ox * Math.sin(a) + oy * Math.cos(a));
+            f.size = size;
+            return f;
+        }
 
         static float now;
 
