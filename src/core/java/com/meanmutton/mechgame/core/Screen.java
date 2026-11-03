@@ -139,6 +139,7 @@ public abstract class Screen {
             pressedPointer = -1;
             if (inside && !b.repeat) {
                 game.sfx(Platform.SND_CLICK, 0.5f);
+                game.crumb("tap " + (b.label.length() > 0 ? "\"" + b.label + "\"" : "#" + b.id) + " on " + getClass().getSimpleName());
                 onClick(b);
             }
             onRelease(b);

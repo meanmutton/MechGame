@@ -17,6 +17,15 @@ public interface Platform {
 
     void exit();
 
+    /** Saves right away (used when the app is about to die, so it must not be deferred). */
+    void saveNow(String key, String value);
+
+    /** Offers text to other apps (email, messages, notes) through the system share sheet. */
+    void share(String subject, String text);
+
+    /** Which build this is and what it runs on, for crash reports. */
+    String buildInfo();
+
     interface TextCallback {
         void done(String text);
     }
