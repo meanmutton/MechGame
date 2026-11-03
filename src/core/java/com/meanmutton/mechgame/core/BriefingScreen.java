@@ -59,7 +59,7 @@ public final class BriefingScreen extends Screen {
                     u * 3, h * 0.105f, u * 2.6f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
             my = h * 0.15f;
         } else {
-            g.text("CONTRACT " + c.mission + ": " + sc.name.toUpperCase(), u * 3, h * 0.05f, u * 5, Col.ACCENT, Gfx.ALIGN_LEFT, true);
+            g.text((c.merc ? "JOB: " : "CONTRACT " + c.mission + ": ") + sc.name.toUpperCase(), u * 3, h * 0.05f, u * 5, Col.ACCENT, Gfx.ALIGN_LEFT, true);
             g.text("You are the " + Scenario.SIDE_NAMES[c.side].toLowerCase(), w - u * 3, h * 0.05f, u * 3,
                     UnitArt.PLAYER_COLOR, Gfx.ALIGN_RIGHT, true);
             float dy = Ui.wrap(g, HexMap.BIOME_NAMES[map.biome] + " region. " + sc.desc, u * 3, h * 0.095f, u * 2.4f, w - u * 6, Col.TEXT);
@@ -83,7 +83,22 @@ public final class BriefingScreen extends Screen {
         g.strokeRoundRect(mx, my, mw, mh, u, u * 0.3f, Col.BORDER);
         float by = my + mh + u * 3;
         g.text("You deploy on the west (blue), the enemy on the east (red).", mx, by, u * 2.3f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
-        if (sc != null) {
+        Merc.Contract job = c.job();
+        if (job != null) {
+            // who hired you, and who you are about to make an enemy of
+            float x = mx;
+            x += Emblem.label(g, job.employer, x, by + u * 4, u * 2.8f, true) + u * 1.5f;
+            String verb = c.side == Scenario.ATTACKER ? "hires you to attack" : "hires you to defend against";
+            g.text(verb, x, by + u * 4, u * 2.4f, Col.TEXT, Gfx.ALIGN_LEFT, false);
+            x += g.textWidth(verb, u * 2.4f, false) + u * 1.5f;
+            Emblem.label(g, job.target, x, by + u * 4, u * 2.8f, true);
+            int[] win = Merc.repChanges(job, Battle.RESULT_WIN), lose = Merc.repChanges(job, Battle.RESULT_LOSS);
+            String st = "Standing if you win: " + Faction.ALL[job.employer].shortName + " " + ContractsScreen.signed(win[job.employer]) + ", "
+                    + Faction.ALL[job.target].shortName + " " + ContractsScreen.signed(win[job.target]) + ".  If you lose: "
+                    + Faction.ALL[job.employer].shortName + " " + ContractsScreen.signed(lose[job.employer]) + ", "
+                    + Faction.ALL[job.target].shortName + " " + ContractsScreen.signed(lose[job.target]) + ".";
+            g.text(Ui.fit(g, st, u * 2.1f, mw), mx, by + u * 8, u * 2.1f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+        } else if (sc != null) {
             g.text("Front: " + Scenario.frontName(c.front), mx, by + u * 3.5f, u * 2.4f, Col.TEXT, Gfx.ALIGN_LEFT, true);
             g.text("Battle " + (c.planetBattles + 1) + " here. Income: attacker x" + fmt(Scenario.income(Scenario.ATTACKER, c.planetBattles))
                             + ", defender x" + fmt(Scenario.income(Scenario.DEFENDER, c.planetBattles)),
@@ -100,7 +115,8 @@ public final class BriefingScreen extends Screen {
         if (sc != null) {
             g.text(sc.limits(c.limits()), rx + u, y + u * 0.5f, u * 2.2f, Col.TEXT, Gfx.ALIGN_LEFT, true);
             y += u * 3;
-            int mine = Scenario.extraUnits(c.side, c.planetBattles), theirs = Scenario.extraUnits(1 - c.side, c.planetBattles);
+            // reserves come from a campaign's long fight; a mercenary job is fought within the scenario's own limits
+            int mine = c.merc ? 0 : Scenario.extraUnits(c.side, c.planetBattles), theirs = c.merc ? 0 : Scenario.extraUnits(1 - c.side, c.planetBattles);
             if (mine > 0 || theirs > 0) {
                 String res = mine > 0 ? "Your resources bring " + mine + " reserve unit" + (mine > 1 ? "s" : "") + " beyond the scenario limit"
                         : "The enemy's resources let it field " + theirs + " extra unit" + (theirs > 1 ? "s" : "") + " (up to "
@@ -118,9 +134,14 @@ public final class BriefingScreen extends Screen {
                         u * 2.2f, c.edge == c.side ? Col.GOOD : Col.BAD, Gfx.ALIGN_LEFT, false);
                 y += u * 3;
             }
-            y += Ui.wrap(g, sc.stakes(c.front, c.side), rx + u, y + u * 0.5f, u * 2.2f, rw - u * 2, Col.TEXT) + u;
+            if (job == null) y += Ui.wrap(g, sc.stakes(c.front, c.side), rx + u, y + u * 0.5f, u * 2.2f, rw - u * 2, Col.TEXT) + u;
         }
         g.text("Enemy force (" + enemy.size() + ")", rx + u, y + u, u * 2.8f, Col.BAD, Gfx.ALIGN_LEFT, true);
+        if (job != null) {
+            Faction tf = Faction.ALL[job.target];
+            float lw = g.textWidth(tf.shortName, u * 2.2f, true) + u * 2.8f;
+            Emblem.label(g, job.target, rx + rw - u - lw, y + u, u * 2.2f, false);
+        }
         y += u * 4.5f;
         int ev = 0;
         boolean twoCols = enemy.size() > 5;

@@ -47,7 +47,8 @@ public final class DebriefScreen extends Screen {
         Company co = game.company;
         String line = b == null ? "No unit on your roster could take part, so the mission was forfeited."
                 : "Battle lasted " + Math.min(b.maxRounds, b.round) + " rounds.";
-        if (d.scenario != null) line = d.scenario + ": " + line + "  " + campaignLine(co);
+        if (d.rep != null) line = d.scenario + " for " + Faction.ALL[d.employer].name + " against " + Faction.ALL[d.target].name + ".  " + line;
+        else if (d.scenario != null) line = d.scenario + ": " + line + "  " + campaignLine(co);
         g.text(Ui.fit(g, line, u * 2.6f, w - u * 6), w / 2f, h * 0.18f, u * 2.6f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
         float lx = u * 4, cw = (w - u * 12) / 2, y0 = h * 0.25f;
         Ui.panel(g, lx - u, y0, cw + u * 2, h * 0.6f, u * 2);
@@ -86,7 +87,13 @@ public final class DebriefScreen extends Screen {
         y += u * 5;
         int mine = 0;
         if (b != null) for (Unit un : b.units) if (un.team == Battle.PLAYER) mine++;
-        float step = Math.min(u * 5, u * 44 / Math.max(1, mine));
+        float room = u * 44;
+        if (d.rep != null) {   // leave space for the standing changes at the bottom
+            int n = 0;
+            for (int f = 0; f < Faction.COUNT; f++) if (d.rep[f] != 0) n++;
+            room -= ((n + 1) / 2) * u * 3.4f + u * 9;
+        }
+        float step = Math.min(u * 5, room / Math.max(1, mine));
         for (Unit un : b == null ? new java.util.ArrayList<Unit>() : b.units) {
             if (un.team != Battle.PLAYER) continue;
             UnitArt.draw(g, un, rx + u * 3, y, -30, Battle.PLAYER, u * 2.2f, t, 1);
@@ -95,7 +102,7 @@ public final class DebriefScreen extends Screen {
             y += step;
         }
         y += u * 2;
-        if (!d.enemyLost.isEmpty()) y += Ui.wrap(g, "Enemy destroyed: " + join(d.enemyLost), rx + u, y, u * 2.3f, cw - u * 2, Col.TEXT_DIM) + u;
+        if (!d.enemyLost.isEmpty() && d.rep == null) y += Ui.wrap(g, "Enemy destroyed: " + join(d.enemyLost), rx + u, y, u * 2.3f, cw - u * 2, Col.TEXT_DIM) + u;
         if (!game.company.quick && game.company.rival != null) {
             String s = "Enemy company was paid $" + Ui.money(d.rivalPay)
                     + (d.rivalLost > 0 ? ", lost " + d.rivalLost + " wreck" + (d.rivalLost > 1 ? "s" : "") + " on the field" : "")
@@ -103,7 +110,30 @@ public final class DebriefScreen extends Screen {
                     + ". It now has $" + Ui.money(d.rivalCash) + " and " + d.rivalUnits + " units.";
             Ui.wrap(g, s, rx + u, y, u * 2.3f, cw - u * 2, Col.ACCENT);
         }
+        if (d.rep != null) renderStanding(g, rx, y0 + h * 0.6f, cw);
         renderButtons(g);
+    }
+
+    /** Mercenary play: how the job moved your standing, faction by faction, from the bottom of the right panel up. */
+    private void renderStanding(Gfx g, float rx, float bottom, float cw) {
+        Company co = game.company;
+        int n = 0;
+        for (int f = 0; f < Faction.COUNT; f++) if (d.rep[f] != 0) n++;
+        float rowH = u * 3.4f, colW = (cw - u * 2) / 2;
+        int rows = (n + 1) / 2;
+        float y = bottom - u * 2.5f - rows * rowH;
+        g.text("Standing", rx + u, y - u * 1.5f, u * 2.8f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
+        int i = 0;
+        for (int f = 0; f < Faction.COUNT; f++) {
+            int dv = d.rep[f];
+            if (dv == 0) continue;
+            float x = rx + u + (i % 2) * colW, ry = y + u * 2 + (i / 2) * rowH;
+            Emblem.label(g, f, x, ry, u * 2.2f, false);
+            int tier = Merc.tier(co.rep[f]);
+            g.text(ContractsScreen.signed(dv) + " " + Merc.TIERS[tier], x + colW - u * 2, ry, u * 2.1f,
+                    dv > 0 ? Col.GOOD : Col.BAD, Gfx.ALIGN_RIGHT, true);
+            i++;
+        }
     }
 
     private String campaignLine(Company co) {

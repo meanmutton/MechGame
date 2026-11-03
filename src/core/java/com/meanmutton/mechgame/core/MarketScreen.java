@@ -24,7 +24,10 @@ public final class MarketScreen extends Screen {
 
     public MarketScreen(Game game) {
         super(game);
-        for (Chassis ch : Chassis.SHOP) previews[ch.id] = new Unit(ch);
+        for (Chassis ch : Chassis.ALL) if (ch.type != UnitType.EMPLACEMENT) previews[ch.id] = new Unit(ch);
+        if (!game.company.sells(Chassis.ALL[sel])) {
+            for (Chassis ch : Chassis.ALL) if (game.company.sells(ch)) { sel = ch.id; break; }
+        }
     }
 
     private boolean inTab(Chassis ch) {
@@ -56,8 +59,8 @@ public final class MarketScreen extends Screen {
         int cols = 3;
         float cw = gridW / cols, ch = u * 17;
         int k = 0;
-        for (Chassis c : Chassis.SHOP) {
-            if (!inTab(c)) continue;
+        for (Chassis c : Chassis.ALL) {
+            if (!game.company.sells(c) || !inTab(c)) continue;
             float x = gridX + (k % cols) * cw, y = gridY + (k / cols) * ch - scroll;
             Btn b = add(new Btn(CARD + c.id, "").set(x + u * 0.5f, y + u * 0.5f, cw - u, ch - u));
             b.selected = sel == c.id;
@@ -71,7 +74,7 @@ public final class MarketScreen extends Screen {
         Btn buy = add(new Btn(BUY, "Buy").set(rx, h - u * 25, rw, u * 10));
         Unit p = previews[sel];
         buy.label = "Buy for $" + Ui.money(p.value());
-        buy.enabled = game.company.cash >= p.value() && game.company.roster.size() < Company.MAX_ROSTER;
+        buy.enabled = game.company.sells(p.ch) && game.company.cash >= p.value() && game.company.roster.size() < Company.MAX_ROSTER;
         buy.color = 0xFF2E7D4F;
         add(new Btn(BACK, "Back to HQ").set(rx, h - u * 13, rw, u * 9));
     }
@@ -95,7 +98,8 @@ public final class MarketScreen extends Screen {
         if (b.id == BUY) {
             Unit p = previews[sel];
             Company c = game.company;
-            if (c.cash >= p.value() && c.roster.size() < Company.MAX_ROSTER) {
+            if (c.sells(p.ch) && c.cash >= p.value() && c.roster.size() < Company.MAX_ROSTER) {
+                if (p.ch.unique) c.offerChassis = -1;   // a prototype is one of a kind
                 c.cash -= p.value();
                 Unit u2 = new Unit(p.ch);
                 int same = 0;
@@ -207,7 +211,8 @@ public final class MarketScreen extends Screen {
             UnitArt.draw(g, p, b.x + b.h * 0.5f, cy, -30, Battle.PLAYER, b.h * 0.5f, t, 1);
             boolean mark = next != null && next.force != Scenario.F_ALL && next.allows(p);
             float tx = b.x + b.h * 1.0f, maxW = b.x + b.w - tx - u * (mark ? 4.5f : 1);
-            g.text(Ui.fit(g, p.ch.name, u * 2.8f, maxW), tx, b.y + b.h * 0.24f, u * 2.8f, Col.TEXT, Gfx.ALIGN_LEFT, true);
+            g.text(Ui.fit(g, (p.ch.unique ? "\u2605 " : "") + p.ch.name, u * 2.8f, maxW), tx, b.y + b.h * 0.24f, u * 2.8f,
+                    p.ch.unique ? Col.ACCENT : Col.TEXT, Gfx.ALIGN_LEFT, true);
             String tag = factionTag(p.ch);
             int ex = Faction.exclusive(p.ch.factions);
             float tagW = g.textWidth(tag, u * 2f, true) + u * (ex >= 0 ? 5.2f : 2.5f);
@@ -220,6 +225,10 @@ public final class MarketScreen extends Screen {
             if (mark) g.text("\u2713", b.x + b.w - u * 1.8f, b.y + b.h * 0.26f, u * 3f, Col.GOOD, Gfx.ALIGN_RIGHT, true);
         }
         g.restore();
+        boolean any = false;
+        for (Btn b : buttons) if (b.id >= CARD) any = true;
+        if (!any && game.company.merc) Ui.wrap(g, "No faction on " + game.company.planet.name + " will sell to you. Earn some goodwill, or travel.",
+                gridX + u * 2, gridY + u * 6, u * 3, gridW - u * 4, Col.ACCENT);
         if (maxScroll > 0) {
             float bh = gridH * gridH / (gridH + maxScroll);
             float by = gridY + (gridH - bh) * (scroll / maxScroll);

@@ -169,6 +169,12 @@ public final class Game {
         return Company.parse(platform.load("company")) != null;
     }
 
+    /** True if the saved company is a mercenary one (for the menu's Continue label). */
+    public boolean saveIsMerc() {
+        Company c = Company.parse(platform.load("company"));
+        return c != null && c.merc;
+    }
+
     /** True if a battle was left in progress (campaign or quick battle). */
     public boolean hasBattle() {
         String s = platform.load(BattleSave.KEY);
@@ -237,6 +243,49 @@ public final class Game {
         setScreen(new HqScreen(this));
     }
 
+    /** A mercenary company on its first planet, with a board of contracts waiting. */
+    public void newMercenary(int difficulty, int funds) {
+        clearBattle();
+        company = new Company();
+        company.merc = true;
+        company.difficulty = difficulty;
+        company.cash = funds;
+        company.planet = Merc.planet(rng);
+        Merc.fillBoard(company, rng);
+        company.rollContract(rng);
+        saveCompany();
+        setScreen(new HqScreen(this));
+    }
+
+    /** Takes a contract from the board: its scenario sets the limits for deployment. */
+    public void acceptContract(int index) {
+        Company c = company;
+        if (index < 0 || index >= c.contracts.size()) return;
+        c.contract = index;
+        c.side = c.contracts.get(index).role;
+        c.rollContract(rng);
+        c.fitDeployment();
+        saveCompany();
+        setScreen(new HqScreen(this));
+    }
+
+    /** Moves the company to another planet: new factions, a new board, new markets. */
+    public void travel(Merc.Planet to) {
+        Company c = company;
+        int cost = Merc.travelCost(c);
+        if (c.cash < cost) return;
+        c.cash -= cost;
+        c.planet = to;
+        c.contracts.clear();
+        c.contract = -1;
+        Merc.fillBoard(c, rng);
+        Merc.rollOffers(c, rng);
+        c.rollContract(rng);
+        c.fitDeployment();
+        saveCompany();
+        setScreen(new ContractsScreen(this));
+    }
+
     public void quickBattle(int difficulty, int budget) {
         clearBattle();
         company = new Company();
@@ -251,6 +300,11 @@ public final class Game {
         Company c = Company.parse(platform.load("company"));
         if (c == null) return;
         company = c;
+        if (c.merc) {
+            c.fitDeployment();
+            setScreen(new HqScreen(this));
+            return;
+        }
         c.rival = Company.parse(platform.load("rival"));
         if (c.rival == null) {
             // saves from before rival companies existed: start one matched to this company's current worth
@@ -316,7 +370,17 @@ public final class Game {
         List<Unit> enemy;
         List<Unit> allies = new ArrayList<Unit>();
         boolean militia = false;
-        if (sc != null && c.rival != null) {
+        if (sc != null && c.merc && c.job() != null) {
+            // the target faction's own force, in its colors, with the scenario's garrisons on each side
+            Merc.Contract k = c.job();
+            boolean attacking = c.side == Scenario.ATTACKER;
+            enemy = new ArrayList<Unit>(Merc.enemyForce(k, sc));
+            allies.addAll(Scenario.garrison(attacking ? sc.attackerGarrison : sc.defenderGarrison));
+            for (Unit g : Scenario.garrison(attacking ? sc.defenderGarrison : sc.attackerGarrison)) {
+                g.paint = Faction.ALL[k.target].scheme;
+                enemy.add(g);
+            }
+        } else if (sc != null && c.rival != null) {
             militia = Rival.ensureForce(c.rival);
             boolean attacking = c.side == Scenario.ATTACKER;
             enemy = new ArrayList<Unit>(Rival.chooseForce(c.rival, c.deployedValue(), c.difficulty, sc, !attacking, c.planetBattles, r));
@@ -441,7 +505,20 @@ public final class Game {
         Company c = company;
         Company rv = c.rival;
         int battle = c.planetBattles;
-        if (!c.quick) {
+        if (c.merc && c.job() != null) {
+            // standing with every faction moves; the contract leaves the board and a new one takes its place
+            Merc.Contract k = c.job();
+            int[] dr = Merc.repChanges(k, result);
+            for (int f = 0; f < Faction.COUNT; f++) c.rep[f] = Math.max(Merc.REP_MIN, Math.min(Merc.REP_MAX, c.rep[f] + dr[f]));
+            d.rep = dr;
+            d.employer = k.employer;
+            d.target = k.target;
+            d.scenario = Scenario.get(k.scenario).name;
+            c.contracts.remove(c.contract);
+            c.contract = -1;
+            Merc.fillBoard(c, rng);
+            Merc.rollOffers(c, rng);
+        } else if (!c.quick) {
             Scenario sc = c.next();
             int out = c.outcome(result);
             d.scenario = sc.name;
@@ -515,6 +592,9 @@ public final class Game {
         public boolean forfeit;
         public String scenario;
         public int outcome, frontBefore, frontAfter, over, campaignBonus;
+        // mercenary play: standing changes by faction, and who the job was for and against
+        public int[] rep;
+        public int employer = -1, target = -1;
         public final List<String> rivalBought = new ArrayList<String>();
     }
 }

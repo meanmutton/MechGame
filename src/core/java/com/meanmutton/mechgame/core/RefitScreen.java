@@ -236,7 +236,10 @@ public final class RefitScreen extends Screen {
                 return;
             }
             if (owned) c.armoryW[wid]--;
-            else c.cash -= nw.cost;
+            else {
+                c.cash -= nw.cost;
+                if (nw.unique) c.offerItem = -1;   // one of a kind
+            }
             note(owned ? nw.name + " taken from spares" : nw.name + " bought for $" + Ui.money(nw.cost));
         }
         if (old >= 0) {
@@ -265,7 +268,10 @@ public final class RefitScreen extends Screen {
                 return;
             }
             if (owned) c.armoryE[eid]--;
-            else c.cash -= ne.cost;
+            else {
+                c.cash -= ne.cost;
+                if (ne.unique) c.offerItem = -1;
+            }
         }
         if (old >= 0) c.armoryE[old]++;
         un.equip[s] = eid;

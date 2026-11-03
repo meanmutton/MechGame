@@ -53,6 +53,7 @@ public final class DesktopTest {
         else if (mode.equals("icons")) icons(new File(args[1]));
         else if (mode.equals("gallery")) gallery(new File(args[1]));
         else if (mode.equals("campaign")) campaign(Integer.parseInt(args[1]));
+        else if (mode.equals("merc")) merc(Integer.parseInt(args[1]));
         else if (mode.equals("resume")) resume();
         else if (mode.equals("monkey")) monkey(Integer.parseInt(args[1]), args.length > 2 ? Integer.parseInt(args[2]) : 30000, false);
         else if (mode.equals("monkey-threads")) monkey(Integer.parseInt(args[1]), args.length > 2 ? Integer.parseInt(args[2]) : 30000, true);
@@ -503,6 +504,8 @@ public final class DesktopTest {
             shot(g, "48_help_time_and_money");
             click(g, 3);
             shot(g, "49_help_factions");
+            click(g, 3);
+            shot(g, "49b_help_mercenary");
         }
         // a crash report: saved when the game dies, shown on the next launch, shared or closed
         {
@@ -539,6 +542,66 @@ public final class DesktopTest {
                 throw new RuntimeException("freeze report incomplete");
             click(g3, 2);
             System.out.println("freeze report OK (" + fp.shared.length() + " chars)");
+        }
+        // mercenary play: HQ without a job, the contract board, travel, a job, its market, briefing, battle and debrief
+        {
+            FakePlatform mp = new FakePlatform();
+            Game gm = new Game(mp, 31);
+            tick(gm, 2);
+            gm.newMercenary(1, 14000);
+            Company mc = gm.company;
+            System.arraycopy(new int[]{35, -55, 12, -20, 64, 0, -8, 22}, 0, mc.rep, 0, Faction.COUNT);
+            mc.contracts.clear();
+            Merc.fillBoard(mc, gm.rng);
+            tick(gm, 2);
+            shot(gm, "52_merc_hq_no_job");
+            click(gm, 10);   // Contracts
+            tick(gm, 2);
+            shot(gm, "53_merc_contracts");
+            click(gm, 2);   // Travel
+            tick(gm, 2);
+            shot(gm, "54_merc_travel");
+            click(gm, 1);   // stay
+            tick(gm, 1);
+            int pick = 0;
+            for (int i = 0; i < mc.contracts.size(); i++) if (mc.contracts.get(i).threat == 2) pick = i;
+            click(gm, 100 + pick);   // take the job
+            tick(gm, 2);
+            Scenario msc = mc.next();
+            for (Chassis ch : Chassis.ALL) {
+                if (mc.roster.size() >= 6 || !mc.sells(ch) || !msc.allows(ch)) continue;
+                Unit un = new Unit(ch);
+                if (un.value() <= 2600 && mc.limits().fits(mc.roster, un)) mc.roster.add(un);
+            }
+            mc.deployed.clear();
+            for (Unit un : mc.roster) if (mc.canDeploy(un)) mc.deployed.add(un);
+            gm.toHq();
+            tick(gm, 2);
+            shot(gm, "55_merc_hq_job");
+            click(gm, 2);   // Market
+            tick(gm, 2);
+            shot(gm, "56_merc_market");
+            gm.prepareMission();
+            tick(gm, 2);
+            shot(gm, "57_merc_briefing");
+            click(gm, 2);
+            tick(gm, 20);
+            Battle mb = ((BattleScreen) gm.screen()).battle();
+            mb.finishDeployment();
+            tick(gm, 30);
+            shot(gm, "58_merc_battle");
+            mb.autoPlayer = true;
+            gm.headless = true;   // plan on this thread, so the battle plays out in the loop
+            int frames = 0;
+            while (mb.result == Battle.RESULT_NONE && ++frames < 20 * 60 * 120) mb.update(1 / 20f);
+            if (mb.result == Battle.RESULT_NONE) throw new RuntimeException("mercenary battle did not finish");
+            gm.finishBattle(mb);
+            gm.headless = false;
+            tick(gm, 2);
+            shot(gm, "59_merc_debrief");
+            gm.toMenu();
+            tick(gm, 2);
+            shot(gm, "60_menu_merc");
         }
         // weather variety on a smaller screen
         W = 1600;
@@ -679,6 +742,174 @@ public final class DesktopTest {
      * the rival company's money and roster, and saves. When a planet is decided it moves on to the next,
      * alternating attack and defense.
      */
+    /**
+     * Mercenary play end to end: take jobs from the board, buy only what the planet sells you, fight the target
+     * faction's force, and check standing, the board, offers, travel and the save after every job.
+     */
+    static void merc(int jobs) throws Exception {
+        FakePlatform fp = new FakePlatform();
+        Game g = new Game(fp, 4242);
+        g.headless = true;
+        g.newMercenary(1, 10000);
+        Company c = g.company;
+        if (!c.merc || c.planet == null || c.contracts.isEmpty() || c.job() != null) throw new RuntimeException("bad mercenary start");
+        Random r = new Random(11);
+        String[] res = {"", "WIN", "LOSS", "DRAW", "WITHDRAW"};
+        int travels = 0, protos = 0;
+        for (int m = 1; m <= jobs; m++) {
+            if (c.contracts.isEmpty() || m % 5 == 0) {
+                // move on: pick the destination with the most factions that hire you
+                TravelScreen ts = new TravelScreen(g);
+                java.lang.reflect.Field fo = TravelScreen.class.getDeclaredField("options");
+                fo.setAccessible(true);
+                Merc.Planet[] opts = (Merc.Planet[]) fo.get(ts);
+                Merc.Planet best = null;
+                int bestHires = -1;
+                for (Merc.Planet p : opts) {
+                    int hires = 0;
+                    for (int f = 0; f < Faction.COUNT; f++) if (p.has(f) && Merc.hires(c.rep[f])) hires++;
+                    if (hires > bestHires) { bestHires = hires; best = p; }
+                }
+                int cash = c.cash, cost = Merc.travelCost(c);
+                if (cash < cost) c.cash = cash = cost + 2000;
+                g.travel(best);
+                if (c.planet != best || c.cash != cash - cost) throw new RuntimeException("travel failed");
+                travels++;
+                System.out.println("-- travelled to " + best.name + " for $" + cost);
+                if (c.contracts.isEmpty()) continue;
+            }
+            for (Merc.Contract k : c.contracts) {
+                if (!c.planet.has(k.employer) || !c.planet.has(k.target) || !Merc.hires(c.rep[k.employer]) || Merc.allied(k.employer, k.target)
+                        || k.employer == k.target) throw new RuntimeException("bad contract on the board: " + k.serialize());
+                if (k.scenario == 0 || k.scenario == 20) throw new RuntimeException("campaign-only scenario offered");
+            }
+            int pick = r.nextInt(c.contracts.size());
+            g.acceptContract(pick);
+            Merc.Contract k = c.job();
+            Scenario sc = c.next();
+            if (k == null || sc.id != k.scenario || c.side != k.role || c.reward != k.reward || c.limits() != sc.caps)
+                throw new RuntimeException("contract not applied");
+            // the market: only designs from factions here that trade with you, uniques only when offered
+            for (Chassis ch : Chassis.ALL) {
+                if (!c.sells(ch)) continue;
+                if (ch.unique && ch.id != c.offerChassis) throw new RuntimeException("unique sold without an offer");
+                boolean ok = ch.unique;
+                for (int f = 0; f < Faction.COUNT; f++) if (c.planet.has(f) && Merc.trades(c.rep[f]) && (ch.factions & Faction.bit(f)) != 0) ok = true;
+                if (!ok) throw new RuntimeException(ch.name + " sold by nobody here");
+            }
+            for (Wpn w : Wpn.ALL) if (c.canBuy(w) && w.unique && c.offerItem != w.id) throw new RuntimeException("unique weapon sold without an offer");
+            // repair, then buy for the job's limits from this planet's market
+            for (Unit u : c.roster) if (u.isDamaged() && c.cash >= u.repairCost()) { c.cash -= u.repairCost(); u.repairFully(); }
+            Limits lim = c.limits();
+            for (int buys = 0; buys < 5; buys++) {
+                int[] have = new int[4];
+                for (Unit u : c.roster) if (!u.destroyed && c.allowed(u)) have[Limits.kind(u.type)]++;
+                int[] room = {lim.mechs - have[0], lim.heavy - Math.min(have[0], lim.mechs) - have[1], lim.infantry - have[2], 0};
+                Unit best = null;
+                for (Chassis ch : Chassis.ALL) {
+                    int kd = Limits.kind(ch.type);
+                    if (!c.sells(ch) || !sc.allows(ch) || room[kd] <= 0 || (kd == Limits.MECH && room[1] + room[0] <= 0)) continue;
+                    Unit u = new Unit(ch);
+                    if (u.value() <= c.cash * 0.5f && (best == null || u.value() > best.value()) && r.nextFloat() < 0.8f) best = u;
+                }
+                if (best == null || c.roster.size() >= Company.MAX_ROSTER - 1) break;
+                c.cash -= best.value();
+                c.roster.add(best);
+            }
+            c.deployed.clear();
+            for (Unit u : c.roster) if (c.canDeploy(u) && !c.deployed.contains(u)) c.deployed.add(u);
+            if (!lim.holds(c.deployed)) throw new RuntimeException("deployed past the job's limits");
+            int[] repBefore = c.rep.clone();
+            int boardBefore = c.contracts.size();
+            if (c.deployed.isEmpty()) {
+                g.forfeitMission();
+                System.out.printf("job %2d: %-21s FORFEIT (nothing allowed)%n", m, sc.name);
+                int[] dr = Merc.repChanges(k, Battle.RESULT_WITHDRAW);
+                for (int f = 0; f < Faction.COUNT; f++)
+                    if (c.rep[f] != Math.max(Merc.REP_MIN, Math.min(Merc.REP_MAX, repBefore[f] + dr[f]))) throw new RuntimeException("standing not applied");
+            } else {
+                g.prepareMission();
+                BriefingScreen bs = (BriefingScreen) g.screen();
+                java.lang.reflect.Field fm = BriefingScreen.class.getDeclaredField("map");
+                java.lang.reflect.Field fe = BriefingScreen.class.getDeclaredField("enemy");
+                java.lang.reflect.Field fa = BriefingScreen.class.getDeclaredField("allies");
+                fm.setAccessible(true);
+                fe.setAccessible(true);
+                fa.setAccessible(true);
+                @SuppressWarnings("unchecked") List<Unit> enemy = (List<Unit>) fe.get(bs);
+                @SuppressWarnings("unchecked") List<Unit> allies = (List<Unit>) fa.get(bs);
+                List<Unit> fielded = new ArrayList<Unit>();
+                for (Unit e : enemy) {
+                    if (e.paint != Faction.ALL[k.target].scheme) throw new RuntimeException("enemy not in the target's colors");
+                    if ("garrison".equals(e.tag)) continue;
+                    fielded.add(e);
+                    if ((e.ch.factions & Faction.bit(k.target)) == 0) throw new RuntimeException(e.name + " is not a " + Faction.ALL[k.target].name + " design");
+                    if (!sc.allows(e)) throw new RuntimeException("enemy " + e.name + " not allowed in " + sc.name);
+                    if (e.ch.unique) protos++;
+                    for (int w : e.weapon) if (w >= 0 && Wpn.ALL[w].maker >= 0 && Wpn.ALL[w].maker != k.target && !Wpn.ALL[w].unique)
+                        throw new RuntimeException("enemy carries another faction's make");
+                }
+                if (fielded.isEmpty()) throw new RuntimeException("enemy fielded nothing");
+                if (!sc.caps.holds(fielded)) throw new RuntimeException("enemy over the job's limits");
+                g.startBattle((HexMap) fm.get(bs), enemy, allies);
+                Battle b = ((BattleScreen) g.screen()).battle();
+                b.autoPlayer = true;
+                b.finishDeployment();
+                int frames = 0;
+                while (b.result == Battle.RESULT_NONE) {
+                    b.update(1 / 20f);
+                    if (++frames > 20 * 60 * 120) throw new RuntimeException("stalled");
+                }
+                int cashBefore = c.cash;
+                g.finishBattle(b);
+                int[] dr = Merc.repChanges(k, b.result);
+                for (int f = 0; f < Faction.COUNT; f++)
+                    if (c.rep[f] != Math.max(Merc.REP_MIN, Math.min(Merc.REP_MAX, repBefore[f] + dr[f]))) throw new RuntimeException("standing not applied");
+                System.out.printf("job %2d: %-21s %-8s %-4s for %-9s vs %-9s threat %d pay $%5d  you $%6d->$%6d %2d units | %s %+d, %s %+d%n",
+                        m, sc.name, Scenario.SIDE_NAMES[c.side], res[b.result], Faction.ALL[k.employer].shortName, Faction.ALL[k.target].shortName,
+                        k.threat, k.reward, cashBefore, c.cash, c.roster.size(), Faction.ALL[k.employer].shortName, dr[k.employer],
+                        Faction.ALL[k.target].shortName, dr[k.target]);
+            }
+            if (c.job() != null || c.contracts.contains(k)) throw new RuntimeException("finished contract still on the board");
+            if (c.contracts.size() < Math.min(boardBefore - 1, 1)) throw new RuntimeException("board not refilled");
+            // the save must round-trip the mercenary state
+            Company back = Company.parse(fp.load("company"));
+            if (back == null || !back.merc || !java.util.Arrays.equals(back.rep, c.rep) || !back.planet.name.equals(c.planet.name)
+                    || back.planet.factions != c.planet.factions || back.contracts.size() != c.contracts.size() || back.contract != c.contract
+                    || back.offerChassis != c.offerChassis || back.offerItem != c.offerItem || back.cash != c.cash)
+                throw new RuntimeException("mercenary save round trip failed");
+            for (int i = 0; i < c.contracts.size(); i++)
+                if (!back.contracts.get(i).serialize().equals(c.contracts.get(i).serialize())) throw new RuntimeException("contract round trip failed");
+        }
+        String standing = java.util.Arrays.toString(c.rep);
+        // trust brings offers: make a faction here an ally and roll until something special turns up
+        int f0 = -1;
+        for (int f = 0; f < Faction.COUNT; f++) if (c.planet.has(f)) f0 = f;
+        c.rep[f0] = 80;
+        boolean offered = false;
+        for (int i = 0; i < 40 && !offered; i++) {
+            Merc.rollOffers(c, r);
+            offered = c.offerChassis >= 0 || c.offerItem >= 0;
+        }
+        if (!offered) throw new RuntimeException("an allied faction never offered anything");
+        if (c.offerChassis >= 0 && !c.sells(Chassis.ALL[c.offerChassis])) throw new RuntimeException("offered prototype not for sale");
+        if (c.offerItem >= 0 && c.offerItem < 1000 && !c.canBuy(Wpn.ALL[c.offerItem])) throw new RuntimeException("offered weapon not for sale");
+        if (c.offerItem >= 1000 && !c.canBuy(Equip.ALL[c.offerItem - 1000])) throw new RuntimeException("offered equipment not for sale");
+        // hostility closes doors: nobody hires or sells when everyone here hates you
+        for (int f = 0; f < Faction.COUNT; f++) c.rep[f] = -60;
+        c.contracts.clear();
+        Merc.fillBoard(c, r);
+        if (!c.contracts.isEmpty()) throw new RuntimeException("hostile factions still hire");
+        for (Chassis ch : Chassis.ALL) if (c.sells(ch) && !ch.unique) throw new RuntimeException("hostile faction still sells " + ch.name);
+        // campaign and quick-battle companies never see faction makes or uniques
+        Company camp = new Company();
+        for (Wpn w : Wpn.ALL) if (camp.canBuy(w) && (w.unique || w.maker >= 0)) throw new RuntimeException("campaign sells " + w.name);
+        for (Equip e : Equip.ALL) if (camp.canBuy(e) && (e.unique || e.maker >= 0)) throw new RuntimeException("campaign sells " + e.name);
+        for (Chassis ch : Chassis.SHOP) if (ch.unique) throw new RuntimeException("unique in the shop");
+        System.out.println("mercenary: " + jobs + " jobs, " + travels + " travels, " + protos + " prototypes fielded against you; standing "
+                + standing + "; checks passed");
+    }
+
     static void campaign(int missions) throws Exception {
         FakePlatform fp = new FakePlatform();
         Game g = new Game(fp, 2024);

@@ -37,12 +37,35 @@ public final class Company {
     /** The company's paint (null: the default for its side: blue for you, red for the campaign's enemy). */
     public Scheme scheme;
 
+    // mercenary play (see Merc)
+    public boolean merc;
+    /** Standing with each faction, -100 to 100. */
+    public final int[] rep = new int[Faction.COUNT];
+    public Merc.Planet planet;
+    public final List<Merc.Contract> contracts = new ArrayList<Merc.Contract>();
+    /** The contract the company has accepted (an index into contracts), or -1. */
+    public int contract = -1;
+    /** Special offers on this planet: a unique design id, and a unique item (weapon id, or 1000 + equipment id); -1 for none. */
+    public int offerChassis = -1, offerItem = -1;
+
+    /** The accepted contract, or null. */
+    public Merc.Contract job() {
+        return merc && contract >= 0 && contract < contracts.size() ? contracts.get(contract) : null;
+    }
+
     // next contract
     public int biome;
     public int reward;
     public long seed;
 
     public void rollContract(Random r) {
+        if (merc) {   // mercenary pay comes with each contract; battles happen on the current planet
+            biome = planet != null ? planet.biome : 0;
+            Merc.Contract k = job();
+            reward = k != null ? k.reward : 0;
+            seed = r.nextLong();
+            return;
+        }
         biome = r.nextInt(HexMap.BIOME_NAMES.length);
         reward = 1600 + Math.min(mission, 20) * 300 + difficulty * 400;
         if (!quick) reward = Math.round(reward * Scenario.get(scenario).pay * Scenario.income(side, planetBattles) / 50f) * 50;
@@ -66,22 +89,36 @@ public final class Company {
      * items come with faction designs and from salvage, and unique items only turn up in mercenary play.
      */
     public boolean canBuy(Wpn w) {
+        if (merc && planet != null) return Merc.sellsItem(this, w.maker, w.unique, w.id);
         return !w.unique && w.maker < 0;
     }
 
     public boolean canBuy(Equip e) {
+        if (merc && planet != null) return Merc.sellsItem(this, e.maker, e.unique, 1000 + e.id);
         return !e.unique && e.maker < 0;
+    }
+
+    /** Is this design for sale to the company? (In mercenary play, only from factions here that trade with you.) */
+    public boolean sells(Chassis ch) {
+        if (merc && planet != null) return Merc.sells(this, ch);
+        return ch.buyable();
     }
 
     /** The next campaign scenario (null in a quick battle). */
     public Scenario next() {
-        return quick ? null : Scenario.get(scenario);
+        if (quick) return null;
+        if (merc) {
+            Merc.Contract k = job();
+            return k == null ? null : Scenario.get(k.scenario);
+        }
+        return Scenario.get(scenario);
     }
 
     /** What you may deploy in the next battle (quick battles use the full-size limits). */
     public Limits limits() {
         Scenario s = next();
-        return s == null ? Limits.FULL : s.limitsFor(side, planetBattles);
+        if (s == null) return Limits.FULL;
+        return merc ? s.caps : s.limitsFor(side, planetBattles);
     }
 
     public int deployLimit() {
@@ -139,6 +176,19 @@ public final class Company {
 
     // ---------------- persistence ----------------
 
+    private String repString() {
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < rep.length; i++) b.append(i > 0 ? ":" : "").append(rep[i]);
+        return b.toString();
+    }
+
+    private String contractString() {
+        if (contracts.isEmpty()) return "-";
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < contracts.size(); i++) b.append(i > 0 ? "/" : "").append(contracts.get(i).serialize());
+        return b.toString();
+    }
+
     public String serialize() {
         StringBuilder b = new StringBuilder("C1|");
         b.append(quick ? 1 : 0).append(',').append(difficulty).append(',').append(cash).append(',').append(mission)
@@ -146,7 +196,10 @@ public final class Company {
                 .append(',').append(seed).append(',').append(side).append(',').append(front).append(',').append(scenario)
                 .append(',').append(lastScenario).append(',').append(lastOutcome).append(',').append(edge).append(',').append(over)
                 .append(',').append(planets).append(',').append(planetBattles)
-                .append(',').append(scheme == null ? "-" : scheme.serialize()).append('|');
+                .append(',').append(scheme == null ? "-" : scheme.serialize())
+                .append(',').append(merc ? 1 : 0).append(',').append(repString()).append(',').append(planet == null ? "-" : planet.serialize())
+                .append(',').append(contractString()).append(',').append(contract).append(',').append(offerChassis).append(':').append(offerItem)
+                .append('|');
         for (int i = 0; i < armoryW.length; i++) b.append(i > 0 ? "," : "").append(armoryW[i]);
         b.append('|');
         for (int i = 0; i < armoryE.length; i++) b.append(i > 0 ? "," : "").append(armoryE[i]);
@@ -182,6 +235,17 @@ public final class Company {
                 c.planets = Integer.parseInt(h[16]);
                 if (h.length >= 18) c.planetBattles = Integer.parseInt(h[17]);
                 if (h.length >= 19 && !h[18].equals("-")) c.scheme = Scheme.parse(h[18], null);
+                if (h.length >= 25) {
+                    c.merc = h[19].equals("1");
+                    String[] rp = h[20].split(":");
+                    for (int i = 0; i < rp.length && i < c.rep.length; i++) c.rep[i] = Integer.parseInt(rp[i]);
+                    if (!h[21].equals("-")) c.planet = Merc.Planet.parse(h[21]);
+                    if (!h[22].equals("-")) for (String k : h[22].split("/")) c.contracts.add(Merc.Contract.parse(k));
+                    c.contract = Integer.parseInt(h[23]);
+                    String[] of = h[24].split(":");
+                    c.offerChassis = Integer.parseInt(of[0]);
+                    c.offerItem = Integer.parseInt(of[1]);
+                }
             }
             String[] aw = p[2].split(",");
             for (int i = 0; i < aw.length && i < c.armoryW.length; i++) c.armoryW[i] = Integer.parseInt(aw[i]);

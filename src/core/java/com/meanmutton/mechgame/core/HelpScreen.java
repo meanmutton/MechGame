@@ -6,7 +6,7 @@ public final class HelpScreen extends Screen {
     private int page;
 
     private static final String[] TITLES = {"THE BASICS", "SHOOTING", "DAMAGE", "HEAT, AMMO & EQUIPMENT", "TERRAIN & WEATHER",
-            "UNITS", "CAMPAIGN", "CAMPAIGN SCENARIOS", "TIME AND MONEY", "FACTIONS"};
+            "UNITS", "CAMPAIGN", "CAMPAIGN SCENARIOS", "TIME AND MONEY", "FACTIONS", "MERCENARY"};
     private static final int FACTIONS_PAGE = 9;
     private static final String[][] PAGES = {
             {
@@ -80,6 +80,14 @@ public final class HelpScreen extends Screen {
                     "When a planet is decided, your company can move on to a new one, on either side, keeping its units and money."
             },
             {},   // the factions page is drawn specially: each faction's emblem, colors and specialty
+            {
+                    "In Mercenary play you fight for whoever pays. Each planet has two to four factions fighting over it; the Contracts board lists the jobs they offer: who hires you, who you fight (both with their emblems and colors), the scenario and its limits, the threat, the pay and the enemy's force.",
+                    "Take a job, then buy, refit and deploy for it at HQ. Each job is one battle against the target faction's own designs, carrying its own makes of weapons and equipment and painted in its colors. Pick company colors that stand apart from theirs.",
+                    "Every job moves your standing. Win and your employer and its allies like you more; the faction you fought, and its allies, like you less. Losing still costs you with the target, and disappoints your employer.",
+                    "Standing runs from Hostile through Unfriendly, Neutral and Friendly to Allied. Anyone above Hostile will hire you; only factions that are Neutral or better will sell to you. The Market and refit screen only carry what this planet's traders make.",
+                    "Allied factions sometimes offer something special: their one-of-a-kind prototype design or a unique weapon or piece of equipment. Uniques only exist in Mercenary play. The biggest jobs may field a faction's prototype against you.",
+                    "When the board dries up or you have made too many enemies, Travel to another planet. Each destination shows who is fighting there and how they see you."
+            },
     };
 
     public HelpScreen(Game game) {
