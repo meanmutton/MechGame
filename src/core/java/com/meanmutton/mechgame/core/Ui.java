@@ -87,4 +87,25 @@ public final class Ui {
         g.fillRoundRect(x, y, w, h, h / 2, 0xFF0A0F18);
         if (frac > 0) g.fillRoundRect(x, y, Math.max(h, w * Math.min(1f, frac)), h, h / 2, color);
     }
+
+    /**
+     * The campaign front from the attacker's dropships (-1) to the defender's base (6). Ground the attacker
+     * holds is drawn in the attacker's color; you are blue, the enemy red. Returns the height used.
+     */
+    public static float frontTrack(Gfx g, float x, float y, float w, float u, int front, int playerSide) {
+        int att = playerSide == Scenario.ATTACKER ? UnitArt.PLAYER_COLOR : UnitArt.ENEMY_COLOR;
+        int def = playerSide == Scenario.ATTACKER ? UnitArt.ENEMY_COLOR : UnitArt.PLAYER_COLOR;
+        int n = Scenario.FRONT_BASE - Scenario.FRONT_MIN + 1;
+        float gap = u * 0.5f, cw = (w - gap * (n - 1)) / n, h = u * 2.6f;
+        for (int i = 0; i < n; i++) {
+            int f = Scenario.FRONT_MIN + i;
+            float cx = x + i * (cw + gap);
+            int col = f < front ? att : (f > front ? def : Col.ACCENT);
+            g.fillRoundRect(cx, y, cw, h, u * 0.6f, Col.alpha(col, f == front ? 1f : 0.55f));
+            if (f == front) g.strokeRoundRect(cx, y, cw, h, u * 0.6f, u * 0.35f, 0xFFFFFFFF);
+        }
+        g.text("Dropships", x, y + h + u * 1.8f, u * 1.8f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+        g.text("Defender's base", x + w, y + h + u * 1.8f, u * 1.8f, Col.TEXT_DIM, Gfx.ALIGN_RIGHT, false);
+        return h + u * 3.2f;
+    }
 }

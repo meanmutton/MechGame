@@ -19,6 +19,8 @@ public final class HexMap {
     public static final String[] BIOME_NAMES = {"Temperate", "Desert", "Arctic", "Badlands"};
     public static final float IMPASSABLE = 999f;
 
+    /** Scenario requests: always generate a river / a town. */
+    public boolean forceRiver, forceTown;
     public final int cols, rows, biome;
     public final int[] terrain, elev;
     public final boolean[] road;
@@ -291,7 +293,7 @@ public final class HexMap {
         }
         // Rivers run downhill from one long edge toward the other
         float riverChance = biome == BIOME_TEMPERATE ? 0.85f : (biome == BIOME_ARCTIC ? 0.6f : (biome == BIOME_BADLANDS ? 0.35f : 0.25f));
-        if (rnd.nextFloat() < riverChance) river(rnd);
+        if (forceRiver || rnd.nextFloat() < riverChance) river(rnd);
         if (biome == BIOME_TEMPERATE && rnd.nextFloat() < 0.3f) river(rnd);
 
         // Forests where it is wet, thicker near water; none on water
@@ -332,7 +334,7 @@ public final class HexMap {
         // A small town on flat open ground in the middle
         float townChance = biome == BIOME_TEMPERATE ? 0.55f : 0.35f;
         int townC = -1, townR = -1;
-        if (rnd.nextFloat() < townChance) {
+        if (forceTown || rnd.nextFloat() < townChance) {
             for (int tries = 0; tries < 40 && townC < 0; tries++) {
                 int c = cols / 3 + rnd.nextInt(cols / 3), r = 2 + rnd.nextInt(rows - 4);
                 int k = idx(c, r);

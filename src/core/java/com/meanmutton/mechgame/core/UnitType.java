@@ -1,12 +1,12 @@
 package com.meanmutton.mechgame.core;
 
 /**
- * The nine unit types: what each can mount, where it can be hit, and how it moves.
+ * The unit types (nine you can buy, plus fixed emplacements that defend bases): what each can mount, where it can be hit, and how it moves.
  * Hit tables give percentage weights per location for an attack from each arc.
  */
 public final class UnitType {
     public static final int INFANTRY = 0, TRACKED = 1, HOVER = 2, VTOL = 3, WHEELED = 4,
-            LIGHT_MECH = 5, MEDIUM_MECH = 6, HEAVY_MECH = 7, ASSAULT_MECH = 8, COUNT = 9;
+            LIGHT_MECH = 5, MEDIUM_MECH = 6, HEAVY_MECH = 7, ASSAULT_MECH = 8, EMPLACEMENT = 9, COUNT = 10;
 
     public static final int ARC_FRONT = 0, ARC_LEFT = 1, ARC_RIGHT = 2, ARC_REAR = 3;
 
@@ -16,20 +16,20 @@ public final class UnitType {
     public static final int V_FRONT = 0, V_LEFT = 1, V_RIGHT = 2, V_REAR = 3, V_TOP = 4;
 
     public static final String[] NAMES = {"Infantry", "Tracked Tank", "Hovertank", "VTOL", "Wheeled Vehicle",
-            "Light Mech", "Medium Mech", "Heavy Mech", "Assault Mech"};
-    public static final String[] SHORT = {"INF", "TANK", "HOVER", "VTOL", "WHEEL", "LIGHT", "MEDIUM", "HEAVY", "ASSAULT"};
+            "Light Mech", "Medium Mech", "Heavy Mech", "Assault Mech", "Emplacement"};
+    public static final String[] SHORT = {"INF", "TANK", "HOVER", "VTOL", "WHEEL", "LIGHT", "MEDIUM", "HEAVY", "ASSAULT", "FIXED"};
 
     /** Heaviest weapon class each type can mount. */
-    public static final int[] MAX_CLASS = {1, 3, 2, 1, 2, 1, 2, 3, 3};
+    public static final int[] MAX_CLASS = {1, 3, 2, 1, 2, 1, 2, 3, 3, 3};
 
     /** Height for line of sight (in elevation levels above the ground it stands on). */
-    public static final int[] HEIGHT = {1, 1, 1, 4, 1, 2, 2, 2, 2};
+    public static final int[] HEIGHT = {1, 1, 1, 4, 1, 2, 2, 2, 2, 1};
 
     /** Chance per hull hit of motive damage (vehicles only). */
-    public static final float[] MOTIVE = {0f, 0.06f, 0.12f, 0.06f, 0.10f, 0f, 0f, 0f, 0f};
+    public static final float[] MOTIVE = {0f, 0.06f, 0.12f, 0.06f, 0.10f, 0f, 0f, 0f, 0f, 0f};
 
     public static boolean isMech(int t) {
-        return t >= LIGHT_MECH;
+        return t >= LIGHT_MECH && t <= ASSAULT_MECH;
     }
 
     public static boolean isVehicle(int t) {

@@ -19,6 +19,8 @@ import java.util.Random;
  *   shots <dir>     render every screen
  *   sim <n>         computer-vs-computer battles: crashes, stalls, balance
  *   icons <resdir>  launcher icons
+ *   campaign <n>    play n campaign missions computer-vs-computer (scenarios, front, rival, saves)
+ *   odds            how often each scenario comes up, and how long campaigns run
  */
 public final class DesktopTest {
     static final class FakePlatform implements Platform {
@@ -45,6 +47,15 @@ public final class DesktopTest {
         else if (mode.equals("icons")) icons(new File(args[1]));
         else if (mode.equals("gallery")) gallery(new File(args[1]));
         else if (mode.equals("campaign")) campaign(Integer.parseInt(args[1]));
+        else if (mode.equals("odds")) {
+            System.out.print("attacker/defender resources by battle:");
+            for (int b = 0; b <= 24; b += 2) System.out.printf(" %d: %.2f%s", b, Scenario.attackerRatio(b),
+                    Scenario.extraUnits(0, b) > 0 ? " (A+" + Scenario.extraUnits(0, b) + ")" : (Scenario.extraUnits(1, b) > 0 ? " (D+" + Scenario.extraUnits(1, b) + ")" : ""));
+            System.out.println();
+            scenarioOdds(4000, 0f, false);
+            scenarioOdds(4000, 1f, false);
+            scenarioOdds(4000, 2f, true);
+        }
     }
 
     // ------------------------------------------------------------------
@@ -178,6 +189,8 @@ public final class DesktopTest {
         shot(g, "02_new_game");
         g.newCampaign(1, 14000);
         Company c = g.company;
+        c.scenario = 4;   // a pitched battle, so every unit type can deploy
+        c.rollContract(g.rng);
         int[] buys = {21, 4, 9, 11, 18, 3};
         for (int id : buys) {
             Unit u = new Unit(Chassis.ALL[id]);
@@ -345,6 +358,74 @@ public final class DesktopTest {
             shot(g, "14d_impact_log");
             System.out.println("last log: " + bb.log.get(bb.log.size() - 1));
         }
+        // campaign scenarios: restrictions at HQ, a base assault with garrison and emplacements, the end screen
+        {
+            // a big roster: two columns at HQ, deployed up to the full-size limits
+            c.scenario = 4;
+            for (int id : new int[]{25, 29, 0, 1, 2, 14, 15, 16, 30, 12, 0}) c.roster.add(new Unit(Chassis.ALL[id]));
+            c.deployed.clear();
+            for (Unit un : c.roster) if (c.canDeploy(un)) c.deployed.add(un);
+            if (!c.limits().holds(c.deployed) || c.deployed.size() != c.deployLimit()) throw new RuntimeException("full-size deployment wrong: " + c.deployed.size());
+            g.toHq();
+            tick(g, 2);
+            shot(g, "39_hq_big_roster");
+            c.scenario = Scenario.INITIAL_DROP;
+            c.front = Scenario.FRONT_START;
+            c.fitDeployment();
+            g.toHq();
+            tick(g, 2);
+            shot(g, "40_hq_initial_drop");
+            click(g, 2);   // Market
+            tick(g, 2);
+            shot(g, "40b_market_initial_drop");
+            c.scenario = Scenario.BASE_ASSAULT;
+            c.front = Scenario.FRONT_BASE;
+            c.planetBattles = 9;
+            c.edge = Scenario.ATTACKER;
+            c.rollContract(g.rng);
+            for (Unit un : c.roster) un.repairFully();
+            c.deployed.clear();
+            for (Unit un : c.roster) if (c.canDeploy(un)) c.deployed.add(un);
+            g.prepareMission();
+            tick(g, 2);
+            shot(g, "41_briefing_base_assault");
+            click(g, 2);
+            tick(g, 20);
+            shot(g, "42_deployment_base_assault");
+            BattleScreen bs2 = (BattleScreen) g.screen();
+            Battle b2 = bs2.battle();
+            int fixedCount = 0;
+            for (Unit un : b2.units) if (un.ch.fixed()) {
+                fixedCount++;
+                if (b2.canPlace(un, un.q, un.r)) throw new RuntimeException("emplacement can be moved");
+            }
+            if (fixedCount != 2) throw new RuntimeException("expected 2 emplacements, found " + fixedCount);
+            b2.autoPlayer = true;
+            click(g, 13);
+            long until = System.currentTimeMillis() + 180000;
+            for (int i = 0; g.screen() == bs2 && System.currentTimeMillis() < until; i++) {
+                tick(g, 1);
+                if (i % 20 == 0) Thread.sleep(1);   // the AI plans on its own thread: give it real time
+                if (i == 900) shot(g, "43_base_assault_battle");
+            }
+            System.out.println("base assault: round " + b2.round + ", result " + b2.result + ", side " + b2.side + ", active "
+                    + (b2.active == null ? "-" : b2.active.name) + ", busy " + b2.busy() + ", fx " + b2.fx.size() + ", mover " + b2.mover);
+            shot(g, "44_debrief_campaign");
+            c.over = Scenario.OUT_ATTACKER;
+            g.setScreen(new CampaignEndScreen(g));
+            tick(g, 2);
+            shot(g, "45_campaign_end");
+            click(g, 3);   // defend a new planet
+            tick(g, 2);
+            if (c.side != Scenario.DEFENDER || c.scenario != Scenario.INITIAL_DROP) throw new RuntimeException("next planet not set up");
+            shot(g, "46_hq_new_planet_defending");
+            HelpScreen hs = new HelpScreen(g);
+            g.setScreen(hs);
+            for (int k = 0; k < 7; k++) click(g, 3);
+            shot(g, "47_help_scenarios");
+            click(g, 3);
+            shot(g, "48_help_time_and_money");
+        }
         // weather variety on a smaller screen
         W = 1600;
         H = 900;
@@ -354,8 +435,8 @@ public final class DesktopTest {
             HexMap m = new HexMap(20, 13, biomes[i], new Weather(wx[i]));
             m.generate(new Random(77 + i));
             List<Unit> mine = new ArrayList<Unit>(), theirs = new ArrayList<Unit>();
-            for (int k = 0; k < 4; k++) mine.add(new Unit(Chassis.ALL[(k * 7 + i) % Chassis.ALL.length]));
-            for (int k = 0; k < 4; k++) theirs.add(new Unit(Chassis.ALL[(k * 5 + 3 + i) % Chassis.ALL.length]));
+            for (int k = 0; k < 4; k++) mine.add(new Unit(Chassis.SHOP[(k * 7 + i) % Chassis.SHOP.length]));
+            for (int k = 0; k < 4; k++) theirs.add(new Unit(Chassis.SHOP[(k * 5 + 3 + i) % Chassis.SHOP.length]));
             Battle bb = new Battle(g, mine, theirs, m, new Random(i), 1);
             bb.finishDeployment();
             g.setScreen(new BattleScreen(g, bb));
@@ -384,7 +465,7 @@ public final class DesktopTest {
         List<Unit> l = new ArrayList<Unit>();
         int left = budget;
         for (int tries = 0; tries < 200 && l.size() < 6; tries++) {
-            Chassis ch = Chassis.ALL[r.nextInt(Chassis.ALL.length)];
+            Chassis ch = Chassis.SHOP[r.nextInt(Chassis.SHOP.length)];
             if (kind == 1 && !UnitType.isMech(ch.type)) continue;
             if (kind == 2 && UnitType.isMech(ch.type)) continue;
             Unit u = new Unit(ch);
@@ -479,57 +560,186 @@ public final class DesktopTest {
 
     // ------------------------------------------------------------------
 
-    /** Plays a campaign with the computer on both sides, checking the rival company's money and roster evolve. */
+    /**
+     * Plays campaigns with the computer on both sides: scenarios, the front, unit restrictions, garrisons,
+     * the rival company's money and roster, and saves. When a planet is decided it moves on to the next,
+     * alternating attack and defense.
+     */
     static void campaign(int missions) throws Exception {
         FakePlatform fp = new FakePlatform();
         Game g = new Game(fp, 2024);
         g.headless = true;
-        g.newCampaign(1, 10000);
+        g.newCampaign(1, 10000, Scenario.ATTACKER);
         Company c = g.company;
         Random r = new Random(7);
+        int[] seen = new int[Scenario.ALL.length];
+        int[][] won = new int[2][2];   // [player side][planet taken by attacker?]
+        int planetStart = 1, forfeits = 0;
+        List<Integer> lengths = new ArrayList<Integer>();
+        String[] res = {"", "WIN", "LOSS", "DRAW", "WITHDRAW"};
         for (int m = 1; m <= missions; m++) {
-            // the player side: repair, then spend down to a small reserve on stock units
+            Scenario sc = c.next();
+            seen[sc.id]++;
+            // the player side: repair, buy for the next scenario (as a player who read the briefing would), deploy
             for (Unit u : c.roster) if (u.isDamaged() && c.cash >= u.repairCost()) { c.cash -= u.repairCost(); u.repairFully(); }
-            for (int tries = 0; tries < 50 && c.roster.size() < 8; tries++) {
-                Unit u = new Unit(Chassis.ALL[r.nextInt(Chassis.ALL.length)]);
-                if (u.value() <= c.cash * 3 / 4) { c.cash -= u.value(); c.roster.add(u); }
+            int allowed = 0;
+            for (Unit u : c.roster) if (!u.destroyed && c.allowed(u)) allowed++;
+            // buy for the open slots: the best allowed unit of each kind (mech, vehicle, infantry) it can afford with
+            // a share of its cash; with a full roster, sell the cheapest unit to make room for a much better one
+            Limits lim = c.limits();
+            for (int buys = 0; buys < 5; buys++) {
+                int[] have = new int[4];
+                for (Unit u : c.roster) if (!u.destroyed && c.allowed(u)) have[Limits.kind(u.type)]++;
+                int[] room = {lim.mechs - have[0], lim.heavy - Math.min(have[0], lim.mechs) - have[1], lim.infantry - have[2], 0};
+                Unit best = null;
+                for (Chassis ch : Chassis.SHOP) {
+                    int k = Limits.kind(ch.type);
+                    if (!sc.allows(ch) || room[k] <= 0 || (k == Limits.MECH && room[1] + room[0] <= 0)) continue;
+                    Unit u = new Unit(ch);
+                    if (u.value() <= c.cash * 0.5f && (best == null || u.value() > best.value()) && r.nextFloat() < 0.8f) best = u;
+                }
+                if (best == null) break;
+                if (c.roster.size() >= Company.MAX_ROSTER - 1) {
+                    Unit cheapest = null;
+                    for (Unit u : c.roster) if (cheapest == null || u.value() < cheapest.value()) cheapest = u;
+                    if (cheapest.value() * 2 > best.value()) break;
+                    c.cash += cheapest.destroyed ? cheapest.value() / 5 : cheapest.value() / 2;
+                    c.roster.remove(cheapest);
+                    c.deployed.remove(cheapest);
+                }
+                c.cash -= best.value();
+                c.roster.add(best);
+            }
+            java.util.Collections.sort(c.roster, new java.util.Comparator<Unit>() {
+                public int compare(Unit x, Unit y) { return y.value() - x.value(); }
+            });
+            if (c.noneAllowed() && !c.mustForfeit()) {   // the HQ won't offer a forfeit while one is affordable: buy the cheapest
+                Unit cheapest = null;
+                for (Chassis ch : Chassis.SHOP) {
+                    Unit u = new Unit(ch);
+                    if (sc.allows(ch) && u.value() <= c.cash && (cheapest == null || u.value() < cheapest.value())) cheapest = u;
+                }
+                c.cash -= cheapest.value();
+                c.roster.add(cheapest);
             }
             c.deployed.clear();
-            for (Unit u : c.roster) if (!u.destroyed && c.deployed.size() < 6) c.deployed.add(u);
-            if (c.deployed.isEmpty()) {   // the real HQ won't launch without units: buy infantry first
-                Unit u = new Unit(Chassis.ALL[0]);
-                c.cash -= u.value();
-                c.roster.add(u);
-                c.deployed.add(u);
+            for (Unit u : c.roster) if (c.canDeploy(u) && !c.deployed.contains(u)) c.deployed.add(u);
+            if (!c.limits().holds(c.deployed)) throw new RuntimeException("deployed past the scenario limits");
+            for (Unit u : c.deployed) if (!sc.allows(u)) throw new RuntimeException(u.name + " deployed in " + sc.name);
+            int rivalCashBefore = c.rival.cash, rivalUnitsBefore = c.rival.roster.size(), frontBefore = c.front;
+            if (c.deployed.isEmpty()) {
+                if (!c.mustForfeit()) throw new RuntimeException("forfeit offered while an allowed unit is affordable");
+                g.forfeitMission();
+                forfeits++;
+                System.out.printf("mission %2d: %-21s FORFEIT (no allowed units)%n", m, sc.name);
+            } else {
+                g.prepareMission();
+                BriefingScreen bs = (BriefingScreen) g.screen();
+                java.lang.reflect.Field fm = BriefingScreen.class.getDeclaredField("map");
+                java.lang.reflect.Field fe = BriefingScreen.class.getDeclaredField("enemy");
+                java.lang.reflect.Field fa = BriefingScreen.class.getDeclaredField("allies");
+                fm.setAccessible(true);
+                fe.setAccessible(true);
+                fa.setAccessible(true);
+                @SuppressWarnings("unchecked") List<Unit> enemy = (List<Unit>) fe.get(bs);
+                @SuppressWarnings("unchecked") List<Unit> allies = (List<Unit>) fa.get(bs);
+                int fielded = 0;
+                for (Unit e : enemy) {
+                    if (e.tag == null && !c.rival.roster.contains(e)) throw new RuntimeException("enemy unit not from the rival roster");
+                    if (!"garrison".equals(e.tag)) {
+                        fielded++;
+                        if (!sc.allows(e)) throw new RuntimeException("enemy " + e.name + " not allowed in " + sc.name);
+                    }
+                }
+                if (!sc.limitsFor(1 - c.side, c.planetBattles).holds(enemy)) throw new RuntimeException("enemy over the unit limits");
+                if (fielded == 0) throw new RuntimeException("enemy fielded nothing");
+                g.startBattle((HexMap) fm.get(bs), enemy, allies);
+                Battle b = ((BattleScreen) g.screen()).battle();
+                if (b.maxRounds != sc.rounds) throw new RuntimeException("scenario rounds not applied");
+                b.autoPlayer = true;
+                b.finishDeployment();
+                int frames = 0;
+                while (b.result == Battle.RESULT_NONE) {
+                    b.update(1 / 20f);
+                    if (++frames > 20 * 60 * 120) throw new RuntimeException("stalled");
+                }
+                for (Unit u : b.units) if (u.ch.fixed() && (u.q < 0 || u.r < 0)) throw new RuntimeException("emplacement not placed");
+                g.finishBattle(b);
+                int garrison = 0, hired = 0;
+                for (Unit e : enemy) if ("garrison".equals(e.tag)) garrison++; else if ("hired".equals(e.tag)) hired++;
+                System.out.printf("mission %2d: %-21s %-8s %-4s front %d->%d  you $%6d %2d units | rival $%6d->$%6d %d->%d units, fielded %d%s%s%s%n",
+                        m, sc.name, Scenario.SIDE_NAMES[c.side], res[b.result], frontBefore, c.front, c.cash, c.roster.size(),
+                        rivalCashBefore, c.rival.cash, rivalUnitsBefore, c.rival.roster.size(), fielded,
+                        hired > 0 ? " (" + hired + " hired)" : "", garrison > 0 ? " +" + garrison + " enemy garrison" : "",
+                        allies.isEmpty() ? "" : " +" + allies.size() + " your garrison");
             }
-            int rivalCashBefore = c.rival.cash, rivalUnitsBefore = c.rival.roster.size();
-            g.prepareMission();
-            BriefingScreen bs = (BriefingScreen) g.screen();
-            java.lang.reflect.Field fm = BriefingScreen.class.getDeclaredField("map");
-            java.lang.reflect.Field fe = BriefingScreen.class.getDeclaredField("enemy");
-            fm.setAccessible(true);
-            fe.setAccessible(true);
-            @SuppressWarnings("unchecked") List<Unit> enemy = (List<Unit>) fe.get(bs);
-            for (Unit e : enemy) if (!c.rival.roster.contains(e)) throw new RuntimeException("enemy unit not from the rival roster");
-            g.startBattle((HexMap) fm.get(bs), enemy);
-            Battle b = ((BattleScreen) g.screen()).battle();
-            b.autoPlayer = true;
-            b.finishDeployment();
-            int frames = 0;
-            while (b.result == Battle.RESULT_NONE) {
-                b.update(1 / 20f);
-                if (++frames > 20 * 60 * 120) throw new RuntimeException("stalled");
-            }
-            g.finishBattle(b);
-            // the save must round-trip both companies
+            // the save must round-trip both companies and the campaign state
             Company back = Company.parse(fp.load("company"));
             Company rback = Company.parse(fp.load("rival"));
-            if (back == null || rback == null || rback.cash != c.rival.cash || rback.roster.size() != c.rival.roster.size())
+            if (back == null || rback == null || rback.cash != c.rival.cash || rback.roster.size() != c.rival.roster.size()
+                    || back.front != c.front || back.scenario != c.scenario || back.side != c.side || back.over != c.over || back.edge != c.edge)
                 throw new RuntimeException("save round trip failed");
-            String[] res = {"", "WIN", "LOSS", "DRAW", "WITHDRAW"};
-            System.out.printf("mission %2d: %-4s you $%6d %d units | rival $%6d -> $%6d, units %d -> %d, fielded %d%n", m, res[b.result],
-                    c.cash, c.roster.size(), rivalCashBefore, c.rival.cash, rivalUnitsBefore, c.rival.roster.size(), enemy.size());
+            if (c.over != 0) {
+                boolean playerWon = c.over == (c.side == Scenario.ATTACKER ? Scenario.OUT_ATTACKER : Scenario.OUT_DEFENDER);
+                System.out.println("== planet decided after " + (m - planetStart + 1) + " battles (attacker/defender resources "
+                        + String.format(java.util.Locale.US, "%.2f", Scenario.attackerRatio(m - planetStart + 1)) + "): " + (c.over == Scenario.OUT_ATTACKER
+                        ? "the attacker took it" : "the attacker left") + " (you were the " + Scenario.SIDE_NAMES[c.side].toLowerCase()
+                        + ", " + (playerWon ? "won" : "lost") + ")");
+                won[c.side][c.over == Scenario.OUT_ATTACKER ? 1 : 0]++;
+                lengths.add(m - planetStart + 1);
+                planetStart = m + 1;
+                g.nextPlanet(1 - c.side);
+                if (c.scenario != Scenario.INITIAL_DROP || c.front != Scenario.FRONT_START) throw new RuntimeException("new planet not reset");
+            }
         }
+        System.out.println("scenarios played:");
+        for (Scenario s : Scenario.ALL) if (seen[s.id] > 0) System.out.printf("  %-22s %d%n", s.name, seen[s.id]);
+        System.out.println("planets decided: " + lengths + " battles each; attacker took " + (won[0][1] + won[1][1])
+                + ", attacker left " + (won[0][0] + won[1][0]) + "; forfeits " + forfeits);
+    }
+
+    /**
+     * Rolls many campaigns' worth of scenario sequences to show how often each comes up, how long campaigns run,
+     * and who takes the planet. A rough model of the economy decides each battle: the attacker's chance follows
+     * its share of the two sides' resources, R^k / (1 + R^k), where R is Scenario.attackerRatio and k says how
+     * much money matters. 10% of battles are draws.
+     */
+    static void scenarioOdds(int campaigns, float k, boolean verbose) {
+        Random r = new Random(99);
+        int[] seen = new int[Scenario.ALL.length];
+        int attackerTook = 0, total = 0, unfinished = 0, longest = 0;
+        int[] lengths = new int[61];
+        for (int c = 0; c < campaigns; c++) {
+            int front = Scenario.FRONT_START, id = Scenario.INITIAL_DROP, last = -1, m = 0;
+            boolean done = false;
+            for (; m < 60 && !done; m++) {
+                seen[id]++;
+                total++;
+                double rk = Math.pow(Scenario.attackerRatio(m), k);
+                float p = (float) (rk / (1 + rk));
+                float roll = r.nextFloat();
+                int out = roll < 0.1f ? Scenario.OUT_DRAW : (roll < 0.1f + 0.9f * p ? Scenario.OUT_ATTACKER : Scenario.OUT_DEFENDER);
+                Scenario sc = Scenario.get(id);
+                if (id == Scenario.BASE_ASSAULT && out == Scenario.OUT_ATTACKER) { attackerTook++; done = true; }
+                else if (id == Scenario.EVACUATION && out == Scenario.OUT_DEFENDER) done = true;
+                else {
+                    front = sc.frontAfter(front, out);
+                    last = id;
+                    id = Scenario.roll(front, out, last, r);
+                }
+            }
+            if (!done) unfinished++;
+            longest = Math.max(longest, m);
+            lengths[m]++;
+        }
+        int median = 0, acc = 0;
+        while (acc + lengths[median] < campaigns / 2) acc += lengths[median++];
+        int p90 = 0;
+        acc = 0;
+        while (acc + lengths[p90] < campaigns * 9 / 10) acc += lengths[p90++];
+        System.out.printf("money weight k=%.1f: attacker took %4.1f%% of planets; battles per planet: mean %.1f, median %d, 90%% within %d, longest %d; %d unfinished at 60%n",
+                k, attackerTook * 100f / campaigns, total / (float) campaigns, median, p90, longest, unfinished);
+        if (verbose) for (Scenario s : Scenario.ALL) System.out.printf("  %-22s %5.1f%%%n", s.name, seen[s.id] * 100f / total);
     }
 
     /** Every design side by side, in both team colors, to check they are all distinct. */

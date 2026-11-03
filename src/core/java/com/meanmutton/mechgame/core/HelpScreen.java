@@ -6,10 +6,10 @@ public final class HelpScreen extends Screen {
     private int page;
 
     private static final String[] TITLES = {"THE BASICS", "SHOOTING", "DAMAGE", "HEAT, AMMO & EQUIPMENT", "TERRAIN & WEATHER",
-            "UNITS", "CAMPAIGN"};
+            "UNITS", "CAMPAIGN", "CAMPAIGN SCENARIOS", "TIME AND MONEY"};
     private static final String[][] PAGES = {
             {
-                    "Each side fields up to 6 units on a hex map. A battle lasts up to 15 rounds.",
+                    "Each side fields up to 4 mechs, 6 mechs and vehicles in all (VTOLs count as vehicles), and 4 infantry, on a hex map. A full-size battle lasts up to 20 rounds; campaign scenarios may set smaller limits and shorter battles.",
                     "Before the first round you deploy: tap a unit, then a green hex. Infantry can be placed on any open hex on the map (ambushes!); everything else starts in your blue zone. Then press Start Battle.",
                     "Double-tap any unit (on the map, in HQ or in the Market) for its full detail sheet: every location's armor and structure, every weapon's numbers, and what each piece of equipment does. The Details button in the battle panel does the same.",
                     "Every round, one side wins initiative. Then the sides take turns activating one unit at a time until every unit has gone.",
@@ -56,11 +56,26 @@ public final class HelpScreen extends Screen {
             },
             {
                     "Your company carries over from battle to battle: money, units, damage and spare parts.",
-                    "At HQ, tick up to 6 units to deploy, repair damage, and launch the next contract. Win to collect the full pay plus a bonus for what you destroyed, and salvage enemy weapons into your spare parts.",
+                    "At HQ, tick the units to deploy (up to the battle's limits), repair damage, and launch the next contract. Win to collect the full pay plus a bonus for what you destroyed, and salvage enemy weapons into your spare parts.",
                     "Units destroyed in a battle you win (or draw) are recovered as wrecks you can repair. Lose or withdraw and they are gone for good.",
                     "The enemy is a company too. It starts with funds like yours, is paid after every battle (more when it wins), repairs what it can afford, loses units left on a field it lost, and buys reinforcements. Beat it down and it gets poorer; let it win and it grows. HQ and the briefing show its money and roster.",
                     "To customize a unit, select it at HQ and press CUSTOMIZE. Tap any weapon mount or equipment slot to swap what's in it, and use - / + to change armor, heat sinks and ammunition, all within the unit's weight limit. Removed parts go to your spares for free reuse. The Market sells new units with factory loadouts.",
                     "Quick Battle gives you a budget, lets you buy and refit a force, and fights a single battle."
+            },
+            {
+                    "A campaign is the fight for one planet. You choose to attack or defend when you start. The front runs from the attacker's dropships (-1) to the defender's base (6) and starts at 2, so the defender has the upper hand.",
+                    "Every battle is a scenario. It limits which units may fight and how many: the Initial Drop allows only VTOLs, wheeled vehicles and light and medium mechs; Recon Sweeps only VTOLs, wheeled vehicles and light mechs; Pitched Battles anything. The enemy plays by the same limits.",
+                    "The next scenario is rolled from the last result, the front and a random roll, and shown at HQ before you repair, buy and customize, so you know what you can bring. Units it doesn't allow show as Not allowed. If nothing on your roster may fight, you can only forfeit.",
+                    "Winning moves the front your way, usually one step (two in a Decisive Engagement, Breakthrough or Counterattack). Recon Sweeps don't move it; the winner gets the edge instead: initiative in the first round of the next battle.",
+                    "Some scenarios lean toward one side: more initiative, a time-out that only asks one side to be close, a free garrison, or a bigger force allowance. The briefing says which way each one leans.",
+                    "The attacker that reaches front 6 assaults the defender's base, held by garrison infantry, an armored car, a gun emplacement and a laser turret. Win, and the planet falls; lose, and it is thrown back a step. An attacker driven past its landing zone must hold its dropships in an Evacuation, or leave the planet.",
+            },
+            {
+                    "Time is on the defender's side. The attacker lands with " + Scenario.ATTACKER_START + " times the starting money, but its pay stays flat, while the defender's pay grows with every battle fought on the planet, up to " + Scenario.DEFENDER_MAX_INCOME + " times.",
+                    "Money alone stops mattering once you can field your best units, so resources also become numbers: the side with more of them brings reserves beyond a scenario's unit limit. The attacker gets one extra unit in its first battles; the defender gets one once it has more resources than the attacker, and up to three as the campaign drags on.",
+                    "The enemy company's force limit follows the two sides' resources too. As the attacker, win early. As the defender, hold on: every battle makes you stronger.",
+                    "The briefing shows the battle count, both sides' income, and any reserves.",
+                    "When a planet is decided, your company can move on to a new one, on either side, keeping its units and money."
             },
     };
 
