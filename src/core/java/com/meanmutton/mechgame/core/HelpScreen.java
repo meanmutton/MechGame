@@ -6,16 +6,17 @@ public final class HelpScreen extends Screen {
     private int page;
 
     private static final String[] TITLES = {"THE BASICS", "SHOOTING", "DAMAGE", "HEAT, AMMO & EQUIPMENT", "TERRAIN & WEATHER",
-            "UNITS", "CAMPAIGN", "CAMPAIGN SCENARIOS", "TIME AND MONEY"};
+            "UNITS", "CAMPAIGN", "CAMPAIGN SCENARIOS", "TIME AND MONEY", "FACTIONS", "MERCENARY"};
+    private static final int FACTIONS_PAGE = 9;
     private static final String[][] PAGES = {
             {
                     "Each side fields up to 4 mechs, 6 mechs and vehicles in all (VTOLs count as vehicles), and 4 infantry, on a hex map. A full-size battle lasts up to 20 rounds; campaign scenarios may set smaller limits and shorter battles.",
                     "Before the first round you deploy: tap a unit, then a green hex. Infantry can be placed on any open hex on the map (ambushes!); everything else starts in your blue zone. Then press Start Battle.",
                     "Double-tap any unit (on the map, in HQ or in the Market) for its full detail sheet: every location's armor and structure, every weapon's numbers, and what each piece of equipment does. The Details button in the battle panel does the same.",
                     "Every round, one side wins initiative. Then the sides take turns activating one unit at a time until every unit has gone.",
-                    "On your activation: tap one of your units (they pulse blue), tap a green hex twice to move there, tap an enemy to target it, choose weapons, FIRE, then End Turn.",
+                    "On your activation: tap one of your units (they pulse blue). The hexes it can reach glow green inside a bright outline, and the rest of the map dims. Tap a green hex twice to move there, tap an enemy to target it, choose weapons, FIRE, then End Turn.",
                     "You can rotate your unit (the arrow buttons) before ending. Facing matters: you shoot out of your front, and enemies who hit your sides or rear do more harm.",
-                    "Undo takes back a move as long as you haven't fired yet. Drag the map to pan and pinch to zoom.",
+                    "Undo takes back a move as long as you haven't fired yet. Drag the map to pan and pinch to zoom. Tap an empty hex for its terrain card: what it costs each kind of unit to enter, and what it does for cover and line of sight.",
                     "Battles save as you play. Leave the app or quit to the menu and Resume Battle puts you back where you were (during the computer's turn, at the start of it).",
                     "Destroy every enemy unit to win. If time runs out, the side that kept more of its value wins."
             },
@@ -78,6 +79,15 @@ public final class HelpScreen extends Screen {
                     "The briefing shows the battle count, both sides' income, and any reserves.",
                     "When a planet is decided, your company can move on to a new one, on either side, keeping its units and money."
             },
+            {},   // the factions page is drawn specially: each faction's emblem, colors and specialty
+            {
+                    "In Mercenary play you fight for whoever pays. Each planet has two to four factions fighting over it; the Contracts board lists the jobs they offer: who hires you, who you fight (both with their emblems and colors), the scenario and its limits, the threat, the pay and the enemy's force.",
+                    "Take a job, then buy, refit and deploy for it at HQ. Each job is one battle against the target faction's own designs, carrying its own makes of weapons and equipment and painted in its colors. Pick company colors that stand apart from theirs.",
+                    "Every job moves your standing. Win and your employer and its allies like you more; the faction you fought, and its allies, like you less. Losing still costs you with the target, and disappoints your employer.",
+                    "Standing runs from Hostile through Unfriendly, Neutral and Friendly to Allied. Anyone above Hostile will hire you; only factions that are Neutral or better will sell to you. The Market and refit screen only carry what this planet's traders make.",
+                    "Allied factions sometimes offer something special: their one-of-a-kind prototype design or a unique weapon or piece of equipment. Uniques only exist in Mercenary play. The biggest jobs may field a faction's prototype against you.",
+                    "When the board dries up or you have made too many enemies, Travel to another planet. Each destination shows who is fighting there and how they see you."
+            },
     };
 
     public HelpScreen(Game game) {
@@ -107,10 +117,32 @@ public final class HelpScreen extends Screen {
         return true;
     }
 
+    /** Every faction with its emblem, colors, bloc and specialty: the same emblem and color mark it everywhere. */
+    private void renderFactions(Gfx g) {
+        float top = h * 0.14f, rowH = (h - top - u * 19) / 4f, colW = (w - u * 9) / 2f;
+        for (Faction f : Faction.ALL) {
+            float x = u * 4 + (f.id % 2) * (colW + u), y = top + (f.id / 2) * rowH;
+            Ui.panel(g, x, y, colW, rowH - u, u * 1.5f);
+            float r = Math.min(rowH * 0.32f, u * 5);
+            Emblem.draw(g, f.id, x + u * 2 + r, y + rowH * 0.45f, r);
+            float tx = x + u * 4 + r * 2;
+            g.text(f.name, tx, y + rowH * 0.2f, u * 3f, f.color, Gfx.ALIGN_LEFT, true);
+            g.text(f.specialty + "  ·  " + (f.bloc >= 0 ? Faction.BLOC_NAMES[f.bloc] : "Independent"), tx, y + rowH * 0.45f, u * 2.2f,
+                    Col.TEXT, Gfx.ALIGN_LEFT, false);
+            // the faction's paint: main, trim, accent
+            int[] cols = {f.scheme.main, f.scheme.trim, f.scheme.accent};
+            for (int i = 0; i < 3; i++) g.fillRoundRect(tx + i * u * 4.5f, y + rowH * 0.62f, u * 4, u * 2.4f, u * 0.5f, cols[i]);
+            Ui.wrap(g, f.desc, tx + u * 15, y + rowH * 0.66f, u * 1.8f, colW - (tx - x) - u * 16, Col.TEXT_DIM);
+        }
+        g.text("Factions matter in mercenary play: who hires you, whose markets you can buy from, and who you fight.",
+                w / 2f, h - u * 16f, u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
+    }
+
     public void render(Gfx g) {
         background(g);
         Ui.title(g, TITLES[page], w / 2f, h * 0.08f, u * 6.5f);
         float y = h * 0.18f;
+        if (page == FACTIONS_PAGE) renderFactions(g);
         for (String s : PAGES[page]) y += Ui.wrap(g, "- " + s, u * 6, y, u * 3, w - u * 12, Col.TEXT) + u * 1.5f;
         g.text("Page " + (page + 1) + " of " + PAGES.length, w - u * 33, h - u * 7.5f, u * 2.6f, Col.TEXT_DIM, Gfx.ALIGN_RIGHT, false);
         renderButtons(g);

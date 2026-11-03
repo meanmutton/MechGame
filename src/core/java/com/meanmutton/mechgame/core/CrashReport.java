@@ -80,10 +80,14 @@ public final class CrashReport {
         try {
             Company c = game.company;
             if (c != null) {
-                s.append("Company: ").append(c.quick ? "quick battle" : "campaign").append(", ").append(Company.DIFFICULTY[c.difficulty])
+                s.append("Company: ").append(c.quick ? "quick battle" : (c.merc ? "mercenary" : "campaign")).append(", ").append(Company.DIFFICULTY[c.difficulty])
                         .append(", contract ").append(c.mission).append(", $").append(c.cash).append(", ").append(c.roster.size())
                         .append(" units, ").append(c.deployed.size()).append(" deployed\n");
-                if (!c.quick) {
+                if (c.merc) {
+                    Merc.Contract k = c.job();
+                    s.append("Mercenary: ").append(c.planet != null ? c.planet.name : "?").append(", ").append(c.contracts.size())
+                            .append(" contracts").append(k != null ? ", job " + k.serialize() : ", no job").append('\n');
+                } else if (!c.quick) {
                     s.append("Campaign: ").append(Scenario.SIDE_NAMES[c.side]).append(", front ").append(c.front).append(", next ")
                             .append(Scenario.get(c.scenario).name).append(", battle ").append(c.planetBattles + 1).append(" on planet ")
                             .append(c.planets + 1).append(c.over != 0 ? ", decided" : "").append('\n');

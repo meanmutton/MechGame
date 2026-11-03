@@ -13,16 +13,17 @@ Android 5.0 or newer, landscape. No permissions, no network, no ads.
 
 ## How it plays
 
-- **Modes.** *Campaign*: fight for a planet as the attacker or the defender (see below); money, units, damage and spare parts carry over, and the game is saved. The enemy is a rival company with its own money and roster: it is paid every contract (more when it wins), repairs what it can afford, loses units left on a field it lost, and buys or upgrades units. Each contract caps the force it can field at a multiple of yours (1.1× Easy, 1.4× Normal, 1.8× Hard); a poor rival fields less. It plays by each scenario's unit limits, buys with the next scenario in mind, and hires stopgap units when it has nothing allowed. *Quick Battle*: spend a budget on a force and fight one battle. Battles in progress are saved as you play: leave the app and **Resume Battle** on the menu puts you back in the same battle.
+- **Modes.** *Campaign*: fight for a planet as the attacker or the defender (see below); money, units, damage and spare parts carry over, and the game is saved. The enemy is a rival company with its own money and roster: it is paid every contract (more when it wins), repairs what it can afford, loses units left on a field it lost, and buys or upgrades units. Each contract caps the force it can field at a multiple of yours (1.1× Easy, 1.4× Normal, 1.8× Hard); a poor rival fields less. It plays by each scenario's unit limits, buys with the next scenario in mind, and hires stopgap units when it has nothing allowed. *Mercenary*: go planet to planet taking single-battle contracts from the factions fighting there, for pay and standing (see Mercenary play below). *Quick Battle*: spend a budget on a force and fight one battle. Battles in progress are saved as you play: leave the app and **Resume Battle** on the menu puts you back in the same battle.
 - **Crash and freeze reports.** If the game ever crashes, it saves a report on the way down (the error, the build and phone, what the game was doing, and your last few taps) and shows it the next time you open it, with a **Share report** button to email or paste it. A watchdog does the same if the game freezes for 5 seconds, recording where every thread is stuck.
 - **Campaign scenarios.** A campaign is a series of battles that ends when the planet is decided. The front runs from the attacker's dropships (-1) to the defender's base (6) and starts at 2, so the defender has the upper hand. Every battle is one of 21 scenarios, each limiting which units may fight and how many: the **Initial Drop** comes first (VTOLs, hovertanks, wheeled vehicles, light and medium mechs), **Recon Sweeps** are for VTOLs, hovertanks, wheeled vehicles and light mechs (at most 2 mechs and 4 units in all, no infantry), **Pitched Battles** and **Decisive Engagements** take everything, and in between come raids, river crossings, street fights, lance clashes, armored thrusts, air assaults, storms and more. Some lean slightly toward the attacker or the defender (more initiative, a time-out that only asks one side to be close, a free garrison, a bigger force allowance), and the briefing says which. The next scenario is rolled from the last result, the front and a random roll, and is shown at HQ and in the Market *before* you repair, buy and customize. An attacker that reaches the base faces garrison infantry, an armored car, a gun emplacement and a laser turret: win and the planet falls. An attacker driven off its landing zone must hold its dropships or leave the planet. Time is on the defender's side: the attacker lands with 1.5 times the starting funds, but its pay stays flat while the defender's grows with every battle on the planet (up to 2.5 times). Resources become force: the richer side fields reserves beyond a scenario's unit limit (the attacker one extra unit in its first two battles; the defender one from about battle 6, two from 10, three from 16), and the enemy's force limit follows the two sides' resources. When a planet is decided, your company can move on to a new one, on either side.
+- **Company colors.** Paint your company from HQ (**Colors**): main, trim and accent from a palette, or a ready-made scheme (Desert, Arctic, Woodland, Night, Crimson, Hazard, Royal), with a live preview beside an enemy unit. On the map the ring under each unit says whose it is (blue yours, red the enemy's), whatever the paint.
 - **Deployment.** Before the first round you place your units: infantry can go on any open hex on the map, everything else starts in your home zone. The computer digs its infantry into woods and towns too.
 - **Details.** Double-tap any unit (on the map, in HQ or in the Market) for its full sheet: every location's armor and structure, every weapon's numbers, and what each piece of equipment does.
 - **Hit feedback.** Every hit bursts on the part of the unit it struck. The battle panel switches to the target's hit-location diagram, flashing each struck location with the damage (yellow for armor, red for structure) and a running total. The combat log lists damage by location, e.g. "Monolith fired at Halberd (front): 5/5 hit, 46 damage: 29 to core, 11 to left arm, 2 to right arm, 4 to right leg".
-- **Turns.** Each round one side wins initiative, then the sides alternate activating one unit at a time. On an activation: tap your unit, tap a green hex twice to move, tap an enemy to target it, pick weapons (hit chances shown per weapon), FIRE, rotate if you like, End Turn. Undo takes back a move until you fire. Drag to pan, pinch to zoom.
+- **Turns.** Each round one side wins initiative, then the sides alternate activating one unit at a time. On an activation: tap your unit (the hexes it can reach glow green inside a bright outline and the rest of the map dims), tap a green hex twice to move, tap an enemy to target it, pick weapons (hit chances shown per weapon), FIRE, rotate if you like, End Turn. Undo takes back a move until you fire. Drag to pan, pinch to zoom.
 - **Hit locations.** Every unit has locations with **armor** and **infrastructure**. Damage strips armor, then infrastructure; a location without infrastructure is destroyed with its weapons. Later hits on a destroyed location (and damage left over when one is blown off) carry through to the core at half strength. Which location gets hit depends on the **angle of attack** (front, side or rear arc, relative to the target's facing) plus a random roll. Mechs: cockpit, core, back, arms, legs. Vehicles: front, sides, rear, turret (rotor on VTOLs). Infantry: one platoon.
 - **Heat and ammo.** Energy weapons generate heat, ballistic weapons use ammo, missiles do some of both but are light. Each unit sheds a limited amount of heat per round; running hot costs movement and accuracy, and maxing out shuts the unit down. Standing in water cools you.
-- **Terrain.** Hills block sight and give high ground, woods give cover and block sight when thick, towns give cover, water cools, roads speed up wheels. Each unit type moves differently: wheels stay on roads and open ground, hovertanks skim any water and weave through light woods, tracked tanks handle light woods, mechs and infantry go almost anywhere, VTOLs fly over everything.
+- **Terrain.** Hills block sight and give high ground, woods give cover and block sight when thick, towns give cover, water cools, roads speed up wheels. Each unit type moves differently: wheels stay on roads and open ground, hovertanks skim any water and weave through light woods, tracked tanks handle light woods, mechs and infantry go almost anywhere, VTOLs fly over everything. Tap an empty hex for its terrain card: the MP each kind of unit pays to enter it (or that it can't), and what it does for cover, line of sight and cooling.
 - **Weather.** Rain, thunderstorms, fog, night, heat waves, snow, sandstorms and magnetic storms each change accuracy, sight range, cooling or electronics.
 - **Maps.** Generated fresh for every battle in four regions (temperate, desert, arctic, badlands). Elevation comes first, then lakes in the low ground, rivers that flow downhill between the two armies, forests where it is wet, rocks on high ground, a town, and a road with bridges linking both sides.
 
@@ -30,26 +31,61 @@ Android 5.0 or newer, landscape. No permissions, no network, no ads.
 
 ## Units
 
-9 types, 33 designs you can buy (plus 3 fixed emplacements that defend bases), each with its own artwork, each in a role: Scout, Front-line, Striker, Fire Support, Artillery, Brawler, Command.
+9 types, 97 designs you can buy (plus 3 fixed emplacements that defend bases), built by eight factions, each with its own artwork, each in a role: Scout, Front-line, Striker, Fire Support, Artillery, Brawler, Command.
 
 ![All units](docs/screenshots/units.png)
 
 | Type | Designs | Notes |
 |---|---|---|
-| Infantry | Rifle Platoon, Rocket Squad, Recon Team, Mortar Section | Cheap; hard to hurt with big guns; good in woods and towns. The Mortar Section is a glass cannon: big damage, easy to kill |
-| Tracked Tank | Ironhide MBT, Breaker Heavy Tank, Thunder SPG, Quiver Missile Carrier | Most armor of any vehicle; heavy weapons |
-| Hovertank | Dart Scout Hover, Riptide Strike Hover, Squall Missile Hover | Very fast; crosses deep water and light woods |
-| VTOL | Mosquito Recon VTOL, Dragonfly Attack VTOL, Talon Gunship | Flies over terrain; light armor; flak deals double damage to it |
-| Wheeled Vehicle | Jackal Scout Car, Rhino Armored Car, Mule Battery, Lancer AT Car | Fast on roads; armor like a heavy mech |
-| Light Mech | Skitter, Needle, Lantern | Fast, light weapons only |
-| Medium Mech | Halberd, Ricochet, Cinder, Sabre Dancer | |
-| Heavy Mech | Bastille, Overwatch, Cleaver, Rainmaker | Heavy weapons |
-| Assault Mech | Monolith, Pulverizer, Skyfall, Aegis | Most armor and firepower |
+| Infantry | Rifle Platoon, Rocket Squad, Recon Team, Mortar Section, Hegemony Grenadiers, Pike Squad, Sapper Team, Prospector Rifles, Ghost Cell, Accord Rangers, Pact Heavy Weapons | Cheap; hard to hurt with big guns; good in woods and towns. The Mortar Section is a glass cannon: big damage, easy to kill |
+| Tracked Tank | Ironhide MBT, Breaker Heavy Tank, Thunder SPG, Quiver Missile Carrier, Lumen, Bulwark, Citadel, Salvo, Longreach, Sentinel, Hedgehog, Anvil, Hammerfall | Most armor of any vehicle; heavy weapons |
+| Hovertank | Dart Scout Hover, Riptide Strike Hover, Squall Missile Hover, Glare, Gale, Cyclone, Skein, Phantom, Tern | Very fast; crosses deep water and light woods |
+| VTOL | Mosquito Recon VTOL, Dragonfly Attack VTOL, Talon Gunship, Kite, Peregrine, Murk, Skylark, Gunhawk | Flies over terrain; light armor; flak deals double damage to it |
+| Wheeled Vehicle | Jackal Scout Car, Rhino Armored Car, Mule Battery, Lancer AT Car, Sparkfly, Relay, Badger, Mongrel, Ox Hauler, Ranger, Aurora, Bison | Fast on roads; armor like a heavy mech |
+| Light Mech | Skitter, Needle, Lantern, Sunspear, Swift, Watchman, Wraith, Vanguard | Fast, light weapons only |
+| Medium Mech | Halberd, Ricochet, Cinder, Sabre Dancer, Corona, Warden, Harrier, Brushfire, Arbiter, Thorn, Homesteader, Shade, Paladin, Forge | |
+| Heavy Mech | Bastille, Overwatch, Cleaver, Rainmaker, Prism, Bastion, Firestorm, Oracle, Briar, Nightfall, Templar, Crucible | Heavy weapons |
+| Assault Mech | Monolith, Pulverizer, Skyfall, Aegis, Solar Flare, Juggernaut, Pyre, Bramble, Sovereign, Colossus | Most armor and firepower |
 | Emplacement | Gun Emplacement, Missile Bunker, Laser Turret | Campaign bases only; can't be bought or moved |
+
+## Factions
+
+Every design is built by one or more of eight factions. Each faction builds around a specialty and has six designs of its own; the members of each bloc share eight more, and common designs (riflemen, the Ironhide, the Halberd) are built widely. The Market shows who builds each design and can filter by unit kind, faction and role, show only what you can afford or what the next scenario allows, and sort by price, name, speed, firepower, armor or range. The workshop's weapon and equipment lists scroll at full size and can be sorted and filtered by make, spares and fit. In mercenary play factions decide who hires you and who sells to you; the campaign and quick battles don't use factions and sell every design.
+
+| Faction | Bloc | Specialty | Its own designs |
+|---|---|---|---|
+| Helion Concord | Northern Accord | Energy weapons | Sunspear, Corona, Prism, Solar Flare, Glare, Lumen |
+| Vardan Hegemony | Iron Pact | Armor and cannons | Bulwark, Citadel, Warden, Bastion, Juggernaut, Hegemony Grenadiers |
+| Kestrel League | Northern Accord | Speed | Swift, Harrier, Gale, Cyclone, Kite, Peregrine |
+| Ashfall Collective | Iron Pact | Missiles and artillery | Brushfire, Firestorm, Pyre, Salvo, Longreach, Sparkfly (and the Skyfall) |
+| Meridian Syndicate | Northern Accord | Electronics and command | Watchman, Arbiter, Oracle, Relay, Skein, Sentinel (and the Aegis) |
+| Thornwall Compact | independent | Close assault and infantry | Thorn, Briar, Bramble, Pike Squad, Sapper Team, Hedgehog |
+| Ironroot Freeholds | Iron Pact | Rugged vehicles | Badger, Mongrel, Ox Hauler, Ranger, Homesteader, Prospector Rifles |
+| Obsidian Veil | independent | Raiders and stealth | Wraith, Shade, Nightfall, Phantom, Murk, Ghost Cell |
+
+![Factions](docs/screenshots/factions.png)
+
+Shared by the Northern Accord: Vanguard, Paladin, Templar, Sovereign, Skylark, Tern, Accord Rangers, Aurora. Shared by the Iron Pact: Anvil, Bison, Hammerfall, Forge, Crucible, Colossus, Pact Heavy Weapons, Gunhawk.
+
+**Faction-made weapons and equipment.** Factions make their own versions of the weapons and equipment in their specialty, named for the maker ("Helion Laser") and shown in its color: Helion energy weapons +5% to hit and 1 less heat; Vardan cannons +10% damage; Kestrel light weapons 25% lighter and a +4 MP turbo booster; Ashfall missiles +10% damage and artillery +5% to hit; Meridian electronics (targeting computer +15%, ECM 3 hexes, sensors through 2 points of woods, uplink +8%); Thornwall melee weapons and demolition charges hit harder and its repair kit restores 25 armor; Ironroot autocannons and rockets carry 50% more ammunition and cost less, and its repair kit works twice; Obsidian burst lasers and rockets do +25% from the side or rear and its smoke lasts longer and works three times. A faction's own designs come with its makes. In the campaign and quick battles only the standard makes are sold new; faction makes come with faction designs and from salvage, and stay in your spare parts.
+
+**Emblems and colors.** Each faction has an emblem (Helion's sun, Vardan's shield, Kestrel's wings, Ashfall's burning mountain, Meridian's globe, Thornwall's tower, Ironroot's tree, Obsidian's eye) and a paint scheme built on its color. The emblem and the color mark the faction everywhere it is named: the Market, unit sheets, the factions page in How to Play, and (in mercenary play) contracts and the enemy units themselves.
+
+**Uniques.** Each faction also has a unique prototype design carrying a unique weapon or piece of equipment (the Zenith with the Sunlance, the Dreadnought with the Hegemon Rail, the Zephyr with an Afterburner, the Cataclysm with the Hellfire Rack, the Panopticon with the Omni-Link, the Warlord with the Siegebreaker, the Mammoth with a Field Workshop, the Eclipse with the Shroud). They only turn up in mercenary play.
 
 Armor follows your spec: tracked tanks and assault mechs carry the most, wheeled vehicles about as much as heavy mechs, hovertanks about as much as medium mechs, light mechs and VTOLs the least. Lighter units move further.
 
 **Mechs** cost roughly twice as much as a comparable vehicle, and earn it: far more internal structure, no motive damage, a 240-degree firing arc, +10% fire control, any terrain, and melee weapons. In computer-vs-computer testing at equal total cost, six vehicles beat two or three mechs about 70% of the time. Vehicles are the cost-efficient choice; mechs are how a bigger budget becomes a stronger force, up to the 4-mech limit.
+
+## Mercenary play
+
+Start a **Mercenary** company from New Game and you land on a contested planet where two to four factions are fighting. The **Contracts** board lists up to four jobs: who hires you and who you would fight (each with its emblem, in its colors), the scenario and its unit limits, a threat rating of one to three stars, the pay, the size of the enemy force, and what a win does to your standing. Take a job, buy and refit for it at HQ, and fight one battle against the target faction's own designs, carrying its makes of weapons and equipment and painted in its scheme.
+
+Every job moves your standing with all eight factions. A win raises your employer (+6 plus 2 per threat star) and its bloc allies (+2), and costs you with the target (-8 minus 2 per star) and its allies (-3); draws and losses still cost you with the target. Standing runs Hostile, Unfriendly, Neutral, Friendly, Allied: anyone above Hostile hires you, Neutral or better sells to you, and the Market and refit screen carry only what this planet's traders make. Allied factions sometimes offer their unique prototype or a unique weapon or piece of equipment, and the biggest jobs may field a prototype against you. When the board runs dry or you have made too many enemies, **Travel** to another planet; each destination shows who is fighting there and how they see you.
+
+| | | |
+|---|---|---|
+| ![Contracts](docs/screenshots/contracts.png) | ![Travel](docs/screenshots/travel.png) | ![Mercenary briefing](docs/screenshots/merc_briefing.png) |
 
 ## Weapons and equipment
 
@@ -70,6 +106,7 @@ To customize a unit, select it at HQ and press **CUSTOMIZE**: you swap weapons a
 |---|---|---|
 | ![HQ](docs/screenshots/hq.png) | ![Market](docs/screenshots/market.png) | ![Workshop](docs/screenshots/workshop.png) |
 | ![Weapons](docs/screenshots/weapons.png) | ![Briefing](docs/screenshots/briefing.png) | ![Firing](docs/screenshots/firing.png) |
+| ![Company colors](docs/screenshots/colors.png) | ![Terrain card](docs/screenshots/terrain.png) | ![Factions](docs/screenshots/factions.png) |
 | ![Campaign HQ](docs/screenshots/campaign.png) | ![Base assault](docs/screenshots/base_assault.png) | ![Campaign won](docs/screenshots/campaign_end.png) |
 
 ## Building

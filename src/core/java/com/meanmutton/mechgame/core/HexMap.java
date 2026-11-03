@@ -511,6 +511,48 @@ public final class HexMap {
         return out;
     }
 
+    /** MP to enter this hex from level ground beside it, or IMPASSABLE. */
+    public float enterCost(int type, int c, int r) {
+        return moveCost(type, c, r, c, r);
+    }
+
+    /** What standing in, or seeing through, this hex does: cover, line of sight, cooling. */
+    public List<String> effects(int c, int r) {
+        List<String> out = new ArrayList<String>();
+        int k = idx(c, r), t = terrain[k];
+        switch (t) {
+            case LIGHT_WOODS:
+                out.add("Cover: units here are 10% harder to hit (not VTOLs).");
+                out.add("Sight: shooting through it costs 10% per hex; 3 points of woods or smoke block sight.");
+                break;
+            case HEAVY_WOODS:
+                out.add("Cover: units here are 20% harder to hit (not VTOLs).");
+                out.add("Sight: counts as 2 points, -10% each; 3 points of woods or smoke block sight.");
+                break;
+            case TOWN:
+                out.add("Cover: units here are 15% harder to hit (not VTOLs).");
+                out.add("Sight: buildings stand a level high and block lines of sight below their roofs.");
+                break;
+            case DEEP:
+                out.add("Cover: mechs here are half-submerged, 10% harder to hit.");
+                out.add("Cooling: units in deep water shed 4 more heat a round.");
+                out.add("Sight: doesn't block line of sight.");
+                break;
+            case SHALLOW:
+                if (road[k]) out.add("A bridge: crossed at road speed, no cooling from the water.");
+                else out.add("Cooling: units standing in it shed 2 more heat a round.");
+                out.add("Cover: none. Sight: doesn't block line of sight.");
+                break;
+            default:
+                out.add("Cover: none. Sight: doesn't block line of sight.");
+                break;
+        }
+        if (elev[k] > 0) out.add("High ground: level " + elev[k] + " blocks lines of sight that pass below it; firing down at a lower target is 5% more accurate.");
+        if (smoke[k] > 0) out.add("Smoke (" + Math.round(smoke[k]) + " round" + (smoke[k] > 1.5f ? "s" : "") + " left): units in it are 25% harder to hit, and it blocks sight through it.");
+        if (weather != null && weather.snowSlow) out.add("Snow: wheeled vehicles and hovertanks pay 1 more MP off roads.");
+        return out;
+    }
+
     public String describe(int c, int r) {
         int k = idx(c, r);
         String s = TERRAIN_NAMES[terrain[k]];

@@ -118,7 +118,8 @@ public final class BattleScreen extends Screen {
             float ew = (pw - u * (n - 1)) / n;
             for (int i = 0; i < n; i++) {
                 int id = eqIds.get(i);
-                String label = id == Equip.TURBO ? "Turbo +3 MP" : (id == Equip.SMOKE ? "Smoke" : (id == Equip.COOLANT ? "Coolant -15 heat" : "Repair Kit"));
+                int pw2 = su.equipPower(id);
+                String label = id == Equip.TURBO ? "Turbo +" + pw2 + " MP" : (id == Equip.SMOKE ? "Smoke" : (id == Equip.COOLANT ? "Coolant -" + pw2 + " heat" : "Repair Kit"));
                 Btn e = add(new Btn(EQ + id, label).set(x0 + i * (ew + u), by0, ew, u * 9f));
                 e.color = 0xFF2A4A5A;
                 e.tag = id;
@@ -461,6 +462,7 @@ public final class BattleScreen extends Screen {
                     } else {
                         pendingDest = k;
                         pendingPath = b.pathTo(prev, b.map.idx(a.q, a.r), k);
+                        infoHex = k;   // what you would be stepping into
                     }
                     return;
                 }
@@ -641,11 +643,12 @@ public final class BattleScreen extends Screen {
                 for (int r = 0; r < b.map.rows; r++) HexRender.fillHex(g, c, r, 0.94f, 0x223F8EF0);
             }
             if (deploySel != null) {
+                boolean[] ok = new boolean[b.map.cols * b.map.rows];
                 for (int c = 0; c < b.map.cols; c++) {
-                    for (int r = 0; r < b.map.rows; r++) {
-                        if (b.canPlace(deploySel, c, r) && b.unitAt(c, r) == null) HexRender.fillHex(g, c, r, 0.86f, 0x3366FF88);
-                    }
+                    for (int r = 0; r < b.map.rows; r++) ok[b.map.idx(c, r)] = b.canPlace(deploySel, c, r) && b.unitAt(c, r) == null;
                 }
+                ok[b.map.idx(deploySel.q, deploySel.r)] = true;
+                highlightArea(g, ok, deploySel);
                 float p = 0.6f + 0.4f * (float) Math.sin(t * 6);
                 HexRender.strokeHex(g, deploySel.q, deploySel.r, 0.97f, 0.1f, Col.alpha(Col.ACCENT, p));
             } else {
@@ -660,12 +663,10 @@ public final class BattleScreen extends Screen {
         if (mine && !a.moved) {
             computeReach();
             if (reach != null) {
-                for (int k = 0; k < reach.length; k++) {
-                    if (reach[k] == Float.MAX_VALUE) continue;
-                    int c = k % b.map.cols, r = k / b.map.cols;
-                    if (c == a.q && r == a.r) continue;
-                    HexRender.fillHex(g, c, r, 0.9f, 0x3366FF88);
-                }
+                boolean[] ok = new boolean[reach.length];
+                for (int k = 0; k < reach.length; k++) ok[k] = reach[k] < Float.MAX_VALUE;
+                ok[b.map.idx(a.q, a.r)] = true;
+                highlightArea(g, ok, a);
             }
         }
         if (mine && pendingDest >= 0 && pendingPath != null) {
@@ -716,6 +717,33 @@ public final class BattleScreen extends Screen {
         }
     }
 
+    /**
+     * Shows where a unit can go: everything else on the map is shaded, the hexes it can reach glow green, and the
+     * edge of that area gets a bright outline, so the reach reads at a glance at any zoom.
+     */
+    private void highlightArea(Gfx g, boolean[] ok, Unit from) {
+        HexMap m = b.map;
+        float p = 0.5f + 0.5f * (float) Math.sin(t * 3);
+        for (int k = 0; k < ok.length; k++) {
+            int c = k % m.cols, r = k / m.cols;
+            if (!ok[k]) HexRender.fillHex(g, c, r, 1.0f, 0x77000000);
+            else if (c != from.q || r != from.r) HexRender.fillHex(g, c, r, 0.92f, Col.alpha(0xFF66FF88, 0.30f + 0.12f * p));
+        }
+        int edge = Col.alpha(0xFF8CFFA8, 0.75f + 0.25f * p);
+        for (int k = 0; k < ok.length; k++) {
+            if (!ok[k]) continue;
+            int c = k % m.cols, r = k / m.cols;
+            float cx = HexMap.px(c, r), cy = HexMap.py(c, r);
+            for (int d = 0; d < 6; d++) {
+                int nc = m.ncol(c, r, d), nr = m.nrow(c, r, d);
+                if (m.in(nc, nr) && ok[m.idx(nc, nr)]) continue;
+                double th = Math.atan2(HexMap.py(nc, nr) - cy, HexMap.px(nc, nr) - cx);
+                double a1 = th - Math.PI / 6, a2 = th + Math.PI / 6;
+                g.line(cx + (float) Math.cos(a1), cy + (float) Math.sin(a1), cx + (float) Math.cos(a2), cy + (float) Math.sin(a2), 0.11f, edge);
+            }
+        }
+    }
+
     private void renderUnits(Gfx g) {
         // wrecks
         for (Unit un : b.units) {
@@ -734,8 +762,9 @@ public final class BattleScreen extends Screen {
             if (un.destroyed && un.deathShown) continue;
             float x = un.drawX, y = un.drawY;
             int tc = UnitArt.teamColor(un.team);
-            g.fillCircle(x, y, 0.82f, Col.alpha(tc, 0.18f));
-            g.strokeCircle(x, y, 0.82f, 0.05f, Col.alpha(tc, 0.85f));
+            // whose unit it is shows by its ring, whatever its paint
+            g.fillCircle(x, y, 0.84f, Col.alpha(tc, 0.2f));
+            g.strokeCircle(x, y, 0.84f, 0.09f, Col.alpha(tc, 0.95f));
             // facing tick
             float fa = (float) Math.toRadians(un.drawFacing);
             g.line(x + (float) Math.cos(fa) * 0.7f, y + (float) Math.sin(fa) * 0.7f, x + (float) Math.cos(fa) * 0.95f,
@@ -926,13 +955,77 @@ public final class BattleScreen extends Screen {
         g.text(Weather.NAMES[b.map.weather.id], u * 24, topBar / 2, u * 2.8f, Col.SHIELD, Gfx.ALIGN_LEFT, false);
         g.text(turn, mapW / 2 + u * 8, topBar / 2, u * 3, b.side == Battle.PLAYER ? Col.ACCENT : 0xFFFF8A7A, Gfx.ALIGN_CENTER, true);
         g.text(b.alive(Battle.PLAYER) + " vs " + b.alive(Battle.ENEMY), mapW - u * 11, topBar / 2, u * 3, Col.TEXT, Gfx.ALIGN_RIGHT, true);
-        if (infoHex >= 0) {
-            int c = infoHex % b.map.cols, r = infoHex / b.map.cols;
-            String s = b.map.describe(c, r);
-            float tw = g.textWidth(s, u * 2.6f, false) + u * 4;
-            g.fillRoundRect(mapW / 2 - tw / 2, topBar + u, tw, u * 5, u * 1.5f, 0xDD000000);
-            g.text(s, mapW / 2, topBar + u * 3.5f, u * 2.6f, Col.TEXT, Gfx.ALIGN_CENTER, false);
+        if (infoHex >= 0) renderTerrainCard(g, infoHex % b.map.cols, infoHex / b.map.cols);
+    }
+
+    private static final int[] CARD_TYPES = {UnitType.MEDIUM_MECH, UnitType.INFANTRY, UnitType.TRACKED, UnitType.HOVER, UnitType.WHEELED, UnitType.VTOL};
+    private static final String[] CARD_NAMES = {"Mechs", "Infantry", "Tanks", "Hovertanks", "Wheeled", "VTOLs"};
+
+    /**
+     * Tapping an empty hex: what the terrain is, what it costs each kind of unit to enter, and what it does for cover
+     * and line of sight. The card sits on the half of the map away from the hex so it never hides it.
+     */
+    private void renderTerrainCard(Gfx g, int c, int r) {
+        HexMap m = b.map;
+        int k = m.idx(c, r);
+        float cw = Math.min(u * 64, mapW - u * 4), pad = u * 2, ts = u * 2.2f, lh = u * 2.9f;
+        float hx = camX + HexMap.px(c, r) * cs;
+        float x = hx < mapW / 2 ? mapW - cw - u * 2 : u * 2, y = topBar + u;
+        String name = m.road[k] ? (m.terrain[k] == HexMap.SHALLOW ? "Bridge" : "Road") : HexMap.TERRAIN_NAMES[m.terrain[k]];
+        if (m.road[k] && m.terrain[k] != HexMap.SHALLOW) name += " (through " + HexMap.TERRAIN_NAMES[m.terrain[k]].toLowerCase() + ")";
+        String climb = "Climbing costs 1 MP more per level. Vehicles can't climb 2 levels or drive off a drop of 2.";
+        String reachLine = null;
+        Unit a = b.active;
+        if (myActivation() && !a.moved && reach != null && reach[k] < Float.MAX_VALUE && k != m.idx(a.q, a.r))
+            reachLine = a.name + " can get here for " + mp(reach[k]) + " MP.";
+        List<String> fx = m.effects(c, r);
+        List<List<String>> wrapped = new ArrayList<List<String>>();
+        int lines = 0;
+        for (String e : fx) {
+            List<String> l = wrapLines(g, e, ts, cw - pad * 2, 4);
+            wrapped.add(l);
+            lines += l.size();
         }
+        List<String> climbL = wrapLines(g, climb, u * 2f, cw - pad * 2, 3);
+        float ch = pad + u * 4 + u * 3.5f + lh * 3 + u * 0.5f + climbL.size() * u * 2.6f + (reachLine != null ? lh : 0) + u * 3.5f + lines * lh + pad;
+        g.fillRoundRect(x, y, cw, ch, u * 1.5f, 0xE80B111C);
+        g.strokeRoundRect(x, y, cw, ch, u * 1.5f, u * 0.3f, Col.BORDER);
+        float ty = y + pad + u * 1.5f;
+        g.text(name, x + pad, ty, u * 3f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
+        g.text("Elevation " + m.elev[k], x + cw - pad, ty, u * 2.4f, Col.TEXT, Gfx.ALIGN_RIGHT, true);
+        ty += u * 4;
+        g.text("Movement: MP to enter", x + pad, ty, u * 2.3f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, true);
+        ty += u * 3.5f;
+        float colW = (cw - pad * 2) / 2;
+        for (int i = 0; i < CARD_TYPES.length; i++) {
+            float cx = x + pad + (i % 2) * colW, cy = ty + (i / 2) * lh;
+            float cost = m.enterCost(CARD_TYPES[i], c, r);
+            boolean no = cost >= HexMap.IMPASSABLE;
+            g.text(CARD_NAMES[i], cx, cy, ts, Col.TEXT, Gfx.ALIGN_LEFT, false);
+            g.text(no ? "can't enter" : mp(cost) + " MP", cx + colW - u * 4, cy, ts, no ? Col.BAD : (cost <= 1 ? Col.GOOD : Col.ACCENT), Gfx.ALIGN_RIGHT, true);
+        }
+        ty += lh * 3 + u * 0.5f;
+        for (String l : climbL) {
+            g.text(l, x + pad, ty, u * 2f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+            ty += u * 2.6f;
+        }
+        if (reachLine != null) {
+            g.text(Ui.fit(g, reachLine, ts, cw - pad * 2), x + pad, ty + u * 0.4f, ts, Col.GOOD, Gfx.ALIGN_LEFT, true);
+            ty += lh;
+        }
+        ty += u * 1.2f;
+        g.text("Cover and sight", x + pad, ty, u * 2.3f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, true);
+        ty += u * 3.2f;
+        for (List<String> l : wrapped) {
+            for (String line : l) {
+                g.text(line, x + pad, ty, ts, Col.TEXT, Gfx.ALIGN_LEFT, false);
+                ty += lh;
+            }
+        }
+    }
+
+    private static String mp(float v) {
+        return v == Math.round(v) ? String.valueOf(Math.round(v)) : String.format(java.util.Locale.US, "%.1f", v);
     }
 
     private void renderLog(Gfx g) {

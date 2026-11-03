@@ -5,18 +5,19 @@ public final class MenuScreen extends Screen {
     private static final int CONTINUE = 1, NEW = 2, HELP = 3, SOUND = 4, SPEED = 5, QUIT = 6;
     private Btn sound, speed;
     private float t;
-    private final boolean hasSave, hasBattle;
+    private final boolean hasSave, hasBattle, mercSave;
 
     public MenuScreen(Game game) {
         super(game);
         hasSave = game.hasSave();
         hasBattle = game.hasBattle();
+        mercSave = hasSave && game.saveIsMerc();
     }
 
     protected void layout() {
         buttons.clear();
         float bw = u * 50, bh = u * 10, x = w * 0.5f - bw / 2, y = h * 0.4f;
-        Btn c = add(new Btn(CONTINUE, hasBattle ? "Resume Battle" : "Continue Campaign").set(x, y, bw, bh));
+        Btn c = add(new Btn(CONTINUE, hasBattle ? "Resume Battle" : (mercSave ? "Continue Mercenary" : "Continue Campaign")).set(x, y, bw, bh));
         c.enabled = hasSave || hasBattle;
         c.color = 0xFF2E6D8F;
         add(new Btn(NEW, "New Game").set(x, y + bh * 1.2f, bw, bh)).color = 0xFF2E7D4F;

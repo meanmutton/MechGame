@@ -2,7 +2,7 @@ package com.meanmutton.mechgame.core;
 
 /** Company headquarters: roster, deployment, repairs, and launching the next mission. */
 public final class HqScreen extends Screen {
-    private static final int MENU = 1, MARKET = 2, REPAIR_ALL = 3, LAUNCH = 4, REFIT = 5, REPAIR = 6, SELL = 7, RENAME = 8,
+    private static final int MENU = 1, MARKET = 2, REPAIR_ALL = 3, LAUNCH = 4, REFIT = 5, REPAIR = 6, SELL = 7, RENAME = 8, COLORS = 9, CONTRACTS = 10,
             ROW = 100, DEPLOY = 200;
     private final Company c;
     private int sel;
@@ -56,18 +56,33 @@ public final class HqScreen extends Screen {
         rep.textSize = sell.textSize = ren.textSize = u * 3f;
         refit.textSize = u * 3.8f;
 
+        Btn colors = add(new Btn(COLORS, "Colors").set(w - u * 62, h * 0.025f, u * 20, u * 7));
+        colors.textSize = u * 2.6f;
+        colors.color = Col.darker((c.scheme != null ? c.scheme : Scheme.PLAYER_DEFAULT).main, 0.3f);
+        if (c.merc) {
+            Btn ct = add(new Btn(CONTRACTS, "Contracts").set(w - u * 85, h * 0.025f, u * 21, u * 7));
+            ct.textSize = u * 2.6f;
+            ct.color = 0xFF2E6D8F;
+        }
         float bbw = (w - u * 12) / 4;
         add(new Btn(MENU, c.quick ? "Quit" : "Main Menu").set(u * 3, h - u * 12, bbw, u * 9));
         add(new Btn(MARKET, "Market").set(u * 6 + bbw, h - u * 12, bbw, u * 9)).color = 0xFF5A4A2A;
         int rc = c.repairAllCost();
         Btn ra = add(new Btn(REPAIR_ALL, rc > 0 ? "Repair All $" + Ui.money(rc) : "All Repaired").set(u * 9 + bbw * 2, h - u * 12, bbw, u * 9));
         ra.enabled = rc > 0 && c.cash >= rc;
-        boolean forfeit = !c.quick && c.deployed.isEmpty() && c.mustForfeit();
+        if (c.merc && c.job() == null) {
+            // a mercenary needs a job first: the button opens the contract board
+            Btn ct = add(new Btn(CONTRACTS, "Contracts").set(u * 12 + bbw * 3, h - u * 12, bbw, u * 9));
+            ct.color = 0xFF2E6D8F;
+            ct.sub = "take a job on " + c.planet.name;
+            return;
+        }
+        boolean forfeit = !c.quick && !c.merc && c.deployed.isEmpty() && c.mustForfeit();
         Btn launch = add(new Btn(LAUNCH, forfeit ? "Forfeit Mission" : (c.quick ? "Fight" : "Launch Mission") + " (" + c.deployed.size() + "/" + c.deployLimit() + ")")
                 .set(u * 12 + bbw * 3, h - u * 12, bbw, u * 9));
         launch.color = forfeit ? 0xFF8F3A2E : 0xFF2E7D4F;
         launch.enabled = !c.deployed.isEmpty() || forfeit;
-        if (!c.quick && !forfeit && c.noneAllowed()) launch.sub = "buy an allowed unit in the Market";
+        if (!c.quick && !forfeit && c.noneAllowed()) launch.sub = c.merc ? "this job allows none of your units" : "buy an allowed unit in the Market";
     }
 
     private float listTop() {
@@ -120,6 +135,12 @@ public final class HqScreen extends Screen {
         } else if (id == MENU) {
             game.saveCompany();
             game.toMenu();
+            return;
+        } else if (id == CONTRACTS) {
+            game.setScreen(new ContractsScreen(game));
+            return;
+        } else if (id == COLORS) {
+            game.setScreen(new PaintScreen(game));
             return;
         } else if (id == MARKET) {
             game.setScreen(new MarketScreen(game));
@@ -184,15 +205,31 @@ public final class HqScreen extends Screen {
 
     public void render(Gfx g) {
         background(g);
-        String title = c.quick ? "QUICK BATTLE: BUILD YOUR FORCE" : "COMPANY HQ";
+        String title = c.quick ? "QUICK BATTLE: BUILD YOUR FORCE" : (c.merc ? "MERCENARY HQ" : "COMPANY HQ");
         g.text(title, u * 3, h * 0.055f, u * 5.2f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
         String sub = c.quick ? "Difficulty " + Company.DIFFICULTY[c.difficulty] + ".  Buy units in the Market, tick up to " + Limits.FULL.text() + " to deploy, then Fight."
                 : "Contract " + c.mission + ": " + HexMap.BIOME_NAMES[c.biome] + " region, pays $" + Ui.money(c.reward)
                 + "   |   Record " + c.wins + "W " + c.losses + "L   |   " + Company.DIFFICULTY[c.difficulty]
                 + (c.rival != null ? "   |   Enemy: $" + Ui.money(c.rival.cash) + ", " + c.rival.roster.size() + " units" : "");
+        if (c.merc) sub = c.planet.name + " (" + HexMap.BIOME_NAMES[c.planet.biome] + ")   |   Record " + c.wins + "W " + c.losses + "L   |   "
+                + Company.DIFFICULTY[c.difficulty];
         g.text(sub, u * 3, h * 0.105f, u * 2.6f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
         Scenario sc = c.next();
-        if (sc != null) {
+        if (c.merc) {
+            Merc.Contract k = c.job();
+            if (k == null) g.text("No contract yet. Open Contracts to take a job, then deploy for it here.", u * 3, h * 0.15f, u * 2.6f,
+                    Col.ACCENT, Gfx.ALIGN_LEFT, true);
+            else {
+                float x = u * 3;
+                x += Emblem.label(g, k.employer, x, h * 0.15f, u * 2.6f, false) + u;
+                String mid = k.role == Scenario.ATTACKER ? "vs" : "defending vs";
+                g.text(mid, x, h * 0.15f, u * 2.4f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+                x += g.textWidth(mid, u * 2.4f, false) + u;
+                x += Emblem.label(g, k.target, x, h * 0.15f, u * 2.6f, false) + u * 2;
+                g.text(Ui.fit(g, sc.name + ", pays $" + Ui.money(k.reward) + ". " + sc.limits() + ".", u * 2.5f, w - x - u * 3), x, h * 0.15f,
+                        u * 2.5f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
+            }
+        } else if (sc != null) {
             String next = "You are the " + Scenario.SIDE_NAMES[c.side].toLowerCase() + ", front " + Scenario.frontName(c.front)
                     + ".   Next: " + sc.name + ". " + sc.limits(c.limits()) + ".";
             g.text(Ui.fit(g, next, u * 2.6f, w - u * 6), u * 3, h * 0.15f, u * 2.6f, Col.ACCENT, Gfx.ALIGN_LEFT, true);

@@ -12,6 +12,8 @@ public final class Unit {
     public String name;
     /** Not part of either company: "garrison" (local troops) or "hired" (enemy stopgaps). Not saved. */
     public String tag;
+    /** Paint for an enemy unit that wears its own colors (a faction's in mercenary play); null for the usual. Not saved. */
+    public Scheme paint;
 
     // ---- loadout ----
     public final int[] weapon;   // per mount, -1 = empty
@@ -145,18 +147,26 @@ public final class Unit {
             if (w != null && !w.usesAmmo() && bins[i] > 0) return "Ammo for a weapon that uses none";
         }
         for (int i = 0; i < equip.length; i++) {
-            for (int j = i + 1; j < equip.length; j++) if (equip[i] >= 0 && equip[i] == equip[j]) return "Duplicate equipment";
+            for (int j = i + 1; j < equip.length; j++)
+                if (equip[i] >= 0 && equip[j] >= 0 && Equip.ALL[equip[i]].base == Equip.ALL[equip[j]].base) return "Duplicate equipment";
         }
         return null;
     }
 
+    /** Working equipment of this standard type (any maker)? */
     public boolean hasEquip(int id) {
-        for (int i = 0; i < equip.length; i++) if (equip[i] == id && !eqBroken[i]) return true;
-        return false;
+        return equipSlot(id) >= 0;
+    }
+
+    /** Strength of the best working equipment of this standard type (Equip.power), or 0 if none. */
+    public int equipPower(int id) {
+        int p = 0;
+        for (int i = 0; i < equip.length; i++) if (equip[i] >= 0 && !eqBroken[i] && Equip.ALL[equip[i]].base == id) p = Math.max(p, Equip.ALL[equip[i]].power);
+        return p;
     }
 
     public int equipSlot(int id) {
-        for (int i = 0; i < equip.length; i++) if (equip[i] == id && !eqBroken[i]) return i;
+        for (int i = 0; i < equip.length; i++) if (equip[i] >= 0 && Equip.ALL[equip[i]].base == id && !eqBroken[i]) return i;
         return -1;
     }
 

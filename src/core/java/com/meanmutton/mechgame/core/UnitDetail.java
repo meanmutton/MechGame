@@ -42,6 +42,7 @@ public final class UnitDetail {
                 {"Weight", RefitScreen.fmt(un.mass()) + " / " + RefitScreen.fmt(un.ch.capacity) + " t"},
                 {"Weapon class", "up to " + (UnitType.MAX_CLASS[un.type] == 1 ? "Light" : (UnitType.MAX_CLASS[un.type] == 2 ? "Medium" : "Heavy"))},
                 {"Value", "$" + Ui.money(un.value())},
+                {"Built by", Faction.names(un.ch.factions)},
         };
         for (String[] r : rows) {
             g.text(r[0], lx, y, ts, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
@@ -95,7 +96,7 @@ public final class UnitDetail {
             }
             boolean ok = un.weaponUsable(m);
             String state = ok ? "" : (un.wpnBroken[m] || un.locDestroyed(mt.loc) ? "  DESTROYED" : "  OUT OF AMMO");
-            g.text(wp.name + " [" + Info.classTag(wp.cls) + "]" + state, rx, y, u * 2.5f, ok ? Col.TEXT : Col.BAD, Gfx.ALIGN_LEFT, true);
+            g.text(wp.name + " [" + Info.classTag(wp.cls) + "]" + state, rx, y, u * 2.5f, ok ? RefitScreen.makerColor(wp.maker, Col.TEXT) : Col.BAD, Gfx.ALIGN_LEFT, true);
             g.text(loc, rx + rw, y, u * 2f, Col.TEXT_DIM, Gfx.ALIGN_RIGHT, false);
             y += u * 2.9f;
             String nums = Wpn.FAMILY[wp.family] + ": " + wp.dmg + " dmg, " + wp.heat + " heat, range " + wp.rangeText()
@@ -116,9 +117,9 @@ public final class UnitDetail {
             any = true;
             Equip eq = Equip.ALL[un.equip[e]];
             String uses = eq.uses > 0 ? "  (" + (b != null ? un.eqUses[e] + " of " : "") + eq.uses + " uses per battle)" : "  (always on)";
-            boolean electronic = eq.id == Equip.TARGETING || eq.id == Equip.ECM || eq.id == Equip.SENSORS || eq.id == Equip.UPLINK;
+            boolean electronic = eq.base == Equip.TARGETING || eq.base == Equip.ECM || eq.base == Equip.SENSORS || eq.base == Equip.UPLINK;
             String state = un.eqBroken[e] ? "  DESTROYED" : (electronic && elecDown ? "  OFFLINE (magnetic storm)" : "");
-            g.text(eq.name + uses + state, rx, y, u * 2.4f, un.eqBroken[e] || state.length() > 0 ? Col.BAD : Col.SHIELD, Gfx.ALIGN_LEFT, true);
+            g.text(eq.name + uses + state, rx, y, u * 2.4f, un.eqBroken[e] || state.length() > 0 ? Col.BAD : RefitScreen.makerColor(eq.maker, Col.SHIELD), Gfx.ALIGN_LEFT, true);
             y += u * 2.8f;
             y += Ui.wrap(g, eq.desc, rx, y, u * 1.95f, rw, Col.TEXT_DIM) + u * 0.6f;
         }

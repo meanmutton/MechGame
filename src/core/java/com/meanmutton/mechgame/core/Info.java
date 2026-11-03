@@ -63,7 +63,7 @@ public final class Info {
             if (wp == null) {
                 g.text(loc + "  (empty " + classTag(u.ch.mounts[m].cls) + " mount)", x, y, ts, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
             } else {
-                int c = u.wpnBroken[m] ? Col.BAD : Col.TEXT;
+                int c = u.wpnBroken[m] ? Col.BAD : RefitScreen.makerColor(wp.maker, Col.TEXT);
                 g.text(loc, x, y, ts * 0.9f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
                 g.text(wp.name + (u.wpnBroken[m] ? " (broken)" : ""), x + w * 0.16f, y, ts, c, Gfx.ALIGN_LEFT, true);
                 String extra = wp.dmg + "d " + wp.heat + "h " + wp.rangeText() + (wp.usesAmmo() ? "  ammo " + u.ammo[m] : "");
