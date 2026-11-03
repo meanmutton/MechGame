@@ -524,6 +524,53 @@ public final class DesktopTest {
             g.toHq();
             tick(g, 2);
             shot(g, "39_hq_big_roster");
+            // the roster: filter by type, sort, and scroll a long list at a readable size
+            {
+                List<Btn> rows = new ArrayList<Btn>();
+                for (Btn rb : buttonsOf(g)) if (rb.id >= 100 && rb.id < 200) rows.add(rb);
+                if (rows.size() != c.roster.size()) throw new RuntimeException("HQ shows " + rows.size() + " of " + c.roster.size());
+                if (rows.get(0).h < H / 100f * 6.5f) throw new RuntimeException("HQ rows shrank to " + rows.get(0).h);
+                boolean hidden = false;
+                for (Btn rb : rows) if (!rb.visible) hidden = true;
+                if (hidden) {
+                    Btn r0 = rows.get(0);
+                    float y0 = r0.y;
+                    g.touch(Game.TOUCH_DOWN, 0, r0.x + 30, r0.y + r0.h / 2);
+                    for (int k = 1; k <= 10; k++) g.touch(Game.TOUCH_MOVE, 0, r0.x + 30, r0.y + r0.h / 2 - k * 50);
+                    g.touch(Game.TOUCH_UP, 0, r0.x + 30, r0.y + r0.h / 2 - 500);
+                    tick(g, 2);
+                    if (find(g, r0.id).y >= y0) throw new RuntimeException("HQ roster did not scroll");
+                    shot(g, "39b_hq_roster_scrolled");
+                }
+                click(g, 21);   // mechs
+                click(g, 11);
+                click(g, 11);
+                click(g, 11);   // sort: value
+                tick(g, 2);
+                int lastV = Integer.MAX_VALUE, mechs = 0;
+                List<Btn> mrows = new ArrayList<Btn>();
+                for (Btn rb : buttonsOf(g)) if (rb.id >= 100 && rb.id < 200) mrows.add(rb);
+                java.util.Collections.sort(mrows, new java.util.Comparator<Btn>() {
+                    public int compare(Btn p1, Btn p2) { return p1.x != p2.x ? Float.compare(p1.x, p2.x) : Float.compare(p1.y, p2.y); }
+                });
+                for (Btn rb : mrows) {
+                    Unit un = c.roster.get(rb.id - 100);
+                    if (!UnitType.isMech(un.type)) throw new RuntimeException("mech tab shows " + un.name);
+                    if (un.value() > lastV) throw new RuntimeException("HQ not sorted by value");
+                    lastV = un.value();
+                    mechs++;
+                }
+                int expect = 0;
+                for (Unit un : c.roster) if (UnitType.isMech(un.type)) expect++;
+                if (mechs != expect) throw new RuntimeException("mech tab shows " + mechs + " of " + expect);
+                // the Monolith carries the most weapons: its loadout stays readable in the detail panel
+                for (Btn rb : mrows) if (c.roster.get(rb.id - 100).ch.id == 29 && rb.visible) { tap(g, rb.x + rb.w / 2, rb.y + rb.h / 2); break; }
+                tick(g, 2);
+                shot(g, "39c_hq_mechs_by_value");
+                click(g, 20);   // all
+                for (int k = 0; k < HqScreen.SORTS.length - 3; k++) click(g, 11);   // back to roster order
+                System.out.println("HQ roster filter, sort and scroll OK (" + mechs + " mechs of " + c.roster.size() + ")");
+            }
             c.scenario = Scenario.INITIAL_DROP;
             c.front = Scenario.FRONT_START;
             c.fitDeployment();
@@ -680,6 +727,49 @@ public final class DesktopTest {
             gm.toMenu();
             tick(gm, 2);
             shot(gm, "60_menu_merc");
+        }
+        // the unit with the most weapons, in battle: full-size weapon rows, and the list scrolls if it must
+        {
+            HexMap m = new HexMap(20, 13, 0, new Weather(Weather.CLEAR));
+            m.generate(new Random(5));
+            List<Unit> mine = new ArrayList<Unit>(), theirs = new ArrayList<Unit>();
+            Unit mono = new Unit(Chassis.ALL[29]);
+            int smoke = Equip.SMOKE, turbo = Equip.TURBO;
+            mono.equip[0] = smoke;
+            mono.equip[1] = turbo;
+            mono.computeMaxes();
+            mono.repairFully();
+            mine.add(mono);
+            theirs.add(new Unit(Chassis.ALL[21]));
+            Battle bb = new Battle(g, mine, theirs, m, new Random(3), 1);
+            bb.finishDeployment();
+            BattleScreen mbs = new BattleScreen(g, bb);
+            g.setScreen(mbs);
+            for (int i = 0; i < 4000 && !(bb.playerTurn() && !bb.busy()); i++) {
+                tick(g, 1);
+                if (i % 20 == 0) Thread.sleep(1);
+            }
+            click(g, 12);   // next unit: the Monolith
+            tick(g, 5);
+            List<Btn> wr = new ArrayList<Btn>();
+            for (Btn wb : buttonsOf(g)) if (wb.id >= 100 && wb.id < 300) wr.add(wb);
+            if (wr.size() != mono.weapon.length) throw new RuntimeException("battle panel shows " + wr.size() + " weapons");
+            if (wr.get(0).h < H / 100f * 4.8f) throw new RuntimeException("battle weapon rows shrank to " + wr.get(0).h);
+            shot(g, "11c_battle_many_weapons");
+            Btn last = find(g, wr.get(wr.size() - 1).id);
+            boolean scrolls = !last.visible;
+            if (scrolls) {
+                Btn w0 = find(g, wr.get(0).id);
+                float y0 = w0.y;
+                g.touch(Game.TOUCH_DOWN, 0, w0.x + 30, w0.y + w0.h / 2);
+                for (int k = 1; k <= 8; k++) g.touch(Game.TOUCH_MOVE, 0, w0.x + 30, w0.y + w0.h / 2 - k * 40);
+                g.touch(Game.TOUCH_UP, 0, w0.x + 30, w0.y + w0.h / 2 - 320);
+                tick(g, 2);
+                if (find(g, w0.id).y >= y0 || !find(g, last.id).visible) throw new RuntimeException("battle weapon list did not scroll to the end");
+                shot(g, "11d_battle_weapons_scrolled");
+            }
+            System.out.println("battle weapon list OK (" + wr.size() + " weapons, row " + Math.round(wr.get(0).h) + " px"
+                    + (scrolls ? ", scrolls to the last" : ", all visible") + ")");
         }
         // weather variety on a smaller screen
         W = 1600;

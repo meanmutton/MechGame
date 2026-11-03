@@ -23,6 +23,21 @@ public final class Ui {
         g.strokeRoundRect(x, y, w, h, r, Math.max(1f, r * 0.12f), Col.BORDER);
     }
 
+    /** A strip across the bottom of a scrolling list that says there is more below. */
+    public static void moreBelow(Gfx g, float x, float bottom, float w, float u, int bg) {
+        g.fillRect(x, bottom - u * 2.8f, w, u * 2.8f, bg);
+        g.fillRect(x, bottom - u * 3.6f, w, u * 0.8f, Col.alpha(bg, 0.6f));
+        g.text("\u25BC more", x + w - u * 1.5f, bottom - u * 1.4f, u * 1.9f, Col.ACCENT, Gfx.ALIGN_RIGHT, true);
+    }
+
+    /** Draws a button even when it is hidden from touches (a row half scrolled out of a clipped list). */
+    public static void buttonAlways(Gfx g, Btn b, float u) {
+        boolean v = b.visible;
+        b.visible = true;
+        button(g, b, u);
+        b.visible = v;
+    }
+
     public static void button(Gfx g, Btn b, float u) {
         if (!b.visible) return;
         float r = Math.min(b.h, b.w) * 0.22f;

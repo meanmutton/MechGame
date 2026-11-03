@@ -41,6 +41,10 @@ public final class BattleScreen extends Screen {
     private boolean laidOutDeploying;
     private Unit deploySel;
     private float dollX, dollY, dollW, dollH, listY, rowH;
+    // a unit with many weapons keeps full-size rows and its list scrolls
+    private float listH, wScroll, wMax, wDownY, wLastY;
+    private int wPointer = -1;
+    private boolean wDragging;
     private float flash;
     // impact view: which unit is shown, the running total of this attack, and a short linger after the last hit
     private Unit impactShown;
@@ -93,6 +97,7 @@ public final class BattleScreen extends Screen {
         dollH = dollW;
         listY = dollY + dollH + u * 2;
         Unit su = panelUnit();
+        if (su != laidOutFor) wScroll = 0;
         laidOutFor = su;
         laidOutDeploying = b.deploying;
         int nw = su == null ? 0 : su.weapon.length;
@@ -102,11 +107,25 @@ public final class BattleScreen extends Screen {
             for (int id : ACTIVE_EQUIP) if (su.equipSlot(id) >= 0) eqIds.add(id);
         }
         float btnArea = u * 24 + (eqIds.isEmpty() ? 0 : u * 10.5f);
-        rowH = nw == 0 ? 0 : Math.min(u * 6.4f, (h - listY - btnArea - u * 8) / nw);
+        // many weapons: give the list some of the hit-location diagram's height before resorting to scrolling
+        float need = nw * u * 5.4f, have = h - listY - btnArea - u * 8;
+        if (have < need) {
+            float shrink = Math.min(dollH - u * 22, need - have);
+            if (shrink > 0) {
+                dollW -= shrink;
+                dollH = dollW;
+                listY = dollY + dollH + u * 2;
+            }
+        }
+        listH = Math.max(u * 6, h - listY - btnArea - u * 8);
+        rowH = nw == 0 ? 0 : Math.max(u * 5.4f, Math.min(u * 6.4f, listH / nw));
+        wMax = nw * rowH > listH ? nw * rowH - listH + u * 2.8f : 0;
+        wScroll = Math.min(wScroll, wMax);
         for (int m = 0; m < nw; m++) {
             Btn r = add(new Btn(WROW + m, "").set(x0, listY + m * rowH, pw, rowH - u * 0.5f));
             r.color = 0xFF1A2434;
         }
+        placeWeaponRows();
         float by2 = h - u * 11, by1 = by2 - u * 11, by0 = by1 - u * 10.5f;
         float bw3 = (pw - u * 2) / 3;
         bRotL = add(new Btn(ROT_L, "↺ Turn").set(x0, by1, bw3, u * 9.5f));
@@ -254,6 +273,57 @@ public final class BattleScreen extends Screen {
         // the panel layout depends on which unit is shown
         if (panelUnit() != laidOutFor || b.deploying != laidOutDeploying) layoutKeepCamera();
         refreshButtons();
+    }
+
+    private static boolean isWeaponRow(Btn b) {
+        return b.id >= WROW && b.id < EQ;
+    }
+
+    /** Moves the weapon rows to the list's scroll position; rows scrolled out of the list can't be tapped. */
+    private void placeWeaponRows() {
+        for (Btn r : buttons) {
+            if (!isWeaponRow(r)) continue;
+            int m = r.id - WROW;
+            r.y = listY + m * rowH - wScroll;
+            float mid = r.y + r.h / 2;
+            r.visible = mid > listY && mid < listY + listH;
+        }
+    }
+
+    public void touchDown(int pointer, float x, float y) {
+        super.touchDown(pointer, x, y);
+        if (pauseMode == 0 && wMax > 0 && x >= panelX && y > listY && y < listY + listH) {
+            wPointer = pointer;
+            wDownY = wLastY = y;
+            wDragging = false;
+        }
+    }
+
+    public void touchMove(int pointer, float x, float y) {
+        if (pointer == wPointer) {
+            if (!wDragging && Math.abs(y - wDownY) > u * 2.5f) {
+                wDragging = true;
+                cancelPress();
+            }
+            if (wDragging) {
+                wScroll = Math.max(0, Math.min(wMax, wScroll - (y - wLastY)));
+                wLastY = y;
+                placeWeaponRows();
+                return;
+            }
+        }
+        super.touchMove(pointer, x, y);
+    }
+
+    public void touchUp(int pointer, float x, float y) {
+        if (pointer == wPointer) {
+            wPointer = -1;
+            if (wDragging) {
+                wDragging = false;
+                return;
+            }
+        }
+        super.touchUp(pointer, x, y);
     }
 
     private void layoutKeepCamera() {
@@ -1184,8 +1254,11 @@ public final class BattleScreen extends Screen {
             if (b.inEcm(su) && su.team == Battle.PLAYER) g.text("In ECM cover", sx, dollY + dollH - u, u * 2f, 0xFF7AD8FF, Gfx.ALIGN_LEFT, false);
         }
 
-        // weapons
-        renderButtons(g);
+        // weapons: the other buttons as usual, the weapon rows clipped to their (scrolling) list
+        for (Btn bb : buttons) if (!isWeaponRow(bb) && bb.visible) Ui.button(g, bb, u);
+        g.save();
+        g.clipRect(panelX, listY - u * 0.2f, panelW, listH + u * 0.2f);
+        for (Btn bb : buttons) if (isWeaponRow(bb) && bb.y + bb.h > listY && bb.y < listY + listH) Ui.buttonAlways(g, bb, u);
         boolean targeting = target != null && su == b.active;
         int heatSel = 0;
         StringBuilder why = null;
@@ -1193,7 +1266,7 @@ public final class BattleScreen extends Screen {
         for (int m = 0; m < su.weapon.length; m++) {
             Btn row = null;
             for (Btn bb : buttons) if (bb.id == WROW + m) row = bb;
-            if (row == null) continue;
+            if (row == null || row.y + row.h < listY || row.y > listY + listH) continue;
             Wpn wp = su.wpn(m);
             float cy = row.y + row.h / 2;
             float ts = Math.min(u * 2.5f, row.h * 0.42f);
@@ -1227,7 +1300,13 @@ public final class BattleScreen extends Screen {
                 g.text(su.wpnBroken[m] || su.locDestroyed(su.ch.mounts[m].loc) ? "DESTROYED" : "NO AMMO", row.x + row.w - u * 1.5f, cy, ts * 0.8f, Col.BAD, Gfx.ALIGN_RIGHT, true);
             }
         }
-        float infoY = listY + su.weapon.length * rowH + u * 1.5f;
+        g.restore();
+        if (wMax > 0) {
+            float bh = listH * listH / (listH + wMax), by = listY + (listH - bh) * (wScroll / wMax);
+            g.fillRoundRect(panelX + panelW - u * 1.3f, by, u * 0.7f, bh, u * 0.35f, 0x88FFFFFF);
+            if (wScroll < wMax - 1) Ui.moreBelow(g, x0, listY + listH, pw, u, 0xFF101826);
+        }
+        float infoY = listY + Math.min(su.weapon.length * rowH, listH) + u * 1.5f;
         if (targeting) {
             if (su.type != UnitType.INFANTRY) {
                 int after = Math.round(su.heat) + heatSel;
