@@ -42,6 +42,7 @@ public final class UnitDetail {
                 {"Weight", RefitScreen.fmt(un.mass()) + " / " + RefitScreen.fmt(un.ch.capacity) + " t"},
                 {"Weapon class", "up to " + (UnitType.MAX_CLASS[un.type] == 1 ? "Light" : (UnitType.MAX_CLASS[un.type] == 2 ? "Medium" : "Heavy"))},
                 {"Value", "$" + Ui.money(un.value())},
+                {"Built by", Faction.names(un.ch.factions)},
         };
         for (String[] r : rows) {
             g.text(r[0], lx, y, ts, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);

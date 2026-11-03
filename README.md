@@ -30,22 +30,39 @@ Android 5.0 or newer, landscape. No permissions, no network, no ads.
 
 ## Units
 
-9 types, 33 designs you can buy (plus 3 fixed emplacements that defend bases), each with its own artwork, each in a role: Scout, Front-line, Striker, Fire Support, Artillery, Brawler, Command.
+9 types, 97 designs you can buy (plus 3 fixed emplacements that defend bases), built by eight factions, each with its own artwork, each in a role: Scout, Front-line, Striker, Fire Support, Artillery, Brawler, Command.
 
 ![All units](docs/screenshots/units.png)
 
 | Type | Designs | Notes |
 |---|---|---|
-| Infantry | Rifle Platoon, Rocket Squad, Recon Team, Mortar Section | Cheap; hard to hurt with big guns; good in woods and towns. The Mortar Section is a glass cannon: big damage, easy to kill |
-| Tracked Tank | Ironhide MBT, Breaker Heavy Tank, Thunder SPG, Quiver Missile Carrier | Most armor of any vehicle; heavy weapons |
-| Hovertank | Dart Scout Hover, Riptide Strike Hover, Squall Missile Hover | Very fast; crosses deep water and light woods |
-| VTOL | Mosquito Recon VTOL, Dragonfly Attack VTOL, Talon Gunship | Flies over terrain; light armor; flak deals double damage to it |
-| Wheeled Vehicle | Jackal Scout Car, Rhino Armored Car, Mule Battery, Lancer AT Car | Fast on roads; armor like a heavy mech |
-| Light Mech | Skitter, Needle, Lantern | Fast, light weapons only |
-| Medium Mech | Halberd, Ricochet, Cinder, Sabre Dancer | |
-| Heavy Mech | Bastille, Overwatch, Cleaver, Rainmaker | Heavy weapons |
-| Assault Mech | Monolith, Pulverizer, Skyfall, Aegis | Most armor and firepower |
+| Infantry | Rifle Platoon, Rocket Squad, Recon Team, Mortar Section, Hegemony Grenadiers, Pike Squad, Sapper Team, Prospector Rifles, Ghost Cell, Accord Rangers, Pact Heavy Weapons | Cheap; hard to hurt with big guns; good in woods and towns. The Mortar Section is a glass cannon: big damage, easy to kill |
+| Tracked Tank | Ironhide MBT, Breaker Heavy Tank, Thunder SPG, Quiver Missile Carrier, Lumen, Bulwark, Citadel, Salvo, Longreach, Sentinel, Hedgehog, Anvil, Hammerfall | Most armor of any vehicle; heavy weapons |
+| Hovertank | Dart Scout Hover, Riptide Strike Hover, Squall Missile Hover, Glare, Gale, Cyclone, Skein, Phantom, Tern | Very fast; crosses deep water and light woods |
+| VTOL | Mosquito Recon VTOL, Dragonfly Attack VTOL, Talon Gunship, Kite, Peregrine, Murk, Skylark, Gunhawk | Flies over terrain; light armor; flak deals double damage to it |
+| Wheeled Vehicle | Jackal Scout Car, Rhino Armored Car, Mule Battery, Lancer AT Car, Sparkfly, Relay, Badger, Mongrel, Ox Hauler, Ranger, Aurora, Bison | Fast on roads; armor like a heavy mech |
+| Light Mech | Skitter, Needle, Lantern, Sunspear, Swift, Watchman, Wraith, Vanguard | Fast, light weapons only |
+| Medium Mech | Halberd, Ricochet, Cinder, Sabre Dancer, Corona, Warden, Harrier, Brushfire, Arbiter, Thorn, Homesteader, Shade, Paladin, Forge | |
+| Heavy Mech | Bastille, Overwatch, Cleaver, Rainmaker, Prism, Bastion, Firestorm, Oracle, Briar, Nightfall, Templar, Crucible | Heavy weapons |
+| Assault Mech | Monolith, Pulverizer, Skyfall, Aegis, Solar Flare, Juggernaut, Pyre, Bramble, Sovereign, Colossus | Most armor and firepower |
 | Emplacement | Gun Emplacement, Missile Bunker, Laser Turret | Campaign bases only; can't be bought or moved |
+
+## Factions
+
+Every design is built by one or more of eight factions. Each faction builds around a specialty and has six designs of its own; the members of each bloc share eight more, and common designs (riflemen, the Ironhide, the Halberd) are built widely. The Market shows who builds each design and can filter by faction. Factions will matter in the mercenary mode (coming); the campaign and quick battles sell every design.
+
+| Faction | Bloc | Specialty | Its own designs |
+|---|---|---|---|
+| Helion Concord | Northern Accord | Energy weapons | Sunspear, Corona, Prism, Solar Flare, Glare, Lumen |
+| Vardan Hegemony | Iron Pact | Armor and cannons | Bulwark, Citadel, Warden, Bastion, Juggernaut, Hegemony Grenadiers |
+| Kestrel League | Northern Accord | Speed | Swift, Harrier, Gale, Cyclone, Kite, Peregrine |
+| Ashfall Collective | Iron Pact | Missiles and artillery | Brushfire, Firestorm, Pyre, Salvo, Longreach, Sparkfly (and the Skyfall) |
+| Meridian Syndicate | Northern Accord | Electronics and command | Watchman, Arbiter, Oracle, Relay, Skein, Sentinel (and the Aegis) |
+| Thornwall Compact | independent | Close assault and infantry | Thorn, Briar, Bramble, Pike Squad, Sapper Team, Hedgehog |
+| Ironroot Freeholds | Iron Pact | Rugged vehicles | Badger, Mongrel, Ox Hauler, Ranger, Homesteader, Prospector Rifles |
+| Obsidian Veil | independent | Raiders and stealth | Wraith, Shade, Nightfall, Phantom, Murk, Ghost Cell |
+
+Shared by the Northern Accord: Vanguard, Paladin, Templar, Sovereign, Skylark, Tern, Accord Rangers, Aurora. Shared by the Iron Pact: Anvil, Bison, Hammerfall, Forge, Crucible, Colossus, Pact Heavy Weapons, Gunhawk.
 
 Armor follows your spec: tracked tanks and assault mechs carry the most, wheeled vehicles about as much as heavy mechs, hovertanks about as much as medium mechs, light mechs and VTOLs the least. Lighter units move further.
 

@@ -236,6 +236,18 @@ public final class DesktopTest {
             tap(g, c2.x + c2.w / 2, c2.y + c2.h / 2);
             shot(g, "04c_market_detail");
             tap(g, 10, 10);   // closes
+            click(g, 3);   // faction filter: Helion
+            click(g, 3);   // Vardan
+            tick(g, 2);
+            for (Btn b : buttonsOf(g)) if (b.id >= 100 && (Chassis.ALL[b.id - 100].factions & Faction.bit(Faction.VARDAN)) == 0)
+                throw new RuntimeException("faction filter shows " + Chassis.ALL[b.id - 100].name);
+            click(g, 11);   // mechs tab: Vardan's own Warden is near the top
+            Btn vc = null;
+            for (Btn b : buttonsOf(g)) if (b.id >= 100 && b.visible && Chassis.ALL[b.id - 100].factions == Faction.bit(Faction.VARDAN)) { vc = b; break; }
+            if (vc != null) tap(g, vc.x + vc.w / 2, vc.y + vc.h / 2);
+            shot(g, "04d_market_faction");
+            for (int k = 0; k < Faction.COUNT - 1; k++) click(g, 3);   // back to any faction
+            click(g, 10);   // all
         }
         click(g, 11);
         click(g, 100 + 29);

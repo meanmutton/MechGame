@@ -28,8 +28,12 @@ public final class Chassis {
     public final int[] stockWeapons, stockBins, stockEquip;
     public final int stockArmor, stockSinks;
     public final String desc;
+    /** Factions that build this design (a Faction mask). */
+    public int factions = Faction.ALL_MASK;
+    /** Parts the artwork is drawn from (UnitArt); null for the original designs, which have hand-drawn looks. */
+    public int[] look;
 
-    private Chassis(int id, String name, int type, int role, int baseCost, float capacity, int maxArmor, int infra, int mp,
+    Chassis(int id, String name, int type, int role, int baseCost, float capacity, int maxArmor, int infra, int mp,
                     int sinks, int heatCap, int maxExtraSinks, int equipSlots, String mounts, int stockArmor, int stockSinks,
                     int[] weapons, int[] bins, int[] equip, String desc) {
         this.id = id;
@@ -84,7 +88,7 @@ public final class Chassis {
 
     private static final int[] NONE = {};
 
-    public static final Chassis[] ALL = {
+    private static final Chassis[] BASE = {
             // ---------------- Infantry ----------------
             new Chassis(0, "Rifle Platoon", UnitType.INFANTRY, Chassis.R_LINE, 90, 3f, 20, 24, 2, 0, 10, 0, 1,
                     "S1T S1T", 12, 0, w(Wpn.RIFLES, Wpn.RIFLES), NONE, NONE,
@@ -207,6 +211,42 @@ public final class Chassis {
                     "T3T T2T", 150, 0, w(Wpn.HEAVY_LASER, Wpn.LASER), NONE, NONE,
                     "A power-fed laser tower. Never runs out of ammunition."),
     };
+
+    /** Every design, indexed by id: the originals, then the faction designs (Catalog). */
+    public static final Chassis[] ALL = all();
+
+    private static Chassis[] all() {
+        Chassis[] extra = Catalog.DESIGNS;
+        Chassis[] out = new Chassis[BASE.length + extra.length];
+        System.arraycopy(BASE, 0, out, 0, BASE.length);
+        System.arraycopy(extra, 0, out, BASE.length, extra.length);
+        for (int i = 0; i < out.length; i++) if (out[i].id != i) throw new IllegalStateException("design ids out of order at " + i);
+        // which factions build the original designs: common ones widely, specialized ones by those who specialize
+        int accord = Faction.blocMask(Faction.BLOC_ACCORD), pact = Faction.blocMask(Faction.BLOC_PACT);
+        int[][] tags = {
+                {0, Faction.ALL_MASK}, {1, Faction.ALL_MASK}, {2, Faction.ALL_MASK},
+                {3, Faction.mask(Faction.ASHFALL, Faction.IRONROOT, Faction.THORNWALL, Faction.VARDAN)},
+                {4, pact | Faction.mask(Faction.THORNWALL)}, {5, Faction.mask(Faction.VARDAN, Faction.THORNWALL)},
+                {6, Faction.mask(Faction.ASHFALL, Faction.VARDAN)}, {7, pact},
+                {8, Faction.mask(Faction.KESTREL, Faction.MERIDIAN, Faction.OBSIDIAN)}, {9, Faction.mask(Faction.KESTREL, Faction.OBSIDIAN, Faction.HELION)},
+                {10, Faction.mask(Faction.KESTREL, Faction.MERIDIAN)},
+                {11, accord | Faction.mask(Faction.OBSIDIAN)}, {12, Faction.mask(Faction.KESTREL, Faction.OBSIDIAN, Faction.IRONROOT)},
+                {13, Faction.mask(Faction.KESTREL, Faction.ASHFALL, Faction.MERIDIAN)},
+                {14, Faction.mask(Faction.IRONROOT, Faction.KESTREL, Faction.OBSIDIAN, Faction.MERIDIAN, Faction.THORNWALL)},
+                {15, Faction.mask(Faction.IRONROOT, Faction.VARDAN, Faction.THORNWALL)}, {16, Faction.mask(Faction.IRONROOT, Faction.ASHFALL)},
+                {17, Faction.mask(Faction.IRONROOT, Faction.MERIDIAN, Faction.HELION)},
+                {18, Faction.mask(Faction.KESTREL, Faction.MERIDIAN, Faction.OBSIDIAN)}, {19, Faction.mask(Faction.OBSIDIAN, Faction.KESTREL, Faction.HELION)},
+                {20, Faction.mask(Faction.MERIDIAN, Faction.HELION)},
+                {21, Faction.mask(Faction.HELION, Faction.MERIDIAN, Faction.THORNWALL, Faction.VARDAN)}, {22, Faction.mask(Faction.KESTREL, Faction.OBSIDIAN)},
+                {23, Faction.mask(Faction.ASHFALL, Faction.MERIDIAN)}, {24, Faction.mask(Faction.THORNWALL, Faction.OBSIDIAN, Faction.HELION)},
+                {25, Faction.mask(Faction.VARDAN, Faction.HELION, Faction.THORNWALL)}, {26, Faction.mask(Faction.MERIDIAN, Faction.HELION, Faction.ASHFALL)},
+                {27, Faction.mask(Faction.THORNWALL, Faction.VARDAN)}, {28, Faction.mask(Faction.ASHFALL, Faction.VARDAN)},
+                {29, Faction.mask(Faction.VARDAN, Faction.IRONROOT)}, {30, Faction.mask(Faction.THORNWALL, Faction.VARDAN)},
+                {31, Faction.mask(Faction.ASHFALL)}, {32, Faction.mask(Faction.MERIDIAN)},
+        };
+        for (int[] t : tags) out[t[0]].factions = t[1];
+        return out;
+    }
 
     /** Designs that can be bought (everything except emplacements). */
     public static final Chassis[] SHOP = shop();

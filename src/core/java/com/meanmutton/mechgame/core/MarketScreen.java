@@ -5,9 +5,11 @@ import java.util.List;
 
 /** Buy new units (factory loadouts). */
 public final class MarketScreen extends Screen {
-    private static final int BACK = 1, BUY = 2, TAB = 10, CARD = 100;
-    private static final String[] TABS = {"All", "Mechs", "Vehicles", "VTOL & Infantry"};
+    private static final int BACK = 1, BUY = 2, FACTION = 3, TAB = 10, CARD = 100;
+    private static final String[] TABS = {"All", "Mechs", "Vehicles", "VTOL & Inf."};
     private int tab;
+    /** Show only designs this faction builds, or -1 for all. */
+    private int faction = -1;
     private int sel = 21;
     private float scroll, maxScroll;
     private float downX, downY, lastY;
@@ -16,15 +18,17 @@ public final class MarketScreen extends Screen {
     private float t;
     private String note;
     private float noteT;
-    private final List<Unit> previews = new ArrayList<Unit>();
+    /** A factory unit for each design, indexed by design id. */
+    private final Unit[] previews = new Unit[Chassis.ALL.length];
     private float gridX, gridY, gridW, gridH;
 
     public MarketScreen(Game game) {
         super(game);
-        for (Chassis ch : Chassis.SHOP) previews.add(new Unit(ch));
+        for (Chassis ch : Chassis.SHOP) previews[ch.id] = new Unit(ch);
     }
 
     private boolean inTab(Chassis ch) {
+        if (faction >= 0 && (ch.factions & Faction.bit(faction)) == 0) return false;
         switch (tab) {
             case 1: return UnitType.isMech(ch.type);
             case 2: return UnitType.isVehicle(ch.type) && ch.type != UnitType.VTOL;
@@ -35,12 +39,16 @@ public final class MarketScreen extends Screen {
 
     protected void layout() {
         buttons.clear();
-        float tw = u * 26;
+        float tw = Math.min(u * 21, (w * 0.6f - u * 28) / TABS.length - u);
         for (int i = 0; i < TABS.length; i++) {
             Btn b = add(new Btn(TAB + i, TABS[i]).set(u * 3 + i * (tw + u), h * 0.15f, tw, u * 8));
             b.selected = tab == i;
-            b.textSize = u * 2.8f;
+            b.textSize = u * 2.6f;
         }
+        Btn fb = add(new Btn(FACTION, faction < 0 ? "Any faction" : Faction.ALL[faction].shortName)
+                .set(u * 3 + TABS.length * (tw + u) + u, h * 0.15f, u * 24, u * 8));
+        fb.textSize = u * 2.6f;
+        if (faction >= 0) fb.textColor = Faction.ALL[faction].color;
         gridX = u * 3;
         gridY = h * 0.15f + u * 10;
         gridW = w * 0.6f;
@@ -61,7 +69,7 @@ public final class MarketScreen extends Screen {
         maxScroll = Math.max(0, rows * ch - gridH);
         float rx = gridX + gridW + u * 3, rw = w - rx - u * 3;
         Btn buy = add(new Btn(BUY, "Buy").set(rx, h - u * 25, rw, u * 10));
-        Unit p = previews.get(sel);
+        Unit p = previews[sel];
         buy.label = "Buy for $" + Ui.money(p.value());
         buy.enabled = game.company.cash >= p.value() && game.company.roster.size() < Company.MAX_ROSTER;
         buy.color = 0xFF2E7D4F;
@@ -85,7 +93,7 @@ public final class MarketScreen extends Screen {
             return;
         }
         if (b.id == BUY) {
-            Unit p = previews.get(sel);
+            Unit p = previews[sel];
             Company c = game.company;
             if (c.cash >= p.value() && c.roster.size() < Company.MAX_ROSTER) {
                 c.cash -= p.value();
@@ -103,9 +111,12 @@ public final class MarketScreen extends Screen {
         } else if (b.id >= TAB && b.id < TAB + TABS.length) {
             tab = b.id - TAB;
             scroll = 0;
+        } else if (b.id == FACTION) {
+            faction = faction + 1 >= Faction.COUNT ? -1 : faction + 1;   // cycles through the factions, then back to all
+            scroll = 0;
         } else if (b.id >= CARD) {
             sel = b.id - CARD;
-            if (doubleTap(Integer.valueOf(b.id))) showDetail(previews.get(sel), Battle.PLAYER, null);
+            if (doubleTap(Integer.valueOf(b.id))) showDetail(previews[sel], Battle.PLAYER, null);
         }
         relayout();
     }
@@ -163,6 +174,21 @@ public final class MarketScreen extends Screen {
         return true;
     }
 
+    /** Short label for who builds a design: the faction, the bloc, or how many share it. */
+    static String factionTag(Chassis ch) {
+        int ex = Faction.exclusive(ch.factions);
+        if (ex >= 0) return Faction.ALL[ex].shortName;
+        if (ch.factions == Faction.ALL_MASK) return "All";
+        for (int bloc = 0; bloc < Faction.BLOC_NAMES.length; bloc++)
+            if (ch.factions == Faction.blocMask(bloc)) return bloc == Faction.BLOC_ACCORD ? "Accord" : "Pact";
+        return Integer.bitCount(ch.factions) + " factions";
+    }
+
+    static int factionColor(Chassis ch) {
+        int ex = Faction.exclusive(ch.factions);
+        return ex >= 0 ? Faction.ALL[ex].color : Col.TEXT_DIM;
+    }
+
     public void render(Gfx g) {
         background(g);
         g.text("MARKET", u * 3, h * 0.06f, u * 5.5f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
@@ -176,13 +202,17 @@ public final class MarketScreen extends Screen {
         for (Btn b : buttons) {
             if (b.id < CARD || !b.visible) continue;
             Ui.button(g, b, u);
-            Unit p = previews.get(b.id - CARD);
+            Unit p = previews[b.id - CARD];
             float cy = b.y + b.h / 2;
             UnitArt.draw(g, p, b.x + b.h * 0.5f, cy, -30, Battle.PLAYER, b.h * 0.5f, t, 1);
             boolean mark = next != null && next.force != Scenario.F_ALL && next.allows(p);
             float tx = b.x + b.h * 1.0f, maxW = b.x + b.w - tx - u * (mark ? 4.5f : 1);
             g.text(Ui.fit(g, p.ch.name, u * 2.8f, maxW), tx, b.y + b.h * 0.24f, u * 2.8f, Col.TEXT, Gfx.ALIGN_LEFT, true);
-            g.text(UnitType.SHORT[p.type] + " · " + Chassis.ROLES[p.ch.role], tx, b.y + b.h * 0.5f, u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+            String tag = factionTag(p.ch);
+            float tagW = g.textWidth(tag, u * 2f, true) + u * 2.5f;
+            g.text(Ui.fit(g, UnitType.SHORT[p.type] + " · " + Chassis.ROLES[p.ch.role], u * 2.2f, b.x + b.w - tx - tagW), tx, b.y + b.h * 0.5f,
+                    u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+            g.text(tag, b.x + b.w - u * 1.5f, b.y + b.h * 0.5f, u * 2f, factionColor(p.ch), Gfx.ALIGN_RIGHT, true);
             g.text("$" + Ui.money(p.value()), tx, b.y + b.h * 0.76f, u * 2.5f, game.company.cash >= p.value() ? Col.MONEY : Col.BAD, Gfx.ALIGN_LEFT, true);
             g.text(p.ch.mp + " MP", b.x + b.w - u * 1.5f, b.y + b.h * 0.76f, u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_RIGHT, false);
             if (mark) g.text("\u2713", b.x + b.w - u * 1.8f, b.y + b.h * 0.26f, u * 3f, Col.GOOD, Gfx.ALIGN_RIGHT, true);
@@ -195,7 +225,7 @@ public final class MarketScreen extends Screen {
         }
         for (Btn b : buttons) if (b.id < CARD) Ui.button(g, b, u);
 
-        Unit p = previews.get(sel);
+        Unit p = previews[sel];
         float rx = gridX + gridW + u * 3, rw = w - rx - u * 3, ry = h * 0.15f;
         Ui.panel(g, rx - u, ry, rw + u * 2, h - ry - u * 27, u * 2);
         UnitArt.draw(g, p, rx + u * 9, ry + u * 10, -35 + (float) Math.sin(t) * 12, Battle.PLAYER, u * 11, t, 1);
@@ -203,6 +233,8 @@ public final class MarketScreen extends Screen {
         g.text(UnitType.NAMES[p.type] + ", " + Chassis.ROLES[p.ch.role], rx + u * 19, ry + u * 9.5f, u * 2.6f, Col.TEXT, Gfx.ALIGN_LEFT, false);
         g.text("Weapon class up to " + Info.classTag(UnitType.MAX_CLASS[p.type]) + ", " + p.ch.mounts.length + " mounts, "
                 + p.ch.equipSlots + " equipment slots", rx + u * 19, ry + u * 13.5f, u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+        g.text(Ui.fit(g, "Built by: " + Faction.names(p.ch.factions), u * 2.2f, rw - u * 19), rx + u * 19, ry + u * 17,
+                u * 2.2f, factionColor(p.ch), Gfx.ALIGN_LEFT, false);
         float y = Ui.wrap(g, p.ch.desc, rx + u, ry + u * 21, u * 2.3f, rw - u * 2, Col.TEXT) + ry + u * 21.5f;
         y = Info.stats(g, p, rx + u, y, rw - u * 2, u * 2.05f);
         Info.loadout(g, p, rx + u, y + u * 0.5f, rw - u * 2, u * 2.0f);
