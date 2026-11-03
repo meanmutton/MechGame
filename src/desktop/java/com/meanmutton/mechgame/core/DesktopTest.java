@@ -21,6 +21,7 @@ import java.util.Random;
  *   icons <resdir>  launcher icons
  *   campaign <n>    play n campaign missions computer-vs-computer (scenarios, front, rival, saves)
  *   odds            how often each scenario comes up, and how long campaigns run
+ *   resume          battles saved mid-fight and resumed after a restart, in a campaign and a quick battle
  */
 public final class DesktopTest {
     static final class FakePlatform implements Platform {
@@ -47,6 +48,7 @@ public final class DesktopTest {
         else if (mode.equals("icons")) icons(new File(args[1]));
         else if (mode.equals("gallery")) gallery(new File(args[1]));
         else if (mode.equals("campaign")) campaign(Integer.parseInt(args[1]));
+        else if (mode.equals("resume")) resume();
         else if (mode.equals("odds")) {
             System.out.print("attacker/defender resources by battle:");
             for (int b = 0; b <= 24; b += 2) System.out.printf(" %d: %.2f%s", b, Scenario.attackerRatio(b),
@@ -740,6 +742,112 @@ public final class DesktopTest {
         System.out.printf("money weight k=%.1f: attacker took %4.1f%% of planets; battles per planet: mean %.1f, median %d, 90%% within %d, longest %d; %d unfinished at 60%n",
                 k, attackerTook * 100f / campaigns, total / (float) campaigns, median, p90, longest, unfinished);
         if (verbose) for (Scenario s : Scenario.ALL) System.out.printf("  %-22s %5.1f%%%n", s.name, seen[s.id] * 100f / total);
+    }
+
+    /** One line per unit plus the turn state: two battles with the same fingerprint are in the same position. */
+    static String fingerprint(Battle b) {
+        StringBuilder s = new StringBuilder("round " + b.round + " side " + b.side + " init " + b.initiative + " deploying " + b.deploying
+                + " active " + (b.active == null ? "-" : b.units.indexOf(b.active)) + "\n");
+        for (Unit u : b.units) {
+            s.append(u.name).append(' ').append(u.team).append(' ').append(u.q).append(',').append(u.r).append(" f").append(u.facing)
+                    .append(" a").append(u.totalArmor()).append(" i").append(u.totalInfra()).append(" h").append(Math.round(u.heat))
+                    .append(u.destroyed ? " dead" : "").append(u.activated ? " done" : "").append(u.moved ? " moved" : "")
+                    .append(u.fired ? " fired" : "").append(" tag ").append(u.tag).append(" ammo ").append(java.util.Arrays.toString(u.ammo)).append('\n');
+        }
+        return s.toString();
+    }
+
+    /**
+     * Saving a battle in progress: the screen saves on its own as the battle goes, a restart (a new Game on the same
+     * stored data) resumes it in exactly the same position, mid-activation included, and the resumed battle plays
+     * to a result that settles on the company's own units.
+     */
+    static void resume() throws Exception {
+        for (int mode = 0; mode < 2; mode++) {
+            FakePlatform fp = new FakePlatform();
+            Game g = new Game(fp, 77);
+            g.headless = true;
+            if (mode == 0) {
+                g.newCampaign(1, 14000, Scenario.ATTACKER);
+                g.company.scenario = 4;
+            } else g.quickBattle(1, 13000);
+            Company c = g.company;
+            for (int id : new int[]{21, 4, 9, 11, 18, 3, 0}) {
+                Unit u = new Unit(Chassis.ALL[id]);
+                c.roster.add(u);
+                if (c.canDeploy(u)) c.deployed.add(u);
+            }
+            g.saveCompany();
+            g.prepareMission();
+            tick(g, 2);
+            click(g, 2);   // begin battle
+            tick(g, 2);
+            BattleScreen bs = (BattleScreen) g.screen();
+            Battle b = bs.battle();
+            tick(g, 3);
+            if (!g.hasBattle()) throw new RuntimeException("no save during deployment");
+            Battle r0 = BattleSave.read(new Game(fp, 1), fp.load(BattleSave.KEY));
+            if (r0 == null || !r0.deploying) throw new RuntimeException("deployment not resumed");
+            // the computer plays both sides for a few rounds
+            b.autoPlayer = true;
+            click(g, 13);   // start battle
+            for (int i = 0; i < 20 * 60 * 60 && b.round < 3; i++) tick(g, 1);
+            for (int i = 0; i < 20 * 60 * 60 && !(BattleSave.quiet(b) && b.active == null); i++) tick(g, 1);
+            tick(g, 1);
+            String before = fingerprint(b);
+            String saved = fp.load(BattleSave.KEY);
+            Game g2 = new Game(fp, 2);   // as if the app were closed and opened again
+            g2.headless = true;
+            if (!g2.hasBattle()) throw new RuntimeException("menu would not offer to resume");
+            g2.resumeBattle();
+            Battle b2 = ((BattleScreen) g2.screen()).battle();
+            String after = fingerprint(b2);
+            if (!before.equals(after)) {
+                System.out.println("BEFORE\n" + before + "AFTER\n" + after);
+                throw new RuntimeException("resumed battle differs from the saved one");
+            }
+            // mid-activation: the player moves a unit, then leaves
+            b2.autoPlayer = false;
+            for (int i = 0; i < 20 * 60 * 60 && !(b2.playerTurn() && b2.active == null && !b2.busy() && BattleSave.quiet(b2)); i++) tick(g2, 1);
+            if (b2.result == Battle.RESULT_NONE) {
+                Unit mover = null;
+                for (Unit u : b2.units) if (u.team == Battle.PLAYER && !u.destroyed && !u.activated && !u.shutdown && u.baseMp() > 0) { mover = u; break; }
+                if (mover != null) {
+                    b2.beginActivation(mover);
+                    int[] prev = new int[b2.map.cols * b2.map.rows];
+                    float[] reach = b2.reach(mover, prev, b2.mpAvailable(mover));
+                    int to = -1;
+                    for (int k = 0; k < reach.length; k++) if (reach[k] > 0 && reach[k] < Float.MAX_VALUE && b2.unitAt(k % b2.map.cols, k / b2.map.cols) == null) { to = k; break; }
+                    if (to >= 0) b2.move(mover, b2.pathTo(prev, b2.map.idx(mover.q, mover.r), to));
+                    for (int i = 0; i < 600 && b2.busy(); i++) tick(g2, 1);
+                    tick(g2, 1);
+                    String mid = fingerprint(b2);
+                    Game g3 = new Game(fp, 3);
+                    g3.headless = true;
+                    g3.resumeBattle();
+                    Battle b3 = ((BattleScreen) g3.screen()).battle();
+                    if (!mid.equals(fingerprint(b3))) {
+                        System.out.println("MID\n" + mid + "RESUMED\n" + fingerprint(b3));
+                        throw new RuntimeException("mid-activation resume differs");
+                    }
+                    if (b3.active == null || !b3.active.moved) throw new RuntimeException("activation not resumed");
+                    b3.endActivation(b3.active);
+                    g2 = g3;
+                    b2 = b3;
+                }
+            }
+            // play the resumed battle out: it must settle on the company's units and clear the save
+            b2.autoPlayer = true;
+            Company c2 = g2.company;
+            for (int i = 0; i < 20 * 60 * 200 && g2.screen() instanceof BattleScreen; i++) tick(g2, 1);
+            if (!(g2.screen() instanceof DebriefScreen)) throw new RuntimeException("resumed battle did not finish");
+            if (g2.hasBattle()) throw new RuntimeException("save not cleared after the battle");
+            for (Unit u : b2.units) if (u.team == Battle.PLAYER && u.tag == null && !u.destroyed && !c2.roster.contains(u))
+                throw new RuntimeException(u.name + " fought but is not on the roster");
+            String[] res = {"", "WIN", "LOSS", "DRAW", "WITHDRAW"};
+            System.out.println((mode == 0 ? "campaign" : "quick battle") + ": saved and resumed at round " + b.round
+                    + " (save " + saved.length() + " chars), mid-activation resume OK, finished " + res[b2.result]);
+        }
     }
 
     /** Every design side by side, in both team colors, to check they are all distinct. */

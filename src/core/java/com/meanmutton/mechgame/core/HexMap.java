@@ -191,7 +191,7 @@ public final class HexMap {
             switch (ter) {
                 case CLEAR: cost = 1; break;
                 case LIGHT_WOODS:
-                    cost = mech ? 2 : (type == UnitType.INFANTRY ? 1 : (type == UnitType.TRACKED ? 2 : IMPASSABLE));
+                    cost = mech || type == UnitType.TRACKED || type == UnitType.HOVER ? 2 : (type == UnitType.INFANTRY ? 1 : IMPASSABLE);
                     break;
                 case HEAVY_WOODS:
                     cost = mech ? 3 : (type == UnitType.INFANTRY ? 2 : IMPASSABLE);
@@ -217,7 +217,7 @@ public final class HexMap {
         if (up > 0) {
             if (!mech && type != UnitType.INFANTRY && up >= 2) return IMPASSABLE;
             if (up >= 3) return IMPASSABLE;
-            cost += type == UnitType.HOVER ? up * 2 : up;
+            cost += up;
         } else if (up < -1 && !mech && type != UnitType.INFANTRY) {
             return IMPASSABLE; // vehicles can't drive off cliffs
         }
@@ -231,7 +231,7 @@ public final class HexMap {
         int t = terrain[k];
         boolean mech = UnitType.isMech(type);
         switch (t) {
-            case LIGHT_WOODS: return mech || type == UnitType.INFANTRY || type == UnitType.TRACKED;
+            case LIGHT_WOODS: return mech || type == UnitType.INFANTRY || type == UnitType.TRACKED || type == UnitType.HOVER;
             case HEAVY_WOODS:
             case TOWN: return mech || type == UnitType.INFANTRY;
             case SHALLOW: return type != UnitType.WHEELED;

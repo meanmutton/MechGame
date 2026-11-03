@@ -4,7 +4,7 @@ package com.meanmutton.mechgame.core;
 public final class NewGameScreen extends Screen {
     private static final int BACK = 1, CAMPAIGN = 2, QUICK = 3, C_DIFF = 10, C_FUNDS = 20, Q_DIFF = 30, Q_BUDGET = 40, C_SIDE = 50;
     private int cDiff = 1, cFunds = 1, qDiff = 1, qBudget = 2, cSide = Scenario.ATTACKER;
-    private boolean confirmOverwrite;
+    private boolean confirmOverwrite, confirmQuick;
 
     public NewGameScreen(Game game) {
         super(game);
@@ -37,7 +37,9 @@ public final class NewGameScreen extends Screen {
             c.sub = confirm ? "tap again to replace it" : (i == Scenario.ATTACKER ? "land and take the planet" : "hold the planet");
             c.color = confirm ? 0xFF8F3A2E : (i == Scenario.ATTACKER ? 0xFF8F4A2E : 0xFF2E7D4F);
         }
-        add(new Btn(QUICK, "Build Force").set(px2 + u * 2, h - u * 26, pw - u * 4, u * 11)).color = 0xFF2E6D8F;
+        Btn qb = add(new Btn(QUICK, confirmQuick ? "Abandon the battle in progress?" : "Build Force").set(px2 + u * 2, h - u * 26, pw - u * 4, u * 11));
+        qb.color = confirmQuick ? 0xFF8F3A2E : 0xFF2E6D8F;
+        if (confirmQuick) qb.sub = "tap again to start a quick battle anyway";
         add(new Btn(BACK, "Back").set(u * 4, h - u * 12, u * 24, u * 9));
     }
 
@@ -51,13 +53,20 @@ public final class NewGameScreen extends Screen {
         if (id == BACK) game.toMenu();
         else if (id >= C_SIDE && id < C_SIDE + 2) {
             int side = id - C_SIDE;
-            if (game.hasSave() && !(confirmOverwrite && cSide == side)) {
+            if ((game.hasSave() || game.hasBattle()) && !(confirmOverwrite && cSide == side)) {
                 confirmOverwrite = true;
                 cSide = side;
                 relayout();
             } else game.newCampaign(cDiff, Game.CAMPAIGN_FUNDS[cFunds], side);
             return;
-        } else if (id == QUICK) game.quickBattle(qDiff, Game.QUICK_BUDGETS[qBudget]);
+        } else if (id == QUICK) {
+            if (game.hasBattle() && !confirmQuick) {
+                confirmQuick = true;
+                relayout();
+                return;
+            }
+            game.quickBattle(qDiff, Game.QUICK_BUDGETS[qBudget]);
+        }
         else if (id >= C_DIFF && id < C_DIFF + 3) cDiff = id - C_DIFF;
         else if (id >= C_FUNDS && id < C_FUNDS + 3) cFunds = id - C_FUNDS;
         else if (id >= Q_DIFF && id < Q_DIFF + 3) qDiff = id - Q_DIFF;

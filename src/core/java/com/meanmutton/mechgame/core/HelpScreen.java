@@ -16,6 +16,7 @@ public final class HelpScreen extends Screen {
                     "On your activation: tap one of your units (they pulse blue), tap a green hex twice to move there, tap an enemy to target it, choose weapons, FIRE, then End Turn.",
                     "You can rotate your unit (the arrow buttons) before ending. Facing matters: you shoot out of your front, and enemies who hit your sides or rear do more harm.",
                     "Undo takes back a move as long as you haven't fired yet. Drag the map to pan and pinch to zoom.",
+                    "Battles save as you play. Leave the app or quit to the menu and Resume Battle puts you back where you were (during the computer's turn, at the start of it).",
                     "Destroy every enemy unit to win. If time runs out, the side that kept more of its value wins."
             },
             {
@@ -44,7 +45,7 @@ public final class HelpScreen extends Screen {
             },
             {
                     "Open ground, light woods (cover -10%), heavy woods (cover -20%), rough ground, shallow and deep water, towns (cover -15%) and roads. Hills come in levels 0 to 3; the number in a hex's corner is its height.",
-                    "Climbing costs extra movement. Wheeled vehicles fly along roads but can't enter woods or water. Hovertanks skim over water but avoid woods. Tracked tanks handle light woods. Mechs and infantry go almost anywhere. VTOLs ignore terrain.",
+                    "Climbing costs extra movement. Wheeled vehicles fly along roads but can't enter woods or water. Hovertanks skim over water, even deep water, and weave through light woods, but not heavy woods or towns. Tracked tanks handle light woods. Mechs and infantry go almost anywhere. VTOLs ignore terrain.",
                     "Maps are generated fresh each battle: rivers run downhill, lakes sit in low ground, forests grow where it's wet, rocks cluster on high ground, and a road links the two sides.",
                     "Weather changes the fight: rain and snow cool you, heat waves don't. Fog and sandstorms limit long-range shots. Night hurts accuracy beyond 4 hexes. Magnetic storms knock out electronics."
             },

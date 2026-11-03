@@ -49,6 +49,8 @@ public final class Battle {
 
     Ai.Turn aiTurn;
     volatile Ai.Planner aiPlanner;
+    /** Bumped whenever the battle state changes in a way worth saving (see BattleSave). */
+    public int version;
     /** Tests: the computer plays the player's side too. */
     public boolean autoPlayer;
     public float aiDelay;
@@ -84,6 +86,16 @@ public final class Battle {
         deploying = true;   // the player places units, then finishDeployment() starts round 1
     }
 
+    /** Rebuilds a battle from a save (BattleSave): the units already carry their positions and state. */
+    Battle(Game game, List<Unit> all, HexMap map, Random rnd, int difficulty) {
+        this.game = game;
+        this.map = map;
+        this.rnd = rnd;
+        this.difficulty = difficulty;
+        units.addAll(all);
+        for (Unit u : units) syncDraw(u);
+    }
+
     // =====================================================================
     // Setup
     // =====================================================================
@@ -108,6 +120,7 @@ public final class Battle {
     }
 
     public void place(Unit u, int c, int r) {
+        version++;
         if (!canPlace(u, c, r)) return;
         u.q = c;
         u.r = r;
@@ -116,6 +129,7 @@ public final class Battle {
     }
 
     public void finishDeployment() {
+        version++;
         if (!deploying) return;
         deploying = false;
         if (autoPlayer) deployInfantryForward(PLAYER);
@@ -301,6 +315,7 @@ public final class Battle {
 
     /** Starts animated movement along a path (list of hex indices, not including the start). */
     public void move(Unit u, int[] path) {
+        version++;
         if (path.length == 0) return;
         undoQ = u.q;
         undoR = u.r;
@@ -325,6 +340,7 @@ public final class Battle {
     }
 
     public void undoMove(Unit u) {
+        version++;
         if (!canUndo(u)) return;
         u.q = undoQ;
         u.r = undoR;
@@ -585,6 +601,7 @@ public final class Battle {
     private float ledgerLast;
 
     public void fire(Unit a, Unit t, boolean[] use) {
+        version++;
         if (a.fired || a.destroyed) return;
         ledger = new java.util.LinkedHashMap<Unit, int[]>();
         ledger.put(t, new int[UnitType.locCount(t.type)]);
@@ -964,6 +981,7 @@ public final class Battle {
     }
 
     public void turbo(Unit u) {
+        version++;
         if (!canTurbo(u)) return;
         int s = u.equipSlot(Equip.TURBO);
         u.eqUses[s]--;
@@ -983,6 +1001,7 @@ public final class Battle {
     }
 
     public void useEquip(Unit u, int equipId) {
+        version++;
         if (!canUse(u, equipId)) return;
         int s = u.equipSlot(equipId);
         u.eqUses[s]--;
@@ -1017,6 +1036,7 @@ public final class Battle {
     }
 
     public void rotate(Unit u, int dir) {
+        version++;
         if (u != active || u.destroyed) return;
         u.facing = (u.facing + dir + 6) % 6;
         u.drawFacing = HexMap.DIR_ANGLE[u.facing];
@@ -1072,6 +1092,7 @@ public final class Battle {
 
     /** Called when a unit starts its activation (selected by the human or the AI). */
     public void beginActivation(Unit u) {
+        version++;
         if (u.team != side || u.activated || u.destroyed) return;
         active = u;
         u.moved = false;
@@ -1087,6 +1108,7 @@ public final class Battle {
     }
 
     public void endActivation(Unit u) {
+        version++;
         if (u != active) return;
         u.activated = true;
         if (u.shutdown) {
