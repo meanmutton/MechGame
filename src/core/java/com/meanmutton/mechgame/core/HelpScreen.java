@@ -64,7 +64,7 @@ public final class HelpScreen extends Screen {
             },
             {
                     "A campaign is the fight for one planet. You choose to attack or defend when you start. The front runs from the attacker's dropships (-1) to the defender's base (6) and starts at 2, so the defender has the upper hand.",
-                    "Every battle is a scenario. It limits which units may fight and how many: the Initial Drop allows only VTOLs, wheeled vehicles and light and medium mechs; Recon Sweeps only VTOLs, wheeled vehicles and light mechs; Pitched Battles anything. The enemy plays by the same limits.",
+                    "Every battle is a scenario. It limits which units may fight and how many: the Initial Drop allows only VTOLs, hovertanks, wheeled vehicles and light and medium mechs; Recon Sweeps only VTOLs, hovertanks, wheeled vehicles and light mechs; Pitched Battles anything. The enemy plays by the same limits.",
                     "The next scenario is rolled from the last result, the front and a random roll, and shown at HQ before you repair, buy and customize, so you know what you can bring. Units it doesn't allow show as Not allowed. If nothing on your roster may fight, you can only forfeit.",
                     "Winning moves the front your way, usually one step (two in a Decisive Engagement, Breakthrough or Counterattack). Recon Sweeps don't move it; the winner gets the edge instead: initiative in the first round of the next battle.",
                     "Some scenarios lean toward one side: more initiative, a time-out that only asks one side to be close, a free garrison, or a bigger force allowance. The briefing says which way each one leans.",
