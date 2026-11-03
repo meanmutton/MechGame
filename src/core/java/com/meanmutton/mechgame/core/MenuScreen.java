@@ -5,18 +5,19 @@ public final class MenuScreen extends Screen {
     private static final int CONTINUE = 1, NEW = 2, HELP = 3, SOUND = 4, SPEED = 5, QUIT = 6;
     private Btn sound, speed;
     private float t;
-    private final boolean hasSave;
+    private final boolean hasSave, hasBattle;
 
     public MenuScreen(Game game) {
         super(game);
         hasSave = game.hasSave();
+        hasBattle = game.hasBattle();
     }
 
     protected void layout() {
         buttons.clear();
         float bw = u * 50, bh = u * 10, x = w * 0.5f - bw / 2, y = h * 0.4f;
-        Btn c = add(new Btn(CONTINUE, "Continue Campaign").set(x, y, bw, bh));
-        c.enabled = hasSave;
+        Btn c = add(new Btn(CONTINUE, hasBattle ? "Resume Battle" : "Continue Campaign").set(x, y, bw, bh));
+        c.enabled = hasSave || hasBattle;
         c.color = 0xFF2E6D8F;
         add(new Btn(NEW, "New Game").set(x, y + bh * 1.2f, bw, bh)).color = 0xFF2E7D4F;
         add(new Btn(HELP, "How to Play").set(x, y + bh * 2.4f, bw, bh));
@@ -35,7 +36,10 @@ public final class MenuScreen extends Screen {
 
     protected void onClick(Btn b) {
         switch (b.id) {
-            case CONTINUE: game.continueCampaign(); break;
+            case CONTINUE:
+                if (hasBattle) game.resumeBattle();
+                else game.continueCampaign();
+                break;
             case NEW: game.setScreen(new NewGameScreen(game)); break;
             case HELP: game.setScreen(new HelpScreen(game)); break;
             case SOUND:

@@ -118,6 +118,31 @@ public final class Game {
         return Company.parse(platform.load("company")) != null;
     }
 
+    /** True if a battle was left in progress (campaign or quick battle). */
+    public boolean hasBattle() {
+        String s = platform.load(BattleSave.KEY);
+        return s != null && s.length() > 0;
+    }
+
+    public void saveBattle(Battle b) {
+        if (company != null) platform.save(BattleSave.KEY, BattleSave.write(company, b));
+    }
+
+    public void clearBattle() {
+        platform.save(BattleSave.KEY, "");
+    }
+
+    /** Back into the battle that was in progress, exactly where it was left. */
+    public void resumeBattle() {
+        Battle b = BattleSave.read(this, platform.load(BattleSave.KEY));
+        if (b == null) {
+            clearBattle();
+            if (hasSave()) continueCampaign();
+            return;
+        }
+        setScreen(new BattleScreen(this, b));
+    }
+
     // =====================================================================
     // Flow
     // =====================================================================
@@ -127,6 +152,7 @@ public final class Game {
     }
 
     public void newCampaign(int difficulty, int funds, int side) {
+        clearBattle();
         company = new Company();
         company.difficulty = difficulty;
         company.side = side;
@@ -161,6 +187,7 @@ public final class Game {
     }
 
     public void quickBattle(int difficulty, int budget) {
+        clearBattle();
         company = new Company();
         company.quick = true;
         company.difficulty = difficulty;
@@ -285,6 +312,7 @@ public final class Game {
 
     /** Settles money, salvage, and losses after a battle, then shows the debrief. */
     public void finishBattle(Battle b) {
+        clearBattle();
         Company c = company;
         Debrief d = new Debrief();
         d.result = b.result;

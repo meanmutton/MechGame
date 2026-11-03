@@ -289,7 +289,8 @@ public final class Unit {
 
     public String serialize() {
         StringBuilder b = new StringBuilder();
-        b.append(ch.id).append(',').append(clean(name)).append(',').append(armorTotal).append(',').append(extraSinks)
+        // a design's own name is stored as empty (it can be longer than a typed name may be)
+        b.append(ch.id).append(',').append(name.equals(ch.name) ? "" : clean(name, 30)).append(',').append(armorTotal).append(',').append(extraSinks)
                 .append(',').append(sinksLost).append(',').append(mpLost).append(',').append(destroyed ? 1 : 0);
         b.append(';');
         for (int i = 0; i < weapon.length; i++) {
@@ -347,8 +348,13 @@ public final class Unit {
     }
 
     static String clean(String s) {
+        return clean(s, 18);
+    }
+
+    /** Strips the characters saves use as separators, and limits the length. */
+    static String clean(String s, int max) {
         StringBuilder b = new StringBuilder();
-        for (int i = 0; i < s.length() && b.length() < 18; i++) {
+        for (int i = 0; i < s.length() && b.length() < max; i++) {
             char c = s.charAt(i);
             if (c == ',' || c == ';' || c == '/' || c == ':' || c == '|' || c < 32) continue;
             b.append(c);

@@ -35,8 +35,8 @@ public final class Scenario {
     public static final int F_ALL = 0, F_DROP = 1, F_SCOUT = 2, F_LIGHT = 3, F_MECHS = 4, F_ARMOR = 5, F_AIR = 6, F_GROUND = 7;
     public static final String[] FORCE_TEXT = {
             "any units",
-            "VTOLs, wheeled vehicles, light and medium mechs",
-            "VTOLs, wheeled vehicles and light mechs",
+            "VTOLs, hovertanks, wheeled vehicles, light and medium mechs",
+            "VTOLs, hovertanks, wheeled vehicles and light mechs",
             "infantry, hovertanks, VTOLs, wheeled vehicles and light mechs",
             "mechs only",
             "infantry and vehicles, no mechs",
@@ -168,8 +168,8 @@ public final class Scenario {
         int t = ch.type;
         if (t == UnitType.EMPLACEMENT) return false;
         switch (force) {
-            case F_DROP: return t == UnitType.VTOL || t == UnitType.WHEELED || t == UnitType.LIGHT_MECH || t == UnitType.MEDIUM_MECH;
-            case F_SCOUT: return t == UnitType.VTOL || t == UnitType.WHEELED || t == UnitType.LIGHT_MECH;
+            case F_DROP: return t == UnitType.VTOL || t == UnitType.HOVER || t == UnitType.WHEELED || t == UnitType.LIGHT_MECH || t == UnitType.MEDIUM_MECH;
+            case F_SCOUT: return t == UnitType.VTOL || t == UnitType.HOVER || t == UnitType.WHEELED || t == UnitType.LIGHT_MECH;
             case F_LIGHT: return t == UnitType.INFANTRY || t == UnitType.HOVER || t == UnitType.VTOL || t == UnitType.WHEELED || t == UnitType.LIGHT_MECH;
             case F_MECHS: return UnitType.isMech(t);
             case F_ARMOR: return !UnitType.isMech(t);

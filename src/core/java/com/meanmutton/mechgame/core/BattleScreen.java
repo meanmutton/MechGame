@@ -48,6 +48,8 @@ public final class BattleScreen extends Screen {
     private float impactLinger;
     private final java.util.Set<Battle.Fx> counted = new java.util.HashSet<Battle.Fx>();
 
+    private int savedVersion = -1;
+
     public BattleScreen(Game game, Battle b) {
         super(game);
         this.b = b;
@@ -151,7 +153,7 @@ public final class BattleScreen extends Screen {
             overlay.add(new Btn(P_SOUND, "Sound: " + (game.settings.sound ? "On" : "Off")).set(x, y + bh * 1.2f, bw, bh));
             overlay.add(new Btn(P_SPEED, "Enemy turns: " + Settings.SPEED_NAMES[game.settings.aiSpeed]).set(x, y + bh * 2.4f, bw, bh));
             overlay.add(new Btn(P_WITHDRAW, "Withdraw from battle").set(x, y + bh * 3.6f, bw, bh).tint(0xFF8F5A2E));
-            overlay.add(new Btn(P_QUIT, "Quit to menu (battle lost unsaved)").set(x, y + bh * 4.8f, bw, bh).tint(0xFF7A2A2A));
+            overlay.add(new Btn(P_QUIT, "Save and quit to menu").set(x, y + bh * 4.8f, bw, bh).tint(0xFF2E6D8F));
         } else {
             overlay.add(new Btn(P_CONFIRM, "Yes, withdraw").set(w / 2f - u * 32, h * 0.55f, u * 30, bh).tint(0xFF8F3A2E));
             overlay.add(new Btn(P_RESUME, "Keep fighting").set(w / 2f + u * 2, h * 0.55f, u * 30, bh).tint(0xFF2E7D4F));
@@ -215,6 +217,11 @@ public final class BattleScreen extends Screen {
         if (flash > 0) flash -= dt;
         if (pauseMode != 0) return;
         b.update(dt);
+        // keep the battle saved, so leaving the app and coming back resumes it here
+        if (b.version != savedVersion && BattleSave.quiet(b)) {
+            game.saveBattle(b);
+            savedVersion = b.version;
+        }
         Unit cur = impactUnit();
         if (cur != null) {
             if (cur != impactShown) {
@@ -280,7 +287,10 @@ public final class BattleScreen extends Screen {
             case P_SPEED: game.settings.aiSpeed = (game.settings.aiSpeed + 1) % 3; game.saveSettings(); layoutOverlay(); return;
             case P_WITHDRAW: pauseMode = 2; layoutOverlay(); return;
             case P_CONFIRM: pauseMode = 0; b.withdraw(); endTimer = 1.5f; return;
-            case P_QUIT: game.toMenu(); return;
+            case P_QUIT:
+                if (BattleSave.quiet(b)) game.saveBattle(b);   // otherwise the last quiet moment is already saved
+                game.toMenu();
+                return;
             case NEXT: selectNextReady(); return;
             case DETAILS:
                 if (panelUnit() != null) showDetail(panelUnit(), panelUnit().team, b);
