@@ -3,7 +3,18 @@ package com.meanmutton.mechgame.core;
 /** Company headquarters: roster, deployment, repairs, and launching the next mission. */
 public final class HqScreen extends Screen {
     private static final int MENU = 1, MARKET = 2, REPAIR_ALL = 3, LAUNCH = 4, REFIT = 5, REPAIR = 6, SELL = 7, RENAME = 8, COLORS = 9, CONTRACTS = 10,
-            ROW = 100, DEPLOY = 200;
+            SORT = 11, TAB = 20, ROW = 100, DEPLOY = 200;
+    static final String[] TABS = {"All", "Mechs", "Vehicles", "VTOL & Inf."};
+    static final String[] SORTS = {"Roster order", "Name", "Type", "Value", "Condition", "Deployed first"};
+    // the roster's filter and order stay as you left them while the game runs
+    private static int tab, sort;
+    private float scroll, maxScroll, loadScroll, loadMax;
+    private float listY0, listY1, loadY0, loadY1, rowsW;
+    private int laidOut = -1;   // roster size the rows were laid out for
+    private int dragPointer = -1, dragWhat;   // 1 = roster list, 2 = loadout
+    private float downY, lastY;
+    private boolean dragging;
+    private final java.util.List<Integer> shown = new java.util.ArrayList<Integer>();
     private final Company c;
     private int sel;
     private boolean confirmSell;
@@ -22,20 +33,47 @@ public final class HqScreen extends Screen {
         if (sel >= n) sel = n - 1;
         if (sel < 0 && n > 0) sel = 0;
         float lx = u * 3, ly = listTop(), lw = w * 0.56f;
-        // a long roster goes into two columns
-        int cols = n > 8 ? 2 : 1, rows = (n + cols - 1) / cols;
+        laidOut = n;
+        // the roster, filtered by type and put in the chosen order
+        shown.clear();
+        for (int i = 0; i < n; i++) if (inTab(c.roster.get(i))) shown.add(i);
+        sortShown();
+        // a long roster goes into two columns; rows never shrink below a readable size, and the list scrolls instead
+        int m = shown.size();
+        int cols = m > 8 ? 2 : 1, rows = (m + cols - 1) / cols;
         float colW = (lw - u * (cols - 1)) / cols;
-        float rowH = Math.min(u * 10, (h - u * 14 - ly) / Math.max(6, rows));
-        for (int i = 0; i < n; i++) {
+        listY0 = ly;
+        listY1 = h - u * 14;
+        rowsW = lw;
+        float avail = listY1 - ly;
+        float rowH = Math.max(u * 7.5f, Math.min(u * 10, avail / Math.max(6, rows)));
+        maxScroll = rows * rowH > avail ? rows * rowH - avail + u * 2.8f : 0;
+        scroll = Math.max(0, Math.min(maxScroll, scroll));
+        for (int k = 0; k < m; k++) {
+            int i = shown.get(k);
             Unit un = c.roster.get(i);
-            float x = lx + (i / Math.max(1, rows)) * (colW + u), y = ly + (i % Math.max(1, rows)) * rowH;
+            float x = lx + (k / Math.max(1, rows)) * (colW + u), y = ly + (k % Math.max(1, rows)) * rowH - scroll;
+            boolean vis = y + rowH * 0.5f > ly && y + rowH * 0.5f < listY1;
             Btn row = add(new Btn(ROW + i, "").set(x + rowH * 1.1f, y + u * 0.3f, colW - rowH * 1.1f, rowH - u * 0.6f));
             row.selected = sel == i;
             row.color = 0xFF1E2A3C;
+            row.visible = vis;
             Btn dep = add(new Btn(DEPLOY + i, c.deployed.contains(un) ? "✓" : "").set(x, y + u * 0.3f, rowH - u * 0.6f, rowH - u * 0.6f));
             dep.color = c.deployed.contains(un) ? 0xFF2E7D4F : (c.canDeploy(un) ? 0xFF2A3346 : 0xFF171D29);
             dep.enabled = !un.destroyed;   // tapping one that can't go explains why
+            dep.visible = vis;
         }
+        // the filter row above the list (added after the rows, so it takes touches first)
+        float cy0 = ctrlTop(), sw = u * 27, tw = (lw - sw - u * TABS.length) / TABS.length;
+        for (int i = 0; i < TABS.length; i++) {
+            int cnt = 0;
+            for (Unit un : c.roster) if (tabOf(un, i)) cnt++;
+            Btn tb = add(new Btn(TAB + i, TABS[i] + (i > 0 && cnt > 0 ? " " + cnt : "")).set(lx + i * (tw + u), cy0, tw, u * 6.5f));
+            tb.selected = tab == i;
+            tb.textSize = u * 2.3f;
+        }
+        Btn sb = add(new Btn(SORT, "Sort: " + SORTS[sort]).set(lx + lw - sw, cy0, sw, u * 6.5f));
+        sb.textSize = u * 2.3f;
         float rx = lx + lw + u * 3, rw = w - rx - u * 3;
         float by = h - u * 25;
         float bw = (rw - u * 2) / 3;
@@ -85,8 +123,97 @@ public final class HqScreen extends Screen {
         if (!c.quick && !forfeit && c.noneAllowed()) launch.sub = c.merc ? "this job allows none of your units" : "buy an allowed unit in the Market";
     }
 
+    /** Top of the filter row; the roster list starts below it and its header. */
+    private float ctrlTop() {
+        return c.quick ? h * 0.15f : h * 0.18f;
+    }
+
     private float listTop() {
-        return c.quick ? h * 0.19f : h * 0.215f;
+        return ctrlTop() + u * 11;
+    }
+
+    private static boolean tabOf(Unit un, int t) {
+        switch (t) {
+            case 1: return UnitType.isMech(un.type);
+            case 2: return UnitType.isVehicle(un.type) && un.type != UnitType.VTOL;
+            case 3: return un.type == UnitType.VTOL || un.type == UnitType.INFANTRY;
+            default: return true;
+        }
+    }
+
+    private boolean inTab(Unit un) {
+        return tabOf(un, tab);
+    }
+
+    private void sortShown() {
+        if (sort == 0) return;
+        java.util.Collections.sort(shown, new java.util.Comparator<Integer>() {
+            public int compare(Integer a, Integer b) {
+                Unit x = c.roster.get(a), y = c.roster.get(b);
+                int d;
+                switch (sort) {
+                    case 1: d = x.name.compareToIgnoreCase(y.name); break;
+                    case 2: d = typeRank(x) - typeRank(y); break;
+                    case 3: d = y.value() - x.value(); break;
+                    case 4: d = Float.compare(x.destroyed ? -1 : x.condition(), y.destroyed ? -1 : y.condition()); break;
+                    default: d = (c.deployed.contains(x) ? 0 : 1) - (c.deployed.contains(y) ? 0 : 1); break;
+                }
+                return d != 0 ? d : a - b;
+            }
+        });
+    }
+
+    /** Heaviest first: assault, heavy, medium and light mechs, then tanks, hovertanks, wheels, VTOLs, infantry. */
+    private static int typeRank(Unit u) {
+        int[] rank = {8, 4, 5, 7, 6, 3, 2, 1, 0, 9};
+        return rank[u.type];
+    }
+
+    // drag to scroll the roster list, or the selected unit's loadout
+    protected void onTouchDown(int pointer, float x, float y) {
+        startDrag(pointer, x, y);
+    }
+
+    private void startDrag(int pointer, float x, float y) {
+        dragPointer = pointer;
+        downY = lastY = y;
+        dragging = false;
+        dragWhat = x < u * 3 + rowsW && y > listY0 && y < listY1 && maxScroll > 0 ? 1
+                : (x > u * 3 + rowsW && y > loadY0 && y < loadY1 && loadMax > 0 ? 2 : 0);
+    }
+
+    public void touchDown(int pointer, float x, float y) {
+        super.touchDown(pointer, x, y);
+        if (isPressing(pointer)) startDrag(pointer, x, y);   // a press on a row can still turn into a scroll
+    }
+
+    public void touchMove(int pointer, float x, float y) {
+        if (pointer == dragPointer && dragWhat != 0) {
+            if (!dragging && Math.abs(y - downY) > u * 2.5f) {
+                dragging = true;
+                cancelPress();
+            }
+            if (dragging) {
+                if (dragWhat == 1) {
+                    scroll = Math.max(0, Math.min(maxScroll, scroll - (y - lastY)));
+                    relayout();
+                } else loadScroll = Math.max(0, Math.min(loadMax, loadScroll - (y - lastY)));
+                lastY = y;
+                return;
+            }
+        }
+        lastY = y;
+        super.touchMove(pointer, x, y);
+    }
+
+    public void touchUp(int pointer, float x, float y) {
+        if (dragging && pointer == dragPointer) {
+            dragging = false;
+            dragPointer = -1;
+            return;
+        }
+        dragPointer = -1;
+        super.touchUp(pointer, x, y);
     }
 
     private Unit selected() {
@@ -106,9 +233,7 @@ public final class HqScreen extends Screen {
         super.update(dt);
         t += dt;
         if (toastT > 0) toastT -= dt;
-        int rows = 0;
-        for (Btn b : buttons) if (b.id >= ROW && b.id < DEPLOY) rows++;
-        if (rows != c.roster.size()) relayout();
+        if (laidOut != c.roster.size()) relayout();
     }
 
     private void toast(String s) {
@@ -120,11 +245,19 @@ public final class HqScreen extends Screen {
         int id = b.id;
         if (id != SELL) confirmSell = false;
         Unit su = selected();
-        if (id >= ROW && id < ROW + Company.MAX_ROSTER + 10) {
+        if (id >= TAB && id < TAB + TABS.length) {
+            tab = id - TAB;
+            scroll = 0;
+        } else if (id == SORT) {
+            sort = (sort + 1) % SORTS.length;
+            scroll = 0;
+        } else if (id >= ROW && id < ROW + Company.MAX_ROSTER + 10) {
+            if (sel != id - ROW) loadScroll = 0;
             sel = id - ROW;
             if (doubleTap(Integer.valueOf(id)) && selected() != null) showDetail(selected(), Battle.PLAYER, null);
         } else if (id >= DEPLOY && id < DEPLOY + Company.MAX_ROSTER + 10) {
             Unit un = c.roster.get(id - DEPLOY);
+            if (sel != id - DEPLOY) loadScroll = 0;
             if (c.deployed.contains(un)) c.deployed.remove(un);
             else if (c.canDeploy(un)) {
                 c.deployed.add(un);
@@ -240,14 +373,21 @@ public final class HqScreen extends Screen {
         g.text("Deploy", lx, ly - u * 2.5f, u * 2.4f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
         g.text("Roster (" + c.roster.size() + "/" + Company.MAX_ROSTER + ")   Deployed value $" + Ui.money(c.deployedValue()),
                 lx + u * 12, ly - u * 2.5f, u * 2.4f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
-        renderButtons(g);
+        // everything but the roster rows, then the rows clipped to the list area
+        for (Btn b : buttons) if (b.id < ROW) Ui.button(g, b, u);
         if (c.roster.isEmpty()) {
             g.text("No units yet. Open the Market to buy some.", lx + lw / 2, h * 0.45f, u * 3.5f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
+        } else if (shown.isEmpty()) {
+            g.text("No " + TABS[tab].toLowerCase().replace("vtol", "VTOLs").replace(" & inf.", " or infantry") + " on the roster.",
+                    lx + lw / 2, h * 0.45f, u * 3, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
         }
+        g.save();
+        g.clipRect(0, listY0, lx + lw + u, listY1 - listY0);
+        for (Btn b : buttons) if (b.id >= ROW && b.y + b.h > listY0 && b.y < listY1) Ui.buttonAlways(g, b, u);
         for (int i = 0; i < c.roster.size(); i++) {
             Unit un = c.roster.get(i);
             Btn row = find(ROW + i);
-            if (row == null) continue;
+            if (row == null || row.y + row.h < listY0 || row.y > listY1) continue;
             float cy = row.y + row.h / 2;
             UnitArt.draw(g, un, row.x + row.h * 0.6f, cy, -30, Battle.PLAYER, row.h * 0.62f, t, un.condition());
             float tx = row.x + row.h * 1.3f;
@@ -265,10 +405,17 @@ public final class HqScreen extends Screen {
             g.text(state, row.x + row.w - u * 2, cy - row.h * 0.18f, sts, stc, Gfx.ALIGN_RIGHT, true);
             Ui.bar(g, row.x + row.w - barW - u * 2, cy + row.h * 0.12f, barW, u * 1.4f, un.condition(), un.destroyed ? Col.BAD : (un.isDamaged() ? Col.ACCENT : Col.GOOD));
         }
+        g.restore();
+        if (maxScroll > 0) {
+            float lh = listY1 - listY0, bh = lh * lh / (lh + maxScroll), by = listY0 + (lh - bh) * (scroll / maxScroll);
+            g.fillRoundRect(lx + lw + u * 0.6f, by, u * 0.8f, bh, u * 0.4f, 0x66FFFFFF);
+            if (scroll < maxScroll - 1) Ui.moreBelow(g, lx, listY1, lw, u, 0xFF17213B);
+        }
         // detail
         Unit su = selected();
-        float rx = lx + lw + u * 3, rw = w - rx - u * 3, ry = ly - u * 2;
-        Ui.panel(g, rx - u, ry, rw + u * 2, h - ry - u * 38, u * 2);
+        float rx = lx + lw + u * 3, rw = w - rx - u * 3, ry = ctrlTop();
+        float pBottom = h - u * 37.5f;
+        Ui.panel(g, rx - u, ry, rw + u * 2, pBottom - ry, u * 2);
         if (su != null) {
             UnitArt.draw(g, su, rx + u * 9, ry + u * 10, -40 + (float) Math.sin(t) * 10, Battle.PLAYER, u * 11, t, 1);
             g.text(su.name, rx + u * 19, ry + u * 5, u * 3.8f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
@@ -280,11 +427,24 @@ public final class HqScreen extends Screen {
                     "cools " + su.dissipation() + ", cap " + su.ch.heatCap, Info.alphaDamage(su) + " dmg", Info.maxRange(su) + " hexes"};
             float cw = (rw - u * 2) / 2;
             for (int i = 0; i < k.length; i++) {
-                float cx = rx + u + (i % 2) * cw, cy = ry + u * 21 + (i / 2) * u * 3.1f;
+                float cx = rx + u + (i % 2) * cw, cy = ry + u * 19.5f + (i / 2) * u * 3f;
                 g.text(k[i], cx, cy, u * 2.1f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
                 g.text(v[i], cx + cw * 0.42f, cy, u * 2.1f, Col.TEXT, Gfx.ALIGN_LEFT, true);
             }
-            Info.loadout(g, su, rx + u, ry + u * 29.5f, rw - u * 2, u * 1.9f);
+            // the loadout at a readable size; a long one scrolls inside the panel
+            loadY0 = ry + u * 28.5f;
+            loadY1 = pBottom - u * 0.8f;
+            g.save();
+            g.clipRect(rx - u, loadY0, rw + u * 2, loadY1 - loadY0);
+            float end = Info.loadout(g, su, rx + u, loadY0 + u * 1.4f - loadScroll, rw - u * 2, u * 2.25f) + loadScroll;
+            g.restore();
+            loadMax = end > loadY1 ? end - loadY1 + u * 3.2f : 0;
+            loadScroll = Math.min(loadScroll, loadMax);
+            if (loadMax > 0) {
+                float lh = loadY1 - loadY0, bh = lh * lh / (lh + loadMax), by = loadY0 + (lh - bh) * (loadScroll / loadMax);
+                g.fillRoundRect(rx + rw + u * 0.2f, by, u * 0.7f, bh, u * 0.35f, 0x66FFFFFF);
+                if (loadScroll < loadMax - 1) Ui.moreBelow(g, rx - u * 0.5f, loadY1, rw + u * 0.5f, u, Col.PANEL);
+            }
         } else {
             g.text("Select a unit", rx + rw / 2, h * 0.4f, u * 3, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
         }

@@ -58,7 +58,7 @@ public final class HelpScreen extends Screen {
             },
             {
                     "Your company carries over from battle to battle: money, units, damage and spare parts.",
-                    "At HQ, tick the units to deploy (up to the battle's limits), repair damage, and launch the next contract. Win to collect the full pay plus a bonus for what you destroyed, and salvage enemy weapons into your spare parts.",
+                    "At HQ, tick the units to deploy (up to the battle's limits), repair damage, and launch the next contract. The tabs above the roster show only mechs, vehicles, or VTOLs and infantry, and Sort orders it by name, type, value, condition or what is deployed; a long roster or loadout scrolls. Win to collect the full pay plus a bonus for what you destroyed, and salvage enemy weapons into your spare parts.",
                     "Units destroyed in a battle you win (or draw) are recovered as wrecks you can repair. Lose or withdraw and they are gone for good.",
                     "The enemy is a company too. It starts with funds like yours, is paid after every battle (more when it wins), repairs what it can afford, loses units left on a field it lost, and buys reinforcements. Beat it down and it gets poorer; let it win and it grows. HQ and the briefing show its money and roster.",
                     "To customize a unit, select it at HQ and press CUSTOMIZE. Tap any weapon mount or equipment slot to swap what's in it, and use - / + to change armor, heat sinks and ammunition, all within the unit's weight limit. Removed parts go to your spares for free reuse. The Market sells new units with factory loadouts.",
