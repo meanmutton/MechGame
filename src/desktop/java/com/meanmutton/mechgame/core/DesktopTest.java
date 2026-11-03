@@ -364,6 +364,21 @@ public final class DesktopTest {
         Unit a = b.active;
         int[] prev = new int[b.map.cols * b.map.rows];
         float[] reach = b.reach(a, prev, b.mpAvailable(a));
+        // tap an empty hex out of reach (woods if there are any on screen) for the terrain card
+        int info = -1;
+        for (int k = 0; k < reach.length; k++) {
+            int ic = k % b.map.cols, ir = k / b.map.cols;
+            float[] sp = hexToScreen(bs, ic, ir);
+            if (reach[k] < Float.MAX_VALUE || b.unitAt(ic, ir) != null || sp[0] < 40 || sp[1] < 120 || sp[0] > W * 0.6f || sp[1] > H - 60) continue;
+            if (info < 0 || b.map.terrain[k] == HexMap.HEAVY_WOODS || (b.map.terrain[k] == HexMap.LIGHT_WOODS && b.map.terrain[info] == HexMap.CLEAR)) info = k;
+        }
+        if (info >= 0) {
+            float[] sp = hexToScreen(bs, info % b.map.cols, info / b.map.cols);
+            tap(g, sp[0], sp[1]);
+            shot(g, "11b_terrain_card");
+            List<String> fx = b.map.effects(info % b.map.cols, info / b.map.cols);
+            if (fx.isEmpty()) throw new RuntimeException("terrain card has no effects");
+        }
         int best = -1;
         for (int k = 0; k < reach.length; k++) if (reach[k] < Float.MAX_VALUE && (best < 0 || k % b.map.cols > best % b.map.cols)) best = k;
         if (best >= 0) {
