@@ -245,7 +245,7 @@ public final class Battle {
         if (u.shutdown) return 0;
         int mp = u.baseMp() - u.heatPenaltyMp();
         if (u.staggered) mp = mp / 2;
-        if (u.turboOn) mp += 3;
+        if (u.turboOn) mp += Math.max(3, u.equipPower(Equip.TURBO));
         return Math.max(0, mp);
     }
 
@@ -393,18 +393,20 @@ public final class Battle {
         if (map.weather.electronicsDown) return false;
         for (Unit o : units) {
             if (o.destroyed || o.team != target.team || !o.hasEquip(Equip.ECM)) continue;
-            if (HexMap.distance(o.q, o.r, target.q, target.r) <= 2) return true;
+            if (HexMap.distance(o.q, o.r, target.q, target.r) <= o.equipPower(Equip.ECM)) return true;
         }
         return false;
     }
 
-    private boolean uplinkNear(Unit a) {
-        if (map.weather.electronicsDown) return false;
+    /** The best command uplink bonus reaching this unit (its own or a friend's within 3 hexes), or 0. */
+    private int uplinkNear(Unit a) {
+        if (map.weather.electronicsDown) return 0;
+        int best = 0;
         for (Unit o : units) {
             if (o.destroyed || o.team != a.team || !o.hasEquip(Equip.UPLINK)) continue;
-            if (HexMap.distance(o.q, o.r, a.q, a.r) <= 3) return true;
+            if (HexMap.distance(o.q, o.r, a.q, a.r) <= 3) best = Math.max(best, o.equipPower(Equip.UPLINK));
         }
-        return false;
+        return best;
     }
 
     public int losPoints(Unit a, Unit t) {
@@ -525,9 +527,10 @@ public final class Battle {
         if (a.hasEquip(Equip.TARGETING) && elecUp && w.direct()) {
             if (ecm) {
                 if (why != null) why.append(", targeting computer jammed");
-            } else chance += mod(why, 10, "targeting computer");
+            } else chance += mod(why, a.equipPower(Equip.TARGETING), "targeting computer");
         }
-        if (uplinkNear(a)) chance += mod(why, 5, "uplink");
+        int uplink = uplinkNear(a);
+        if (uplink > 0) chance += mod(why, uplink, "uplink");
         if (UnitType.isMech(a.type)) chance += mod(why, 10, "mech fire control");
         if (a.moved) {
             int pen = a.type == UnitType.VTOL || a.type == UnitType.INFANTRY || UnitType.isMech(a.type) ? -5 : -10;
@@ -551,7 +554,7 @@ public final class Battle {
         if (map.smoke[k] > 0) chance += mod(why, -25, "target in smoke");
         if (pts > 0 && !indirect) {
             int p = pts;
-            if (sensorsWork(a)) p = Math.max(0, p - 1);
+            if (sensorsWork(a)) p = Math.max(0, p - a.equipPower(Equip.SENSORS));
             if (p > 0) chance += mod(why, -10 * p, "woods in the way");
         }
         if (map.elev[map.idx(a.q, a.r)] > map.elev[k] && a.type != UnitType.VTOL) chance += mod(why, 5, "high ground");
@@ -586,8 +589,8 @@ public final class Battle {
             else if (w.family != Wpn.F_ARTILLERY && w.family != Wpn.F_MISSILE && !t.ch.exposedCrew()) m *= 0.5f;
         }
         if (w.has(Wpn.VS_AIR) && t.type == UnitType.VTOL) m *= 2f;
-        if (w.family == Wpn.F_ENERGY && t.hasEquip(Equip.REFLECTIVE)) m *= 0.75f;
-        if ((w.family == Wpn.F_MISSILE || w.family == Wpn.F_ARTILLERY) && t.hasEquip(Equip.REACTIVE)) m *= 0.75f;
+        if (w.family == Wpn.F_ENERGY && t.hasEquip(Equip.REFLECTIVE)) m *= 1f - t.equipPower(Equip.REFLECTIVE) / 100f;
+        if ((w.family == Wpn.F_MISSILE || w.family == Wpn.F_ARTILLERY) && t.hasEquip(Equip.REACTIVE)) m *= 1f - t.equipPower(Equip.REACTIVE) / 100f;
         return m;
     }
 
@@ -715,7 +718,7 @@ public final class Battle {
         int d = HexMap.distance(a.q, a.r, t.q, t.r);
         switch (w.family) {
             case Wpn.F_ENERGY: return 0.12f;
-            case Wpn.F_BALLISTIC: return w.id == Wpn.RAIL ? 0.08f : 0.08f + d * 0.035f;
+            case Wpn.F_BALLISTIC: return w.base == Wpn.RAIL ? 0.08f : 0.08f + d * 0.035f;
             case Wpn.F_MISSILE: return 0.3f + d * 0.06f;
             case Wpn.F_ARTILLERY: return 0.9f + d * 0.05f;
             case Wpn.F_MELEE: return 0.2f;
@@ -727,7 +730,7 @@ public final class Battle {
         int s;
         switch (w.family) {
             case Wpn.F_ENERGY: s = Platform.SND_LASER; break;
-            case Wpn.F_BALLISTIC: s = w.id == Wpn.RAIL ? Platform.SND_RAIL : Platform.SND_CANNON; break;
+            case Wpn.F_BALLISTIC: s = w.base == Wpn.RAIL ? Platform.SND_RAIL : Platform.SND_CANNON; break;
             case Wpn.F_MISSILE: s = Platform.SND_MISSILE; break;
             case Wpn.F_ARTILLERY: s = Platform.SND_ARTY; break;
             case Wpn.F_MELEE: s = Platform.SND_MELEE; break;
@@ -740,6 +743,7 @@ public final class Battle {
         float total = w.dmg * a.firepowerScale();
         if (w.family == Wpn.F_MISSILE && !w.has(Wpn.SEEKER)) total *= 0.4f + rnd.nextFloat() * 0.6f;
         total *= damageMultiplier(w, t);
+        if (w.has(Wpn.FLANKER) && arc != UnitType.ARC_FRONT) total *= 1.25f;   // raider weapons punish exposed flanks
         int remaining = Math.max(1, Math.round(total));
         float stagger = 0;
         while (remaining > 0 && !t.destroyed) {
@@ -987,7 +991,7 @@ public final class Battle {
         u.eqUses[s]--;
         u.turboOn = true;
         if (UnitType.isMech(u.type)) u.heat += 5;
-        log(u.name + " engages turbo (+3 MP)");
+        log(u.name + " engages turbo (+" + Math.max(3, u.equipPower(Equip.TURBO)) + " MP)");
     }
 
     boolean canTurboAi(Unit u) {
@@ -1006,13 +1010,15 @@ public final class Battle {
         int s = u.equipSlot(equipId);
         u.eqUses[s]--;
         switch (equipId) {
-            case Equip.COOLANT:
-                u.heat = Math.max(0, u.heat - 15);
-                queue(Fx.text("-15 HEAT", u, 0, 0xFF7AD8FF));
+            case Equip.COOLANT: {
+                int dump = Equip.ALL[u.equip[s]].power;
+                u.heat = Math.max(0, u.heat - dump);
+                queue(Fx.text("-" + dump + " HEAT", u, 0, 0xFF7AD8FF));
                 log(u.name + " flushes coolant");
                 break;
+            }
             case Equip.SMOKE:
-                map.smoke[map.idx(u.q, u.r)] = 2;
+                map.smoke[map.idx(u.q, u.r)] = Equip.ALL[u.equip[s]].power;
                 queue(Fx.text("SMOKE", u, 0, 0xFFDDDDDD));
                 log(u.name + " pops smoke");
                 break;
@@ -1025,7 +1031,7 @@ public final class Battle {
                     }
                 }
                 if (best >= 0) {
-                    int add = Math.min(15, missing);
+                    int add = Math.min(Equip.ALL[u.equip[s]].power, missing);
                     u.armor[best] += add;
                     queue(Fx.text("+" + add + " ARMOR", u, 0, 0xFF5BD46A));
                     log(u.name + " patches its " + UnitType.locNames(u.type)[best]);
@@ -1289,14 +1295,14 @@ public final class Battle {
                 case Wpn.F_MISSILE: f.kind = MISSILES; f.count = Math.min(8, Math.max(3, w.dmg / 2)); break;
                 case Wpn.F_ARTILLERY: f.kind = SHELL; break;
                 case Wpn.F_MELEE: f.kind = MELEE; break;
-                default: f.kind = TRACER; f.count = w.id == Wpn.CHAINGUN || w.id == Wpn.RIFLES ? 5 : (w.id == Wpn.FLAK ? 3 : 1);
+                default: f.kind = TRACER; f.count = w.base == Wpn.CHAINGUN || w.base == Wpn.RIFLES ? 5 : (w.base == Wpn.FLAK ? 3 : 1);
                     f.size = w.cls;
             }
             return f;
         }
 
         static int colorFor(Wpn w) {
-            switch (w.id) {
+            switch (w.base) {
                 case Wpn.PLASMA: return 0xFFFF7AD8;
                 case Wpn.ION_LANCE: return 0xFF7AD8FF;
                 case Wpn.LIGHT_BURST:

@@ -86,10 +86,12 @@ public final class RefitScreen extends Screen {
             int cur = un.equip[slot];
             float freeMass = un.ch.capacity - un.mass() + (cur >= 0 ? Equip.ALL[cur].mass : 0);
             for (Equip e : Equip.ALL) {
+                // what you can buy here, plus anything you already own
+                if (!c.canBuy(e) && c.armoryE[e.id] == 0 && e.id != cur) continue;
                 boolean dup = false;
-                for (int s = 0; s < un.equip.length; s++) if (s != slot && un.equip[s] == e.id) dup = true;
-                boolean ok = !dup && e.mass <= freeMass + 0.001f && (c.armoryE[e.id] > 0 || c.cash >= e.cost || e.id == cur);
-                if (un.type == UnitType.INFANTRY && e.id != Equip.SENSORS && e.id != Equip.SMOKE) continue;
+                for (int s = 0; s < un.equip.length; s++) if (s != slot && un.equip[s] >= 0 && Equip.ALL[un.equip[s]].base == e.base) dup = true;
+                boolean ok = !dup && e.mass <= freeMass + 0.001f && (c.armoryE[e.id] > 0 || (c.canBuy(e) && c.cash >= e.cost) || e.id == cur);
+                if (un.type == UnitType.INFANTRY && e.base != Equip.SENSORS && e.base != Equip.SMOKE) continue;
                 opts.add(new int[]{e.id, ok ? 1 : 0});
             }
         } else {
@@ -98,11 +100,13 @@ public final class RefitScreen extends Screen {
             float freeMass = un.ch.capacity - un.mass() + (cur != null ? cur.mass + un.bins[m] * cur.binMass : 0);
             for (Wpn wp : Wpn.ALL) {
                 if (!Wpn.canMount(wp, un.type, un.ch.mounts[m].cls)) continue;
-                boolean ok = wp.mass <= freeMass + 0.001f && (c.armoryW[wp.id] > 0 || c.cash >= wp.cost || (cur != null && cur.id == wp.id));
+                boolean mine = cur != null && cur.id == wp.id;
+                if (!c.canBuy(wp) && c.armoryW[wp.id] == 0 && !mine) continue;
+                boolean ok = wp.mass <= freeMass + 0.001f && (c.armoryW[wp.id] > 0 || (c.canBuy(wp) && c.cash >= wp.cost) || mine);
                 opts.add(new int[]{wp.id, ok ? 1 : 0});
             }
         }
-        int cols = 2;
+        int cols = opts.size() + 1 > 24 ? 3 : 2;   // three columns when spares of many makes are on hand
         int rows = (opts.size() + 1 + cols - 1) / cols;
         float cw = (pw - u * 6) / cols, ch = Math.min(u * 9, (ph - u * 14) / rows);
         Btn empty = new Btn(OPT + 999, "Empty this " + (equipMode ? "slot" : "mount"));
@@ -223,6 +227,10 @@ public final class RefitScreen extends Screen {
         if (wid >= 0) {
             Wpn nw = Wpn.ALL[wid];
             boolean owned = c.armoryW[wid] > 0;
+            if (!owned && !c.canBuy(nw)) {
+                note(nw.name + " isn't for sale here");
+                return;
+            }
             if (!owned && c.cash < nw.cost) {
                 note("Not enough money");
                 return;
@@ -248,6 +256,10 @@ public final class RefitScreen extends Screen {
         if (eid >= 0) {
             Equip ne = Equip.ALL[eid];
             boolean owned = c.armoryE[eid] > 0;
+            if (!owned && !c.canBuy(ne)) {
+                note(ne.name + " isn't for sale here");
+                return;
+            }
             if (!owned && c.cash < ne.cost) {
                 note("Not enough money");
                 return;
@@ -318,7 +330,7 @@ public final class RefitScreen extends Screen {
                 g.text(head, b.x + u * 2, b.y + b.h * 0.3f, u * 2.1f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
                 if (wp == null) g.text("(empty)", b.x + u * 2, b.y + b.h * 0.68f, u * 2.8f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, true);
                 else {
-                    g.text(wp.name, b.x + u * 2, b.y + b.h * 0.68f, u * 2.8f, Col.TEXT, Gfx.ALIGN_LEFT, true);
+                    g.text(wp.name, b.x + u * 2, b.y + b.h * 0.68f, u * 2.8f, makerColor(wp.maker, Col.TEXT), Gfx.ALIGN_LEFT, true);
                     String st = wp.dmg + " dmg  " + wp.heat + " heat  " + wp.rangeText() + "  " + fmt(wp.mass) + " t"
                             + (wp.usesAmmo() ? "  |  " + un.maxAmmo(m) + " shots (" + (1 + un.bins[m]) + " bins)" : "");
                     g.text(st, b.x + b.w - u * 1.5f, b.y + b.h * 0.68f, u * 2.1f, Col.TEXT_DIM, Gfx.ALIGN_RIGHT, false);
@@ -329,7 +341,7 @@ public final class RefitScreen extends Screen {
                 g.text("Equipment slot " + (s + 1), b.x + u * 2, b.y + b.h * 0.3f, u * 2.1f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
                 if (e < 0) g.text("(empty)", b.x + u * 2, b.y + b.h * 0.68f, u * 2.8f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, true);
                 else {
-                    g.text(Equip.ALL[e].name, b.x + u * 2, b.y + b.h * 0.68f, u * 2.8f, Col.SHIELD, Gfx.ALIGN_LEFT, true);
+                    g.text(Equip.ALL[e].name, b.x + u * 2, b.y + b.h * 0.68f, u * 2.8f, makerColor(Equip.ALL[e].maker, Col.SHIELD), Gfx.ALIGN_LEFT, true);
                     g.text(fmt(Equip.ALL[e].mass) + " t", b.x + b.w - u * 1.5f, b.y + b.h * 0.68f, u * 2.1f, Col.TEXT_DIM, Gfx.ALIGN_RIGHT, false);
                 }
             }
@@ -358,22 +370,29 @@ public final class RefitScreen extends Screen {
             int tc = b.enabled ? Col.TEXT : Col.TEXT_DIM;
             if (eq) {
                 Equip e = Equip.ALL[id];
-                g.text(e.name, tx, b.y + b.h * 0.32f, u * 2.6f, tc, Gfx.ALIGN_LEFT, true);
-                g.text(Ui.fit(g, e.desc, u * 1.9f, b.w * 0.72f), tx, b.y + b.h * 0.7f, u * 1.9f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+                g.text(Ui.fit(g, e.name, u * 2.6f, b.w * 0.62f), tx, b.y + b.h * 0.32f, u * 2.6f, makerColor(e.maker, tc), Gfx.ALIGN_LEFT, true);
+                g.text(Ui.fit(g, e.bonus != null ? e.bonus : e.desc, u * 1.9f, b.w * 0.9f), tx, b.y + b.h * 0.7f, u * 1.9f,
+                        e.bonus != null ? makerColor(e.maker, Col.TEXT_DIM) : Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
                 String price = c.armoryE[id] > 0 ? "spare x" + c.armoryE[id] : "$" + Ui.money(e.cost);
                 g.text(fmt(e.mass) + " t  " + price, b.x + b.w - u * 1.5f, b.y + b.h * 0.32f, u * 2.2f,
                         c.armoryE[id] > 0 ? Col.GOOD : Col.MONEY, Gfx.ALIGN_RIGHT, false);
             } else {
                 Wpn wp = Wpn.ALL[id];
-                g.text(wp.name + "  [" + Info.classTag(wp.cls) + "]", tx, b.y + b.h * 0.32f, u * 2.6f, tc, Gfx.ALIGN_LEFT, true);
+                g.text(Ui.fit(g, wp.name + "  [" + Info.classTag(wp.cls) + "]", u * 2.6f, b.w * 0.62f), tx, b.y + b.h * 0.32f, u * 2.6f,
+                        makerColor(wp.maker, tc), Gfx.ALIGN_LEFT, true);
                 String st = Wpn.FAMILY[wp.family] + ": " + wp.dmg + " dmg, " + wp.heat + " heat, range " + wp.rangeText()
-                        + (wp.usesAmmo() ? ", " + wp.ammo + " shots/bin" : "");
-                g.text(Ui.fit(g, st, u * 1.9f, b.w * 0.74f), tx, b.y + b.h * 0.7f, u * 1.9f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+                        + (wp.usesAmmo() ? ", " + wp.ammo + " shots/bin" : "") + (wp.bonus != null ? " · " + wp.bonus : "");
+                g.text(Ui.fit(g, st, u * 1.9f, b.w * 0.94f), tx, b.y + b.h * 0.7f, u * 1.9f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
                 String price = c.armoryW[id] > 0 ? "spare x" + c.armoryW[id] : "$" + Ui.money(wp.cost);
                 g.text(fmt(wp.mass) + " t  " + price, b.x + b.w - u * 1.5f, b.y + b.h * 0.32f, u * 2.2f,
                         c.armoryW[id] > 0 ? Col.GOOD : Col.MONEY, Gfx.ALIGN_RIGHT, false);
             }
         }
+    }
+
+    /** Faction-made items are named in their maker's color. */
+    static int makerColor(int maker, int otherwise) {
+        return maker >= 0 ? Faction.ALL[maker].color : otherwise;
     }
 
     static String fmt(float f) {

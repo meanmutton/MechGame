@@ -59,6 +59,18 @@ public final class Company {
         return c;
     }
 
+    /**
+     * Can this company buy the item new? In the campaign and quick battles only standard makes are sold; faction-made
+     * items come with faction designs and from salvage, and unique items only turn up in mercenary play.
+     */
+    public boolean canBuy(Wpn w) {
+        return !w.unique && w.maker < 0;
+    }
+
+    public boolean canBuy(Equip e) {
+        return !e.unique && e.maker < 0;
+    }
+
     /** The next campaign scenario (null in a quick battle). */
     public Scenario next() {
         return quick ? null : Scenario.get(scenario);

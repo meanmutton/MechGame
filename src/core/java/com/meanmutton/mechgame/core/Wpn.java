@@ -6,7 +6,7 @@ public final class Wpn {
     public static final String[] FAMILY = {"Energy", "Ballistic", "Missile", "Artillery", "Melee", "Infantry"};
 
     public static final int VS_INF = 1, VS_AIR = 2, AP = 4, HEAT_TARGET = 8, ION = 16, STAGGER = 32, SEEKER = 64,
-            INDIRECT = 128, MECH_ONLY = 256, INF_ONLY = 512;
+            INDIRECT = 128, MECH_ONLY = 256, INF_ONLY = 512, FLANKER = 1024;
 
     public final int id;
     public final String name;
@@ -23,9 +23,28 @@ public final class Wpn {
     public final int flags;
     public final int splash;    // artillery splash damage to adjacent hexes
     public final String desc;
+    /** The standard weapon this is a version of (its own id for standard weapons); rules check this, not the id. */
+    public final int base;
+    /** Faction that makes this version (-1 for the standard make). */
+    public final int maker;
+    /** One of a kind: only found in mercenary play. */
+    public final boolean unique;
+    /** What the maker's version does better, or null. */
+    public final String bonus;
 
     private Wpn(int id, String name, int cls, int family, int dmg, int group, int heat, int ammo, float binMass,
                 int rMin, int rShort, int rMed, int rLong, float mass, int cost, int acc, int flags, int splash, String desc) {
+        this(id, name, cls, family, dmg, group, heat, ammo, binMass, rMin, rShort, rMed, rLong, mass, cost, acc, flags, splash, desc,
+                id, -1, false, null);
+    }
+
+    private Wpn(int id, String name, int cls, int family, int dmg, int group, int heat, int ammo, float binMass,
+                int rMin, int rShort, int rMed, int rLong, float mass, int cost, int acc, int flags, int splash, String desc,
+                int base, int maker, boolean unique, String bonus) {
+        this.base = base;
+        this.maker = maker;
+        this.unique = unique;
+        this.bonus = bonus;
         this.id = id;
         this.name = name;
         this.cls = cls;
@@ -73,7 +92,7 @@ public final class Wpn {
             SEEKERS = 19, MORTAR = 20, HOWITZER = 21, SIEGE_HOWITZER = 22, VIBRO_BLADE = 23, ARC_SWORD = 24,
             BATTLE_AXE = 25, GREAT_AXE = 26, HAMMER = 27, RIFLES = 28, SATCHELS = 29, AT_TEAM = 30;
 
-    public static final Wpn[] ALL = {
+    private static final Wpn[] BASE = {
             new Wpn(LIGHT_LASER, "Light Laser", 1, F_ENERGY, 4, 4, 2, 0, 0, 0, 2, 4, 6, 1f, 40, 0, 0, 0,
                     "Cheap, light, reliable. Never runs dry."),
             new Wpn(LIGHT_BURST, "Light Burst Laser", 1, F_ENERGY, 4, 4, 3, 0, 0, 0, 1, 2, 3, 1f, 55, 15, 0, 0,
@@ -138,12 +157,93 @@ public final class Wpn {
                     "Shoulder-launched anti-tank missiles. Infantry only."),
     };
 
+    /**
+     * Every weapon, indexed by id: the standard ones (ids 0-30), then each faction's versions of the weapons in its
+     * specialty, then the unique weapons. Ids are saved: only ever add at the end.
+     */
+    public static final Wpn[] ALL = build();
+
+    private static java.util.List<Wpn> list;
+
+    private static Wpn[] build() {
+        list = new java.util.ArrayList<Wpn>(java.util.Arrays.asList(BASE));
+        // Helion: energy weapons that aim truer and run cooler
+        for (int b : new int[]{LIGHT_LASER, LIGHT_BURST, LASER, BURST_LASER, HEAVY_LASER, PLASMA, ION_LANCE})
+            make(Faction.HELION, b, 0, -1, 1f, 5, 0, 0, "+5% to hit and 1 less heat");
+        // Vardan: harder-hitting cannons
+        for (int b : new int[]{LIGHT_CANNON, BATTLE_CANNON, SIEGE_CANNON, RAIL})
+            make(Faction.VARDAN, b, tenth(b), 0, 1f, 0, 0, 0, "+10% damage");
+        // Kestrel: light weapons that weigh a quarter less
+        for (int b : new int[]{LIGHT_LASER, LIGHT_BURST, LIGHT_ROCKETS, LIGHT_VOLLEY, CHAINGUN})
+            make(Faction.KESTREL, b, 0, 0, 0.75f, 0, 0, 0, "25% lighter");
+        // Ashfall: harder-hitting missiles, truer artillery
+        for (int b : new int[]{LIGHT_ROCKETS, ROCKETS, HEAVY_ROCKETS, LIGHT_VOLLEY, VOLLEY, HEAVY_VOLLEY, SEEKERS})
+            make(Faction.ASHFALL, b, tenth(b), 0, 1f, 0, 0, 0, "+10% damage");
+        for (int b : new int[]{MORTAR, HOWITZER, SIEGE_HOWITZER})
+            make(Faction.ASHFALL, b, 0, 0, 1f, 5, 0, 0, "+5% to hit");
+        // Thornwall: heavier blades and charges
+        for (int b : new int[]{VIBRO_BLADE, ARC_SWORD, BATTLE_AXE, GREAT_AXE, HAMMER, SATCHELS, AT_TEAM})
+            make(Faction.THORNWALL, b, BASE[b].family == F_MELEE ? 2 : 1, 0, 1f, 0, 0, 0, BASE[b].family == F_MELEE ? "+2 damage" : "+1 damage");
+        // Ironroot: rugged guns with deep magazines, cheaper to buy
+        for (int b : new int[]{CHAINGUN, LIGHT_CANNON, BATTLE_CANNON, ROCKETS})
+            make(Faction.IRONROOT, b, 0, 0, 1f, 0, BASE[b].ammo / 2, 0, "+50% ammunition per bin, 10% cheaper");
+        // Obsidian: raider weapons that punish exposed flanks
+        for (int b : new int[]{LIGHT_BURST, BURST_LASER, LIGHT_ROCKETS, SEEKERS})
+            make(Faction.OBSIDIAN, b, 0, 0, 1f, 0, 0, FLANKER, "+25% damage on side and rear hits");
+        // unique weapons: one of a kind, found only in mercenary play
+        unique(Faction.HELION, "Sunlance", 3, F_ENERGY, 16, 16, 9, 0, 0, 0, 3, 7, 12, 6f, 600, 10, 0, 0,
+                "A prototype heavy laser with a focusing array: long reach, high accuracy, a lot of heat.", HEAVY_LASER);
+        unique(Faction.VARDAN, "Hegemon Rail", 3, F_BALLISTIC, 20, 20, 2, 5, 1.5f, 0, 4, 9, 15, 12f, 700, 5, AP, 0,
+                "A super-heavy rail driver that punches through anything at extreme range.", RAIL);
+        unique(Faction.ASHFALL, "Hellfire Rack", 3, F_MISSILE, 26, 2, 6, 4, 1f, 0, 1, 4, 7, 5f, 520, 0, 0, 0,
+                "A launcher that empties a wall of rockets into one target.", HEAVY_ROCKETS);
+        unique(Faction.THORNWALL, "Siegebreaker", 3, F_MELEE, 26, 26, 1, 0, 0, 0, 1, 1, 1, 7f, 520, 0, MECH_ONLY | STAGGER, 0,
+                "A siege ram on a mech's arm. Staggers whatever it hits.", HAMMER);
+        Wpn[] out = list.toArray(new Wpn[0]);
+        list = null;
+        return out;
+    }
+
+    /** A tenth of a weapon's damage, at least 1. */
+    private static int tenth(int b) {
+        return Math.max(1, Math.round(BASE[b].dmg * 0.1f));
+    }
+
+    private static void make(int maker, int b, int dDmg, int dHeat, float massMul, int dAcc, int dAmmo, int extraFlags, String bonus) {
+        Wpn w = BASE[b];
+        Faction f = Faction.ALL[maker];
+        int cost = Math.round(w.cost * (maker == Faction.IRONROOT ? 0.9f : 1.15f) / 5f) * 5;
+        float mass = Math.round(w.mass * massMul * 4f) / 4f;
+        list.add(new Wpn(list.size(), f.shortName + " " + w.name, w.cls, w.family, w.dmg + dDmg, w.group == w.dmg ? w.dmg + dDmg : w.group,
+                Math.max(0, w.heat + dHeat), w.ammo + dAmmo, w.binMass, w.rMin, w.rShort, w.rMed, w.rLong, mass, cost, w.acc + dAcc,
+                w.flags | extraFlags, w.splash, w.desc + " " + f.name + " make: " + bonus + ".", b, maker, false, bonus));
+    }
+
+    private static void unique(int maker, String name, int cls, int family, int dmg, int group, int heat, int ammo, float binMass,
+                               int rMin, int rShort, int rMed, int rLong, float mass, int cost, int acc, int flags, int splash,
+                               String desc, int base) {
+        list.add(new Wpn(list.size(), name, cls, family, dmg, group, heat, ammo, binMass, rMin, rShort, rMed, rLong, mass, cost, acc,
+                flags, splash, desc + " Unique (" + Faction.ALL[maker].name + ").", base, maker, true, "unique"));
+    }
+
+    /** The id of a faction's version of a standard weapon, or the standard weapon if that faction doesn't make one. */
+    public static int made(int maker, int base) {
+        for (Wpn w : ALL) if (w.base == base && w.maker == maker && !w.unique) return w.id;
+        return base;
+    }
+
+    /** The id of the weapon with this name (used for uniques), or -1. */
+    public static int named(String name) {
+        for (Wpn w : ALL) if (w.name.equals(name)) return w.id;
+        return -1;
+    }
+
     public static boolean canMount(Wpn w, int unitType, int mountClass) {
         if (w.cls > mountClass) return false;
         if (w.has(MECH_ONLY) && !UnitType.isMech(unitType)) return false;
         if (w.has(INF_ONLY) && unitType != UnitType.INFANTRY) return false;
         // infantry carry their own weapons, plus the man-portable field mortar
-        if (unitType == UnitType.INFANTRY && !w.has(INF_ONLY) && w.id != MORTAR) return false;
+        if (unitType == UnitType.INFANTRY && !w.has(INF_ONLY) && w.base != MORTAR) return false;
         if (unitType == UnitType.VTOL && w.family == F_ARTILLERY) return false;
         return true;
     }

@@ -118,7 +118,8 @@ public final class BattleScreen extends Screen {
             float ew = (pw - u * (n - 1)) / n;
             for (int i = 0; i < n; i++) {
                 int id = eqIds.get(i);
-                String label = id == Equip.TURBO ? "Turbo +3 MP" : (id == Equip.SMOKE ? "Smoke" : (id == Equip.COOLANT ? "Coolant -15 heat" : "Repair Kit"));
+                int pw2 = su.equipPower(id);
+                String label = id == Equip.TURBO ? "Turbo +" + pw2 + " MP" : (id == Equip.SMOKE ? "Smoke" : (id == Equip.COOLANT ? "Coolant -" + pw2 + " heat" : "Repair Kit"));
                 Btn e = add(new Btn(EQ + id, label).set(x0 + i * (ew + u), by0, ew, u * 9f));
                 e.color = 0xFF2A4A5A;
                 e.tag = id;

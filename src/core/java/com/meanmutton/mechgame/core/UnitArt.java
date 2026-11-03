@@ -296,18 +296,18 @@ public final class UnitArt {
 
     private static void drawArmWeapon(Gfx g, Wpn wp, float ay) {
         if (wp.isMelee()) {
-            int blade = wp.id == Wpn.HAMMER ? 0xFFB0B8C8 : 0xFFE0E8F0;
-            if (wp.id == Wpn.BATTLE_AXE || wp.id == Wpn.GREAT_AXE) {
+            int blade = wp.base == Wpn.HAMMER ? 0xFFB0B8C8 : 0xFFE0E8F0;
+            if (wp.base == Wpn.BATTLE_AXE || wp.base == Wpn.GREAT_AXE) {
                 g.line(0.25f, ay, 0.78f, ay, 0.06f, 0xFF6A5A4A);
-                float sz = wp.id == Wpn.GREAT_AXE ? 0.24f : 0.18f;
+                float sz = wp.base == Wpn.GREAT_AXE ? 0.24f : 0.18f;
                 poly(g, blade, 0.6f, ay, 0.8f, ay - sz, 0.88f, ay + sz);
-            } else if (wp.id == Wpn.HAMMER) {
+            } else if (wp.base == Wpn.HAMMER) {
                 g.line(0.25f, ay, 0.7f, ay, 0.06f, 0xFF6A5A4A);
                 g.fillRoundRect(0.62f, ay - 0.15f, 0.2f, 0.3f, 0.04f, blade);
             } else {
                 float len = wp.cls >= 2 ? 0.95f : 0.7f;
                 g.line(0.28f, ay, len, ay, 0.07f, blade);
-                g.line(0.28f, ay, len, ay, 0.025f, wp.id == Wpn.ARC_SWORD ? 0xFF7AD8FF : 0xFFC0C8D0);
+                g.line(0.28f, ay, len, ay, 0.025f, wp.base == Wpn.ARC_SWORD ? 0xFF7AD8FF : 0xFFC0C8D0);
             }
         } else if (wp.family == Wpn.F_MISSILE) {
             g.fillRoundRect(0.06f, ay - 0.14f, 0.34f, 0.28f, 0.04f, 0xFF3A3E46);
@@ -317,12 +317,12 @@ public final class UnitArt {
         } else if (wp.family == Wpn.F_ENERGY) {
             float len = 0.42f + wp.cls * 0.12f;
             g.line(0.25f, ay, 0.25f + len, ay, 0.05f + wp.cls * 0.02f, 0xFF2A2E36);
-            g.fillCircle(0.25f + len, ay, 0.03f + wp.cls * 0.012f, wp.id == Wpn.PLASMA ? 0xFFFF7AD8 : 0xFFFF6A5A);
+            g.fillCircle(0.25f + len, ay, 0.03f + wp.cls * 0.012f, wp.base == Wpn.PLASMA ? 0xFFFF7AD8 : 0xFFFF6A5A);
         } else {
             float len = 0.42f + wp.cls * 0.14f;
             g.line(0.25f, ay, 0.25f + len, ay, 0.07f + wp.cls * 0.025f, 0xFF2A2E36);
-            if (wp.id == Wpn.RAIL) g.line(0.3f, ay, 0.25f + len, ay, 0.025f, 0xFF9AC8FF);
-            if (wp.id == Wpn.CHAINGUN || wp.id == Wpn.FLAK) g.fillCircle(0.25f + len * 0.3f, ay, 0.07f, 0xFF4A4E56);
+            if (wp.base == Wpn.RAIL) g.line(0.3f, ay, 0.25f + len, ay, 0.025f, 0xFF9AC8FF);
+            if (wp.base == Wpn.CHAINGUN || wp.base == Wpn.FLAK) g.fillCircle(0.25f + len * 0.3f, ay, 0.07f, 0xFF4A4E56);
         }
     }
 
@@ -611,7 +611,7 @@ public final class UnitArt {
         switch (wp.family) {
             case Wpn.F_ENERGY:
                 g.line(x, y, x + len, y, 0.05f + wp.cls * 0.018f, 0xFF2A2E36);
-                g.fillCircle(x + len, y, 0.03f + wp.cls * 0.012f, wp.id == Wpn.PLASMA ? 0xFFFF7AD8 : (wp.id == Wpn.ION_LANCE ? 0xFF7AD8FF : 0xFFFF6A5A));
+                g.fillCircle(x + len, y, 0.03f + wp.cls * 0.012f, wp.base == Wpn.PLASMA ? 0xFFFF7AD8 : (wp.base == Wpn.ION_LANCE ? 0xFF7AD8FF : 0xFFFF6A5A));
                 break;
             case Wpn.F_MISSILE:
                 g.fillRoundRect(x - 0.06f, y - 0.1f - wp.cls * 0.02f, 0.26f + wp.cls * 0.04f, 0.2f + wp.cls * 0.04f, 0.04f, 0xFF3A3E46);
@@ -623,8 +623,8 @@ public final class UnitArt {
                 break;
             default:
                 g.line(x, y, x + len * (0.8f + wp.cls * 0.15f), y, 0.06f + wp.cls * 0.03f, 0xFF2A2E36);
-                if (wp.id == Wpn.RAIL) g.line(x + 0.05f, y, x + len * 1.25f, y, 0.025f, 0xFF9AC8FF);
-                if (wp.id == Wpn.CHAINGUN || wp.id == Wpn.FLAK) g.fillCircle(x + len * 0.25f, y, 0.06f, 0xFF4A4E56);
+                if (wp.base == Wpn.RAIL) g.line(x + 0.05f, y, x + len * 1.25f, y, 0.025f, 0xFF9AC8FF);
+                if (wp.base == Wpn.CHAINGUN || wp.base == Wpn.FLAK) g.fillCircle(x + len * 0.25f, y, 0.06f, 0xFF4A4E56);
         }
     }
 

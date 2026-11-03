@@ -32,6 +32,8 @@ public final class Chassis {
     public int factions = Faction.ALL_MASK;
     /** Parts the artwork is drawn from (UnitArt); null for the original designs, which have hand-drawn looks. */
     public int[] look;
+    /** A one-of-a-kind prototype: only found in mercenary play, never sold in the campaign or quick battles. */
+    public boolean unique;
 
     Chassis(int id, String name, int type, int role, int baseCost, float capacity, int maxArmor, int infra, int mp,
                     int sinks, int heatCap, int maxExtraSinks, int equipSlots, String mounts, int stockArmor, int stockSinks,
@@ -248,7 +250,7 @@ public final class Chassis {
         return out;
     }
 
-    /** Designs that can be bought (everything except emplacements). */
+    /** Designs that can be bought in the campaign and quick battles (everything except emplacements and uniques). */
     public static final Chassis[] SHOP = shop();
 
     private static Chassis[] shop() {
@@ -261,7 +263,7 @@ public final class Chassis {
     }
 
     public boolean buyable() {
-        return type != UnitType.EMPLACEMENT;
+        return type != UnitType.EMPLACEMENT && !unique;
     }
 
     public boolean fixed() {

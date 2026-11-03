@@ -125,6 +125,34 @@ public final class DesktopTest {
         }
         if (bad > 0) throw new RuntimeException(bad + " invalid designs");
         System.out.println("all " + Chassis.ALL.length + " designs valid");
+        // faction-made and unique items: names are unique, versions match their standard item, uniques are never sold here
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        int[] made = new int[Faction.COUNT];
+        int uniques = 0;
+        Company shop = new Company();
+        for (Wpn w : Wpn.ALL) {
+            if (!names.add(w.name)) throw new RuntimeException("duplicate weapon name " + w.name);
+            Wpn b = Wpn.ALL[w.base];
+            if (w.cls != b.cls || w.family != b.family) throw new RuntimeException(w.name + " differs in class or family from " + b.name);
+            if (w.maker >= 0 && !w.unique) made[w.maker]++;
+            if (w.unique) uniques++;
+            if ((w.unique || w.maker >= 0) && shop.canBuy(w)) throw new RuntimeException(w.name + " for sale in the campaign");
+        }
+        for (Equip e : Equip.ALL) {
+            if (!names.add(e.name)) throw new RuntimeException("duplicate equipment name " + e.name);
+            if (e.maker >= 0 && !e.unique) made[e.maker]++;
+            if (e.unique) uniques++;
+            if ((e.unique || e.maker >= 0) && shop.canBuy(e)) throw new RuntimeException(e.name + " for sale in the campaign");
+        }
+        int protos = 0;
+        for (Chassis c : Chassis.ALL) if (c.unique) {
+            protos++;
+            for (Chassis s2 : Chassis.SHOP) if (s2 == c) throw new RuntimeException(c.name + " is unique but on sale");
+        }
+        StringBuilder mb = new StringBuilder();
+        for (Faction f : Faction.ALL) mb.append(mb.length() > 0 ? ", " : "").append(f.shortName).append(' ').append(made[f.id]);
+        System.out.println(Wpn.ALL.length + " weapons and " + Equip.ALL.length + " equipment; faction-made: " + mb + "; "
+                + uniques + " unique items, " + protos + " unique designs");
     }
 
     static void maps(File dir) throws Exception {
@@ -263,6 +291,19 @@ public final class DesktopTest {
         click(g, 400);
         shot(g, "08_refit_equipment_chooser");
         click(g, 499);
+        // a faction design: its own makes of weapons and equipment, shown with their bonuses
+        {
+            Unit corona = new Unit(Chassis.ALL[37]);
+            c.roster.add(corona);
+            c.armoryW[Wpn.made(Faction.VARDAN, Wpn.BATTLE_CANNON)]++;   // a salvaged spare
+            g.setScreen(new RefitScreen(g, corona));
+            tick(g, 2);
+            shot(g, "08b_refit_faction_design");
+            click(g, 100);
+            shot(g, "08c_refit_faction_weapons");
+            click(g, 499);
+            c.roster.remove(corona);
+        }
         g.toHq();
         g.prepareMission();
         tick(g, 2);
