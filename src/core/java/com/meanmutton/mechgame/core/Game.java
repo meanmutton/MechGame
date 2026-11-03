@@ -26,7 +26,8 @@ public final class Game {
         this.platform = platform;
         this.rng = new Random(seed);
         this.settings = Settings.parse(platform.load("settings"));
-        this.screen = new MenuScreen(this);
+        String crash = platform.load(CrashReport.KEY);
+        this.screen = crash != null && crash.length() > 0 ? new CrashScreen(this, crash) : new MenuScreen(this);
     }
 
     public Screen screen() {
@@ -34,6 +35,7 @@ public final class Game {
     }
 
     public void setScreen(Screen s) {
+        if (s != screen) crumb("screen " + s.getClass().getSimpleName());
         screen = s;
         s.resize(w, h);
     }
@@ -58,7 +60,7 @@ public final class Game {
         }
     }
 
-    public void tick(float dt, int width, int height) {
+    public synchronized void tick(float dt, int width, int height) {
         w = Math.max(1, width);
         h = Math.max(1, height);
         screen.resize(w, h);
@@ -94,9 +96,55 @@ public final class Game {
         screen.update(dt);
     }
 
-    public void render(Gfx g) {
+    public synchronized void render(Gfx g) {
         screen.resize(w, h);
         screen.render(g);
+    }
+
+    // ---------------- crash reports ----------------
+
+    private final String[] crumbs = new String[30];
+    private int crumbCount;
+
+    /** Remembers a recent action for crash reports (screen changes, button taps). */
+    public void crumb(String s) {
+        synchronized (crumbs) {
+            crumbs[crumbCount % crumbs.length] = String.format(java.util.Locale.US, "%7.1fs %s", time, s);
+            crumbCount++;
+        }
+    }
+
+    public java.util.List<String> crumbs() {
+        java.util.List<String> out = new ArrayList<String>();
+        synchronized (crumbs) {
+            int n = Math.min(crumbCount, crumbs.length);
+            for (int i = crumbCount - n; i < crumbCount; i++) out.add(crumbs[i % crumbs.length]);
+        }
+        return out;
+    }
+
+    /** Called by the host when an uncaught error is about to end the app: saves a report for the next launch. */
+    public void recordCrash(Thread thread, Throwable error) {
+        String r;
+        try {
+            r = CrashReport.build(this, thread, error);
+        } catch (Throwable t) {
+            java.io.StringWriter sw = new java.io.StringWriter();
+            error.printStackTrace(new java.io.PrintWriter(sw));
+            r = "Hexfront crash report\n\n" + sw;
+        }
+        platform.saveNow(CrashReport.KEY, r);
+    }
+
+    /** Called by the host's watchdog when a thread has been stuck for seconds: saves a report for the next launch. */
+    public void recordFreeze(String what, java.util.Map<Thread, StackTraceElement[]> stacks) {
+        String r;
+        try {
+            r = CrashReport.freeze(this, what, stacks);
+        } catch (Throwable t) {
+            r = "Hexfront freeze report\n" + what;
+        }
+        platform.saveNow(CrashReport.KEY, r);
     }
 
     public void sfx(int id, float vol) {

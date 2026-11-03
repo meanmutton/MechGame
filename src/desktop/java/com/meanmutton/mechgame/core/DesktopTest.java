@@ -21,6 +21,7 @@ import java.util.Random;
  *   icons <resdir>  launcher icons
  *   campaign <n>    play n campaign missions computer-vs-computer (scenarios, front, rival, saves)
  *   odds            how often each scenario comes up, and how long campaigns run
+ *   monkey <seeds> [steps]  random taps, drags and back presses through every screen, looking for crashes
  *   resume          battles saved mid-fight and resumed after a restart, in a campaign and a quick battle
  */
 public final class DesktopTest {
@@ -31,6 +32,10 @@ public final class DesktopTest {
         public void save(String key, String value) { store.put(key, value); }
         public void promptText(String title, String initial, TextCallback cb) { cb.done(initial + " II"); }
         public void exit() {}
+        public void saveNow(String key, String value) { store.put(key, value); }
+        String shared;
+        public void share(String subject, String text) { shared = text; }
+        public String buildInfo() { return "desktop harness"; }
     }
 
     static int W = 2400, H = 1080;
@@ -49,6 +54,8 @@ public final class DesktopTest {
         else if (mode.equals("gallery")) gallery(new File(args[1]));
         else if (mode.equals("campaign")) campaign(Integer.parseInt(args[1]));
         else if (mode.equals("resume")) resume();
+        else if (mode.equals("monkey")) monkey(Integer.parseInt(args[1]), args.length > 2 ? Integer.parseInt(args[2]) : 30000, false);
+        else if (mode.equals("monkey-threads")) monkey(Integer.parseInt(args[1]), args.length > 2 ? Integer.parseInt(args[2]) : 30000, true);
         else if (mode.equals("odds")) {
             System.out.print("attacker/defender resources by battle:");
             for (int b = 0; b <= 24; b += 2) System.out.printf(" %d: %.2f%s", b, Scenario.attackerRatio(b),
@@ -427,6 +434,42 @@ public final class DesktopTest {
             shot(g, "47_help_scenarios");
             click(g, 3);
             shot(g, "48_help_time_and_money");
+        }
+        // a crash report: saved when the game dies, shown on the next launch, shared or closed
+        {
+            g.prepareMission();
+            tick(g, 2);
+            click(g, 2);   // begin battle
+            tick(g, 5);
+            try {
+                Object o = null;
+                o.toString();
+            } catch (NullPointerException e) {
+                g.recordCrash(Thread.currentThread(), e);
+            }
+            Game g2 = new Game(fp, 5);
+            tick(g2, 2);
+            if (!(g2.screen() instanceof CrashScreen)) throw new RuntimeException("crash report not shown at launch");
+            shot(g2, "50_crash_report");
+            click(g2, 1);   // share
+            if (fp.shared == null || !fp.shared.contains("NullPointerException") || !fp.shared.contains("Battle: round"))
+                throw new RuntimeException("crash report not shared in full");
+            click(g2, 2);   // close
+            tick(g2, 1);
+            if (!(g2.screen() instanceof MenuScreen) || new Game(fp, 6).screen() instanceof CrashScreen)
+                throw new RuntimeException("crash report not cleared");
+            System.out.println("crash report OK (" + fp.shared.length() + " chars)");
+            // a freeze report, as the phone's watchdog saves it
+            g2.recordFreeze("The game's drawing thread made no progress for 6 s.", Thread.getAllStackTraces());
+            Game g3 = new Game(fp, 7);
+            tick(g3, 2);
+            if (!(g3.screen() instanceof CrashScreen)) throw new RuntimeException("freeze report not shown at launch");
+            shot(g3, "51_freeze_report");
+            click(g3, 1);
+            if (!fp.shared.startsWith("Hexfront freeze report") || !fp.shared.contains("Thread \"main\""))
+                throw new RuntimeException("freeze report incomplete");
+            click(g3, 2);
+            System.out.println("freeze report OK (" + fp.shared.length() + " chars)");
         }
         // weather variety on a smaller screen
         W = 1600;
@@ -848,6 +891,83 @@ public final class DesktopTest {
             System.out.println((mode == 0 ? "campaign" : "quick battle") + ": saved and resumed at round " + b.round
                     + " (save " + saved.length() + " chars), mid-activation resume OK, finished " + res[b2.result]);
         }
+    }
+
+    /**
+     * Plays the game with random input: mostly taps on buttons that are showing, plus taps and drags anywhere
+     * (the map, lists) and the back key, with time passing in between. Any exception stops the run and prints a
+     * crash report with the steps that led to it. Every few thousand steps the "app" is restarted on the same
+     * saved data, to exercise resuming.
+     */
+    static volatile Throwable threadCrash;
+    static volatile Thread threadCrashed;
+
+    static void monkey(int seeds, int steps, boolean threads) throws Exception {
+        int crashes = 0;
+        // errors on the computer's planning thread, as the phone's crash handler would see them
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            public void uncaughtException(Thread t, Throwable e) {
+                threadCrashed = t;
+                threadCrash = e;
+            }
+        });
+        for (int seed = 1; seed <= seeds; seed++) {
+            Random r = new Random(seed);
+            FakePlatform fp = new FakePlatform();
+            Game g = new Game(fp, seed);
+            g.headless = !threads;   // with threads, the computer plans on its own thread as on the phone
+            int battles = 0, restarts = 0;
+            Screen last = null;
+            try {
+                for (int i = 0; i < steps; i++) {
+                    if (g.screen() != last && g.screen() instanceof BattleScreen) battles++;
+                    last = g.screen();
+                    int roll = r.nextInt(100);
+                    List<Btn> bs = new ArrayList<Btn>();
+                    for (Btn b : buttonsOf(g)) if (b.visible && b.enabled) bs.add(b);
+                    if (roll < 62 && !bs.isEmpty()) {
+                        Btn b = bs.get(r.nextInt(bs.size()));
+                        tap(g, b.x + r.nextFloat() * b.w, b.y + r.nextFloat() * b.h);
+                    } else if (roll < 82) {
+                        tap(g, r.nextFloat() * W, r.nextFloat() * H);
+                    } else if (roll < 90) {
+                        float x = r.nextFloat() * W, y = r.nextFloat() * H;
+                        g.touch(Game.TOUCH_DOWN, 0, x, y);
+                        for (int k = 1; k <= 6; k++) g.touch(Game.TOUCH_MOVE, 0, x + k * (r.nextFloat() - 0.5f) * 80, y + k * (r.nextFloat() - 0.5f) * 80);
+                        g.touch(Game.TOUCH_UP, 0, x, y);
+                        tick(g, 1);
+                    } else if (roll < 92) {
+                        g.touch(Game.BACK, 0, 0, 0);
+                        tick(g, 1);
+                    } else if (roll < 93 && i > 0) {
+                        g = new Game(fp, seed * 1000 + i);   // the app is closed and opened again
+                        g.headless = !threads;
+                        restarts++;
+                    } else {
+                        // let time pass; in battle, sometimes long enough for the computer to play
+                        int n = g.screen() instanceof BattleScreen ? 20 + r.nextInt(400) : 1 + r.nextInt(5);
+                        for (int k = 0; k < n; k++) {
+                            tick(g, 1);
+                            if (threads && k % 10 == 0) Thread.sleep(1);
+                        }
+                    }
+                    if (threadCrash != null) throw threadCrash;
+                    if (i % 500 == 0) {   // render every screen now and then, as the phone does every frame
+                        BufferedImage img = new BufferedImage(W / 4, H / 4, BufferedImage.TYPE_INT_ARGB);
+                        AwtGfx gfx = new AwtGfx(img);
+                        g.render(gfx);
+                        gfx.dispose();
+                    }
+                }
+                System.out.println("seed " + seed + ": " + steps + " steps, " + battles + " battles entered, " + restarts + " restarts, no crash");
+            } catch (Throwable e) {
+                crashes++;
+                System.out.println("seed " + seed + ": CRASH");
+                System.out.println(CrashReport.build(g, e == threadCrash ? threadCrashed : Thread.currentThread(), e));
+                threadCrash = null;
+            }
+        }
+        System.out.println(crashes == 0 ? "monkey: no crashes" : "monkey: " + crashes + " crash(es)");
     }
 
     /** Every design side by side, in both team colors, to check they are all distinct. */
