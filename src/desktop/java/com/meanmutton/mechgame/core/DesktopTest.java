@@ -291,6 +291,32 @@ public final class DesktopTest {
             shot(g, "04d_market_faction");
             for (int k = 0; k < Faction.COUNT - 1; k++) click(g, 3);   // back to any faction
             click(g, 10);   // all
+            // sorting and filters: most expensive first, front-line only, then only what you can afford
+            click(g, 4);
+            click(g, 4);   // Price: high
+            click(g, 5);
+            click(g, 5);   // Front-line
+            tick(g, 2);
+            int last = Integer.MAX_VALUE, n = 0;
+            for (Btn b : buttonsOf(g)) {
+                if (b.id < 100) continue;
+                Chassis ch = Chassis.ALL[b.id - 100];
+                int v = new Unit(ch).value();
+                if (v > last) throw new RuntimeException("market not sorted by price");
+                if (ch.role != 1) throw new RuntimeException("role filter shows " + ch.name);
+                last = v;
+                n++;
+            }
+            if (n == 0) throw new RuntimeException("role filter shows nothing");
+            shot(g, "04e_market_sorted_filtered");
+            click(g, 6);   // affordable only
+            for (Btn b : buttonsOf(g)) if (b.id >= 100 && new Unit(Chassis.ALL[b.id - 100]).value() > c.cash)
+                throw new RuntimeException("affordable filter shows " + Chassis.ALL[b.id - 100].name);
+            click(g, 6);
+            for (int k = 0; k < Chassis.ROLES.length - 1; k++) click(g, 5);   // back to any role
+            for (int k = 0; k < MarketScreen.SORTS.length - 2; k++) click(g, 4);   // back to catalog order
+            if (!find(g, 4).label.endsWith(MarketScreen.SORTS[0]) || !find(g, 5).label.equals("Any role")) throw new RuntimeException("filters did not reset");
+            System.out.println("market sort and filters OK (" + n + " front-line designs)");
         }
         click(g, 11);
         click(g, 100 + 29);
@@ -317,6 +343,43 @@ public final class DesktopTest {
             click(g, 100);
             shot(g, "08c_refit_faction_weapons");
             click(g, 499);
+            // a big pile of spares: the chooser scrolls at full size, and filters and sorts
+            int[] saved = c.armoryW.clone();
+            for (Wpn wp : Wpn.ALL) if (wp.maker >= 0 && !wp.unique) c.armoryW[wp.id]++;
+            click(g, 100);
+            List<Btn> rows = new ArrayList<Btn>();
+            for (Btn b : buttonsOf(g)) if (b.id > 500 && b.id < 1499) rows.add(b);
+            Btn lastRow = rows.get(rows.size() - 1);
+            if (lastRow.visible) throw new RuntimeException("expected the chooser to need scrolling (" + rows.size() + " items)");
+            if (rows.get(0).h < 60) throw new RuntimeException("chooser rows shrank to " + rows.get(0).h);
+            float y0 = rows.get(0).y;
+            g.touch(Game.TOUCH_DOWN, 0, rows.get(0).x + 20, rows.get(0).y + 20);
+            for (int k = 1; k <= 10; k++) g.touch(Game.TOUCH_MOVE, 0, rows.get(0).x + 20, rows.get(0).y + 20 - k * 60);
+            g.touch(Game.TOUCH_UP, 0, rows.get(0).x + 20, rows.get(0).y + 20 - 600);
+            tick(g, 2);
+            if (find(g, rows.get(0).id).y >= y0) throw new RuntimeException("chooser did not scroll");
+            if (!(g.screen() instanceof RefitScreen)) throw new RuntimeException("scrolling picked an item");
+            shot(g, "08d_refit_chooser_scrolled");
+            click(g, 8);
+            click(g, 8);
+            click(g, 8);   // faction makes only
+            click(g, 7);
+            click(g, 7);   // sort: damage
+            tick(g, 2);
+            int lastDmg = Integer.MAX_VALUE;
+            for (Btn b : buttonsOf(g)) {
+                if (b.id <= 500 || b.id >= 1499) continue;
+                Wpn wp = Wpn.ALL[b.id - 500];
+                if (wp.maker < 0 && corona.weapon[0] != wp.id) throw new RuntimeException("faction filter shows " + wp.name);
+                if (wp.dmg > lastDmg && corona.weapon[0] != wp.id) throw new RuntimeException("chooser not sorted by damage");
+                lastDmg = wp.dmg;
+            }
+            shot(g, "08e_refit_chooser_filtered");
+            click(g, 8);   // back to all makes
+            for (int k = 0; k < RefitScreen.W_SORTS.length - 2; k++) click(g, 7);   // back to catalog order
+            click(g, 499);
+            System.arraycopy(saved, 0, c.armoryW, 0, saved.length);
+            System.out.println("refit chooser scroll, filter and sort OK (" + rows.size() + " items)");
             c.roster.remove(corona);
         }
         g.toHq();

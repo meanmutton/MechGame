@@ -9,7 +9,17 @@ import java.util.List;
  */
 public final class RefitScreen extends Screen {
     private static final int DONE = 1, ARM_DN = 2, ARM_UP = 3, SINK_DN = 4, SINK_UP = 5, REPAIR = 6,
-            MOUNT = 100, BIN_DN = 200, BIN_UP = 300, SLOT = 400, OPT = 500, CLOSE = 499;
+            MOUNT = 100, BIN_DN = 200, BIN_UP = 300, SLOT = 400, OPT = 500, CLOSE = 499, C_SORT = 7, C_SHOW = 8, C_FITS = 9;
+    static final String[] W_SORTS = {"Catalog", "Name", "Damage", "Range", "Lightest", "Cheapest"};
+    static final String[] E_SORTS = {"Catalog", "Name", "Lightest", "Cheapest"};
+    static final String[] SHOWS = {"All makes", "Spares only", "Standard only", "Faction makes"};
+    // the chooser's sort and filters stay as you left them while the game runs
+    private static int cSort, cShow;
+    private static boolean cFits;
+    private float cScroll, cMaxScroll, cTop, cBottom;
+    private float downY, lastY;
+    private boolean scrolling;
+    private int scrollPointer = -1;
     private final Unit un;
     private final Company c;
     private float t;
@@ -106,25 +116,127 @@ public final class RefitScreen extends Screen {
                 opts.add(new int[]{wp.id, ok ? 1 : 0});
             }
         }
-        int cols = opts.size() + 1 > 24 ? 3 : 2;   // three columns when spares of many makes are on hand
+        // filters, then the order
+        List<int[]> keep = new ArrayList<int[]>();
+        for (int[] o : opts) {
+            int maker = equipMode ? Equip.ALL[o[0]].maker : Wpn.ALL[o[0]].maker;
+            int spare = equipMode ? c.armoryE[o[0]] : c.armoryW[o[0]];
+            boolean current = equipMode ? un.equip[choosing - 1000] == o[0] : un.weapon[choosing] == o[0];
+            if (!current) {
+                if (cShow == 1 && spare == 0) continue;
+                if (cShow == 2 && maker >= 0) continue;
+                if (cShow == 3 && maker < 0) continue;
+                if (cFits && o[1] == 0) continue;
+            }
+            keep.add(o);
+        }
+        final boolean eqm = equipMode;
+        final int sortKey = equipMode ? (cSort % E_SORTS.length) : (cSort % W_SORTS.length);
+        if (sortKey > 0) {
+            java.util.Collections.sort(keep, new java.util.Comparator<int[]>() {
+                public int compare(int[] a, int[] b) {
+                    float d;
+                    if (eqm) {
+                        Equip x = Equip.ALL[a[0]], y = Equip.ALL[b[0]];
+                        switch (sortKey) {
+                            case 1: return x.name.compareTo(y.name);
+                            case 2: d = x.mass - y.mass; break;
+                            default: d = x.cost - y.cost; break;
+                        }
+                    } else {
+                        Wpn x = Wpn.ALL[a[0]], y = Wpn.ALL[b[0]];
+                        switch (sortKey) {
+                            case 1: return x.name.compareTo(y.name);
+                            case 2: d = y.dmg - x.dmg; break;
+                            case 3: d = y.rLong - x.rLong; break;
+                            case 4: d = x.mass - y.mass; break;
+                            default: d = x.cost - y.cost; break;
+                        }
+                    }
+                    return d < 0 ? -1 : (d > 0 ? 1 : a[0] - b[0]);
+                }
+            });
+        }
+        hidden = opts.size() - keep.size();
+        opts = keep;
+        // a scrolling list of full-size rows: two columns, never shrunk to fit
+        int cols = 2;
+        float cw = (pw - u * 6) / cols, ch = u * 9;
+        cTop = py + u * 20;
+        cBottom = py + ph - u * 2;
         int rows = (opts.size() + 1 + cols - 1) / cols;
-        float cw = (pw - u * 6) / cols, ch = Math.min(u * 9, (ph - u * 14) / rows);
+        cMaxScroll = Math.max(0, rows * ch - (cBottom - cTop));
+        cScroll = Math.max(0, Math.min(cMaxScroll, cScroll));
         Btn empty = new Btn(OPT + 999, "Empty this " + (equipMode ? "slot" : "mount"));
-        empty.set(px + u * 2, py + u * 11, cw - u, ch - u * 0.6f);
+        empty.set(px + u * 2, cTop - cScroll, cw - u, ch - u * 0.6f);
         empty.color = 0xFF3A2E2E;
         empty.sub = "Part goes to your spares";
+        empty.visible = empty.y + empty.h > cTop && empty.y < cBottom;
         overlay.add(empty);
         for (int i = 0; i < opts.size(); i++) {
             int k = i + 1;
             int[] o = opts.get(i);
             Btn b = new Btn(OPT + o[0], "");
-            b.set(px + u * 2 + (k % cols) * (cw + u * 2), py + u * 11 + (k / cols) * ch, cw - u, ch - u * 0.6f);
+            b.set(px + u * 2 + (k % cols) * (cw + u * 2), cTop + (k / cols) * ch - cScroll, cw - u, ch - u * 0.6f);
             b.enabled = o[1] == 1;
             b.color = 0xFF1E293C;
             b.selected = equipMode ? un.equip[choosing - 1000] == o[0] : un.weapon[choosing] == o[0];
+            b.visible = b.y + b.h > cTop && b.y < cBottom;
             overlay.add(b);
         }
+        // the filter row sits above the list, and is checked for touches first
+        float fw = (pw - u * 8) / 3, fy = py + u * 11;
+        String[] sorts = equipMode ? E_SORTS : W_SORTS;
+        Btn fs = new Btn(C_SORT, "Sort: " + sorts[sortKey]);
+        fs.set(px + u * 2, fy, fw, u * 7);
+        Btn fm = new Btn(C_SHOW, SHOWS[cShow]);
+        fm.set(px + u * 3 + fw, fy, fw, u * 7);
+        fm.selected = cShow != 0;
+        Btn ff = new Btn(C_FITS, "Only what fits");
+        ff.set(px + u * 4 + fw * 2, fy, fw, u * 7);
+        ff.selected = cFits;
+        fs.textSize = fm.textSize = ff.textSize = u * 2.4f;
+        if (hidden > 0) fm.sub = hidden + " hidden by filters";
+        overlay.add(fs);
+        overlay.add(fm);
+        overlay.add(ff);
         overlay.add(new Btn(CLOSE, "Cancel").set(px + pw - u * 26, py + u * 1.5f, u * 23, u * 8));
+    }
+
+    private int hidden;
+
+    // drag to scroll the chooser's list (a drag that starts on an item cancels the press)
+    public void touchDown(int pointer, float x, float y) {
+        downY = y;
+        lastY = y;
+        scrolling = false;
+        scrollPointer = pointer;
+        super.touchDown(pointer, x, y);
+    }
+
+    public void touchMove(int pointer, float x, float y) {
+        if (choosing >= 0 && pointer == scrollPointer && downY > cTop && downY < cBottom && cMaxScroll > 0) {
+            if (!scrolling && Math.abs(y - downY) > u * 2.5f) {
+                scrolling = true;
+                cancelPress();
+            }
+            if (scrolling) {
+                cScroll = Math.max(0, Math.min(cMaxScroll, cScroll - (y - lastY)));
+                lastY = y;
+                relayout();
+                return;
+            }
+        }
+        lastY = y;
+        super.touchMove(pointer, x, y);
+    }
+
+    public void touchUp(int pointer, float x, float y) {
+        if (scrolling && pointer == scrollPointer) {
+            scrolling = false;
+            return;
+        }
+        super.touchUp(pointer, x, y);
     }
 
     protected List<Btn> activeButtons() {
@@ -202,8 +314,20 @@ public final class RefitScreen extends Screen {
             }
         } else if (id >= MOUNT && id < MOUNT + 50) {
             choosing = id - MOUNT;
+            cScroll = 0;
         } else if (id >= SLOT && id < SLOT + 50) {
             choosing = 1000 + id - SLOT;
+            cScroll = 0;
+        } else if (id == C_SORT) {
+            int n = choosing >= 1000 ? E_SORTS.length : W_SORTS.length;
+            cSort = (cSort % n + 1) % n;
+            cScroll = 0;
+        } else if (id == C_SHOW) {
+            cShow = (cShow + 1) % SHOWS.length;
+            cScroll = 0;
+        } else if (id == C_FITS) {
+            cFits = !cFits;
+            cScroll = 0;
         } else if (id == CLOSE) {
             choosing = -1;
         } else if (id >= OPT) {
@@ -368,9 +492,19 @@ public final class RefitScreen extends Screen {
                 + " (" + Info.classTag(un.ch.mounts[choosing].cls) + " mount)";
         g.text(title, px + u * 3, py + u * 5.5f, u * 3.8f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
         g.text("Free capacity " + fmt(un.ch.capacity - un.mass()) + " t (plus whatever you remove)", px + u * 3, py + u * 9, u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+        if (cMaxScroll > 0) {
+            float lh = cBottom - cTop, bh = lh * lh / (lh + cMaxScroll), by = cTop + (lh - bh) * (cScroll / cMaxScroll);
+            g.fillRoundRect(px + pw - u * 1.6f, by, u * 0.8f, bh, u * 0.4f, 0x66FFFFFF);
+        }
         for (Btn b : overlay) {
+            if (b.id < OPT) Ui.button(g, b, u);
+        }
+        g.save();
+        g.clipRect(px, cTop, pw, cBottom - cTop);
+        for (Btn b : overlay) {
+            if (b.id < OPT || !b.visible) continue;
             Ui.button(g, b, u);
-            if (b.id < OPT || b.id == OPT + 999) continue;
+            if (b.id == OPT + 999) continue;
             int id = b.id - OPT;
             float tx = b.x + u * 2;
             int tc = b.enabled ? Col.TEXT : Col.TEXT_DIM;
@@ -394,6 +528,8 @@ public final class RefitScreen extends Screen {
                         c.armoryW[id] > 0 ? Col.GOOD : Col.MONEY, Gfx.ALIGN_RIGHT, false);
             }
         }
+        g.restore();
+        if (overlay.size() <= 5) g.text("Nothing matches these filters.", px + pw / 2, cTop + u * 14, u * 2.8f, Col.ACCENT, Gfx.ALIGN_CENTER, false);
     }
 
     /** Faction-made items are named in their maker's color. */

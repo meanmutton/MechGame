@@ -20,10 +20,10 @@ Android 5.0 or newer, landscape. No permissions, no network, no ads.
 - **Deployment.** Before the first round you place your units: infantry can go on any open hex on the map, everything else starts in your home zone. The computer digs its infantry into woods and towns too.
 - **Details.** Double-tap any unit (on the map, in HQ or in the Market) for its full sheet: every location's armor and structure, every weapon's numbers, and what each piece of equipment does.
 - **Hit feedback.** Every hit bursts on the part of the unit it struck. The battle panel switches to the target's hit-location diagram, flashing each struck location with the damage (yellow for armor, red for structure) and a running total. The combat log lists damage by location, e.g. "Monolith fired at Halberd (front): 5/5 hit, 46 damage: 29 to core, 11 to left arm, 2 to right arm, 4 to right leg".
-- **Turns.** Each round one side wins initiative, then the sides alternate activating one unit at a time. On an activation: tap your unit, tap a green hex twice to move, tap an enemy to target it, pick weapons (hit chances shown per weapon), FIRE, rotate if you like, End Turn. Undo takes back a move until you fire. Drag to pan, pinch to zoom.
+- **Turns.** Each round one side wins initiative, then the sides alternate activating one unit at a time. On an activation: tap your unit (the hexes it can reach glow green inside a bright outline and the rest of the map dims), tap a green hex twice to move, tap an enemy to target it, pick weapons (hit chances shown per weapon), FIRE, rotate if you like, End Turn. Undo takes back a move until you fire. Drag to pan, pinch to zoom.
 - **Hit locations.** Every unit has locations with **armor** and **infrastructure**. Damage strips armor, then infrastructure; a location without infrastructure is destroyed with its weapons. Later hits on a destroyed location (and damage left over when one is blown off) carry through to the core at half strength. Which location gets hit depends on the **angle of attack** (front, side or rear arc, relative to the target's facing) plus a random roll. Mechs: cockpit, core, back, arms, legs. Vehicles: front, sides, rear, turret (rotor on VTOLs). Infantry: one platoon.
 - **Heat and ammo.** Energy weapons generate heat, ballistic weapons use ammo, missiles do some of both but are light. Each unit sheds a limited amount of heat per round; running hot costs movement and accuracy, and maxing out shuts the unit down. Standing in water cools you.
-- **Terrain.** Hills block sight and give high ground, woods give cover and block sight when thick, towns give cover, water cools, roads speed up wheels. Each unit type moves differently: wheels stay on roads and open ground, hovertanks skim any water and weave through light woods, tracked tanks handle light woods, mechs and infantry go almost anywhere, VTOLs fly over everything.
+- **Terrain.** Hills block sight and give high ground, woods give cover and block sight when thick, towns give cover, water cools, roads speed up wheels. Each unit type moves differently: wheels stay on roads and open ground, hovertanks skim any water and weave through light woods, tracked tanks handle light woods, mechs and infantry go almost anywhere, VTOLs fly over everything. Tap an empty hex for its terrain card: the MP each kind of unit pays to enter it (or that it can't), and what it does for cover, line of sight and cooling.
 - **Weather.** Rain, thunderstorms, fog, night, heat waves, snow, sandstorms and magnetic storms each change accuracy, sight range, cooling or electronics.
 - **Maps.** Generated fresh for every battle in four regions (temperate, desert, arctic, badlands). Elevation comes first, then lakes in the low ground, rivers that flow downhill between the two armies, forests where it is wet, rocks on high ground, a town, and a road with bridges linking both sides.
 
@@ -50,7 +50,7 @@ Android 5.0 or newer, landscape. No permissions, no network, no ads.
 
 ## Factions
 
-Every design is built by one or more of eight factions. Each faction builds around a specialty and has six designs of its own; the members of each bloc share eight more, and common designs (riflemen, the Ironhide, the Halberd) are built widely. The Market shows who builds each design and can filter by faction. In mercenary play factions decide who hires you and who sells to you; the campaign and quick battles don't use factions and sell every design.
+Every design is built by one or more of eight factions. Each faction builds around a specialty and has six designs of its own; the members of each bloc share eight more, and common designs (riflemen, the Ironhide, the Halberd) are built widely. The Market shows who builds each design and can filter by unit kind, faction and role, show only what you can afford or what the next scenario allows, and sort by price, name, speed, firepower, armor or range. The workshop's weapon and equipment lists scroll at full size and can be sorted and filtered by make, spares and fit. In mercenary play factions decide who hires you and who sells to you; the campaign and quick battles don't use factions and sell every design.
 
 | Faction | Bloc | Specialty | Its own designs |
 |---|---|---|---|
@@ -106,7 +106,7 @@ To customize a unit, select it at HQ and press **CUSTOMIZE**: you swap weapons a
 |---|---|---|
 | ![HQ](docs/screenshots/hq.png) | ![Market](docs/screenshots/market.png) | ![Workshop](docs/screenshots/workshop.png) |
 | ![Weapons](docs/screenshots/weapons.png) | ![Briefing](docs/screenshots/briefing.png) | ![Firing](docs/screenshots/firing.png) |
-| ![Company colors](docs/screenshots/colors.png) | ![Market](docs/screenshots/market.png) | ![Factions](docs/screenshots/factions.png) |
+| ![Company colors](docs/screenshots/colors.png) | ![Terrain card](docs/screenshots/terrain.png) | ![Factions](docs/screenshots/factions.png) |
 | ![Campaign HQ](docs/screenshots/campaign.png) | ![Base assault](docs/screenshots/base_assault.png) | ![Campaign won](docs/screenshots/campaign_end.png) |
 
 ## Building

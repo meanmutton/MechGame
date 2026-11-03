@@ -14,9 +14,9 @@ public final class HelpScreen extends Screen {
                     "Before the first round you deploy: tap a unit, then a green hex. Infantry can be placed on any open hex on the map (ambushes!); everything else starts in your blue zone. Then press Start Battle.",
                     "Double-tap any unit (on the map, in HQ or in the Market) for its full detail sheet: every location's armor and structure, every weapon's numbers, and what each piece of equipment does. The Details button in the battle panel does the same.",
                     "Every round, one side wins initiative. Then the sides take turns activating one unit at a time until every unit has gone.",
-                    "On your activation: tap one of your units (they pulse blue), tap a green hex twice to move there, tap an enemy to target it, choose weapons, FIRE, then End Turn.",
+                    "On your activation: tap one of your units (they pulse blue). The hexes it can reach glow green inside a bright outline, and the rest of the map dims. Tap a green hex twice to move there, tap an enemy to target it, choose weapons, FIRE, then End Turn.",
                     "You can rotate your unit (the arrow buttons) before ending. Facing matters: you shoot out of your front, and enemies who hit your sides or rear do more harm.",
-                    "Undo takes back a move as long as you haven't fired yet. Drag the map to pan and pinch to zoom.",
+                    "Undo takes back a move as long as you haven't fired yet. Drag the map to pan and pinch to zoom. Tap an empty hex for its terrain card: what it costs each kind of unit to enter, and what it does for cover and line of sight.",
                     "Battles save as you play. Leave the app or quit to the menu and Resume Battle puts you back where you were (during the computer's turn, at the start of it).",
                     "Destroy every enemy unit to win. If time runs out, the side that kept more of its value wins."
             },

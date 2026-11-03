@@ -5,8 +5,13 @@ import java.util.List;
 
 /** Buy new units (factory loadouts). */
 public final class MarketScreen extends Screen {
-    private static final int BACK = 1, BUY = 2, FACTION = 3, TAB = 10, CARD = 100;
+    private static final int BACK = 1, BUY = 2, FACTION = 3, SORT = 4, ROLE = 5, AFFORD = 6, ALLOWED = 7, TAB = 10, CARD = 100;
     private static final String[] TABS = {"All", "Mechs", "Vehicles", "VTOL & Inf."};
+    static final String[] SORTS = {"Catalog", "Price: low", "Price: high", "Name", "Fastest", "Firepower", "Armor", "Range"};
+    // sorting and filters stay as you left them while the game runs
+    private static int sort, role = -1;
+    private static boolean onlyAffordable, onlyAllowed;
+    private int shown, total;
     private int tab;
     /** Show only designs this faction builds, or -1 for all. */
     private int faction = -1;
@@ -32,6 +37,10 @@ public final class MarketScreen extends Screen {
 
     private boolean inTab(Chassis ch) {
         if (faction >= 0 && (ch.factions & Faction.bit(faction)) == 0) return false;
+        if (role >= 0 && ch.role != role) return false;
+        if (onlyAffordable && previews[ch.id].value() > game.company.cash) return false;
+        Scenario next = game.company.next();
+        if (onlyAllowed && next != null && !next.allows(ch)) return false;
         switch (tab) {
             case 1: return UnitType.isMech(ch.type);
             case 2: return UnitType.isVehicle(ch.type) && ch.type != UnitType.VTOL;
@@ -52,15 +61,29 @@ public final class MarketScreen extends Screen {
                 .set(u * 3 + TABS.length * (tw + u) + u, h * 0.15f, u * 24, u * 8));
         fb.textSize = u * 2.6f;
         if (faction >= 0) fb.textColor = Faction.ALL[faction].color;
+        // second row: sort and the other filters
+        float r2 = h * 0.15f + u * 9, bw2 = (w * 0.6f - u * 3) / 4;
+        Btn sb = add(new Btn(SORT, "Sort: " + SORTS[sort]).set(u * 3, r2, bw2, u * 7));
+        Btn rb = add(new Btn(ROLE, role < 0 ? "Any role" : Chassis.ROLES[role]).set(u * 3 + (bw2 + u), r2, bw2, u * 7));
+        rb.selected = role >= 0;
+        Btn ab = add(new Btn(AFFORD, "Affordable").set(u * 3 + 2 * (bw2 + u), r2, bw2, u * 7));
+        ab.selected = onlyAffordable;
+        Btn lb = add(new Btn(ALLOWED, "Allowed next").set(u * 3 + 3 * (bw2 + u), r2, bw2, u * 7));
+        lb.selected = onlyAllowed;
+        lb.enabled = game.company.next() != null;
+        sb.textSize = rb.textSize = ab.textSize = lb.textSize = u * 2.4f;
         gridX = u * 3;
-        gridY = h * 0.15f + u * 10;
+        gridY = r2 + u * 9;
         gridW = w * 0.6f;
         gridH = h - gridY - u * 2;
         int cols = 3;
         float cw = gridW / cols, ch = u * 17;
         int k = 0;
-        for (Chassis c : Chassis.ALL) {
-            if (!game.company.sells(c) || !inTab(c)) continue;
+        total = 0;
+        for (Chassis c : sorted()) {
+            if (!game.company.sells(c)) continue;
+            total++;
+            if (!inTab(c)) continue;
             float x = gridX + (k % cols) * cw, y = gridY + (k / cols) * ch - scroll;
             Btn b = add(new Btn(CARD + c.id, "").set(x + u * 0.5f, y + u * 0.5f, cw - u, ch - u));
             b.selected = sel == c.id;
@@ -68,6 +91,8 @@ public final class MarketScreen extends Screen {
             b.visible = y + ch > gridY - 1 && y < gridY + gridH;
             k++;
         }
+        shown = k;
+        if (shown < total) sb.sub = "showing " + shown + " of " + total;
         int rows = (k + cols - 1) / cols;
         maxScroll = Math.max(0, rows * ch - gridH);
         float rx = gridX + gridW + u * 3, rw = w - rx - u * 3;
@@ -77,6 +102,30 @@ public final class MarketScreen extends Screen {
         buy.enabled = game.company.sells(p.ch) && game.company.cash >= p.value() && game.company.roster.size() < Company.MAX_ROSTER;
         buy.color = 0xFF2E7D4F;
         add(new Btn(BACK, "Back to HQ").set(rx, h - u * 13, rw, u * 9));
+    }
+
+    /** The catalog in the chosen order. */
+    private List<Chassis> sorted() {
+        List<Chassis> l = new ArrayList<Chassis>();
+        for (Chassis c : Chassis.ALL) if (previews[c.id] != null) l.add(c);
+        if (sort == 0) return l;
+        java.util.Collections.sort(l, new java.util.Comparator<Chassis>() {
+            public int compare(Chassis a, Chassis b) {
+                Unit ua = previews[a.id], ub = previews[b.id];
+                int d;
+                switch (sort) {
+                    case 1: d = ua.value() - ub.value(); break;
+                    case 2: d = ub.value() - ua.value(); break;
+                    case 3: d = a.name.compareTo(b.name); break;
+                    case 4: d = b.mp - a.mp; break;
+                    case 5: d = Info.alphaDamage(ub) - Info.alphaDamage(ua); break;
+                    case 6: d = ub.armorTotal - ua.armorTotal; break;
+                    default: d = Info.maxRange(ub) - Info.maxRange(ua); break;
+                }
+                return d != 0 ? d : ua.value() - ub.value();
+            }
+        });
+        return l;
     }
 
     private void relayout() {
@@ -114,6 +163,18 @@ public final class MarketScreen extends Screen {
             }
         } else if (b.id >= TAB && b.id < TAB + TABS.length) {
             tab = b.id - TAB;
+            scroll = 0;
+        } else if (b.id == SORT) {
+            sort = (sort + 1) % SORTS.length;
+            scroll = 0;
+        } else if (b.id == ROLE) {
+            role = role + 1 >= Chassis.ROLES.length ? -1 : role + 1;
+            scroll = 0;
+        } else if (b.id == AFFORD) {
+            onlyAffordable = !onlyAffordable;
+            scroll = 0;
+        } else if (b.id == ALLOWED) {
+            onlyAllowed = !onlyAllowed;
             scroll = 0;
         } else if (b.id == FACTION) {
             faction = faction + 1 >= Faction.COUNT ? -1 : faction + 1;   // cycles through the factions, then back to all
@@ -227,7 +288,9 @@ public final class MarketScreen extends Screen {
         g.restore();
         boolean any = false;
         for (Btn b : buttons) if (b.id >= CARD) any = true;
-        if (!any && game.company.merc) Ui.wrap(g, "No faction on " + game.company.planet.name + " will sell to you. Earn some goodwill, or travel.",
+        if (!any && total > 0) Ui.wrap(g, "Nothing matches these filters. Tap a filter again to change it.",
+                gridX + u * 2, gridY + u * 6, u * 3, gridW - u * 4, Col.ACCENT);
+        else if (!any && game.company.merc) Ui.wrap(g, "No faction on " + game.company.planet.name + " will sell to you. Earn some goodwill, or travel.",
                 gridX + u * 2, gridY + u * 6, u * 3, gridW - u * 4, Col.ACCENT);
         if (maxScroll > 0) {
             float bh = gridH * gridH / (gridH + maxScroll);
@@ -267,6 +330,7 @@ public final class MarketScreen extends Screen {
         y = Info.stats(g, p, rx + u, y, rw - u * 2, u * 2.05f);
         Info.loadout(g, p, rx + u, y + u * 0.5f, rw - u * 2, u * 2.0f);
         g.text("Double-tap a unit for full details", gridX + gridW, h * 0.06f, u * 2.4f, Col.ACCENT, Gfx.ALIGN_RIGHT, false);
+
         if (noteT > 0 && note != null) {
             float tw = g.textWidth(note, u * 2.6f, false) + u * 6;
             g.fillRoundRect(w / 2f - tw / 2, h - u * 11, tw, u * 8, u * 2, 0xEE000000);
