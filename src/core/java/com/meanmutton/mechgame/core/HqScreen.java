@@ -2,7 +2,7 @@ package com.meanmutton.mechgame.core;
 
 /** Company headquarters: roster, deployment, repairs, and launching the next mission. */
 public final class HqScreen extends Screen {
-    private static final int MENU = 1, MARKET = 2, REPAIR_ALL = 3, LAUNCH = 4, REFIT = 5, REPAIR = 6, SELL = 7, RENAME = 8,
+    private static final int MENU = 1, MARKET = 2, REPAIR_ALL = 3, LAUNCH = 4, REFIT = 5, REPAIR = 6, SELL = 7, RENAME = 8, COLORS = 9,
             ROW = 100, DEPLOY = 200;
     private final Company c;
     private int sel;
@@ -56,6 +56,9 @@ public final class HqScreen extends Screen {
         rep.textSize = sell.textSize = ren.textSize = u * 3f;
         refit.textSize = u * 3.8f;
 
+        Btn colors = add(new Btn(COLORS, "Colors").set(w - u * 62, h * 0.025f, u * 20, u * 7));
+        colors.textSize = u * 2.6f;
+        colors.color = Col.darker((c.scheme != null ? c.scheme : Scheme.PLAYER_DEFAULT).main, 0.3f);
         float bbw = (w - u * 12) / 4;
         add(new Btn(MENU, c.quick ? "Quit" : "Main Menu").set(u * 3, h - u * 12, bbw, u * 9));
         add(new Btn(MARKET, "Market").set(u * 6 + bbw, h - u * 12, bbw, u * 9)).color = 0xFF5A4A2A;
@@ -120,6 +123,9 @@ public final class HqScreen extends Screen {
         } else if (id == MENU) {
             game.saveCompany();
             game.toMenu();
+            return;
+        } else if (id == COLORS) {
+            game.setScreen(new PaintScreen(game));
             return;
         } else if (id == MARKET) {
             game.setScreen(new MarketScreen(game));

@@ -17,14 +17,30 @@ public final class UnitArt {
      * scale 1 fills most of a hex.
      */
     public static void draw(Gfx g, Unit u, float x, float y, float angle, int team, float scale, float time, float condition) {
-        drawChassis(g, u.ch, u.weapon, x, y, angle, teamColor(team), scale, time, condition, u.type == UnitType.INFANTRY ? u.firepowerScale() : 1f);
+        drawChassis(g, u.ch, u.weapon, x, y, angle, schemeFor(u, team), scale, time, condition, u.type == UnitType.INFANTRY ? u.firepowerScale() : 1f);
+    }
+
+    /** Your units wear your company's colors; enemy units their own paint (a faction's) or the enemy company's. */
+    public static Scheme schemeFor(Unit u, int team) {
+        if (team == Battle.PLAYER) return Scheme.player;
+        return u.paint != null ? u.paint : Scheme.enemy;
     }
 
     public static void drawChassis(Gfx g, Chassis ch, int[] weapons, float x, float y, float angle, int team, float scale,
                                    float time, float condition, float strength) {
-        int body = Col.lerp(team, 0xFF8A93A0, 0.3f);
+        drawChassis(g, ch, weapons, x, y, angle, Scheme.fromColor(team), scale, time, condition, strength);
+    }
+
+    /** The accent of the scheme being drawn (stripes, visors, markings). */
+    private static int accentNow = 0xFFEDEDED;
+
+    public static void drawChassis(Gfx g, Chassis ch, int[] weapons, float x, float y, float angle, Scheme paint, float scale,
+                                   float time, float condition, float strength) {
+        int team = paint.main;
+        int body = paint.main;
         int dark = Col.darker(body, 0.45f);
-        int light = Col.lighter(body, 0.3f);
+        int light = paint.trim;
+        accentNow = paint.accent;
         float lw = 0.035f;
         g.save();
         g.translate(x, y);
@@ -85,14 +101,9 @@ public final class UnitArt {
     private static final int L_HUMAN = 0, L_BIRD = 1, L_STOMP = 2, L_QUAD = 3;
     private static final int C_ROUND = 0, C_VISOR = 1, C_OFFSET = 2, C_TWIN = 3, C_SLIT = 4;
 
-    /** Accent color for a design: its faction's for faction designs, otherwise the look's own. */
+    /** Markings are painted in the accent of the scheme being drawn (the owner's colors, not the maker's). */
     static int factionAccent(Chassis ch, int fallback) {
-        int ex = Faction.exclusive(ch.factions);
-        if (ch.look == null) return fallback;
-        if (ex >= 0) return Faction.ALL[ex].color;
-        if (ch.factions == Faction.blocMask(Faction.BLOC_ACCORD)) return 0xFFE8F0FF;
-        if (ch.factions == Faction.blocMask(Faction.BLOC_PACT)) return 0xFF8A8F98;
-        return fallback;
+        return accentNow;
     }
 
     /** {torso, shoulders, back, legs, cockpit, accent color} by chassis id (18..32). */

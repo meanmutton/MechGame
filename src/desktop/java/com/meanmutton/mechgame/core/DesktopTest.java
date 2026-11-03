@@ -239,6 +239,20 @@ public final class DesktopTest {
         c.roster.get(1).infra[0] -= 5;
         tick(g, 2);
         shot(g, "03_hq");
+        // company colors: pick a preset and a custom accent, then see them at HQ
+        click(g, 9);
+        tick(g, 2);
+        shot(g, "03b_company_colors");
+        click(g, 400 + 1);   // Desert
+        click(g, 300 + 0);   // accent: blue
+        tick(g, 2);
+        shot(g, "03c_company_colors_desert");
+        click(g, 1);         // done
+        if (c.scheme == null || c.scheme.main != Scheme.PRESETS[1].main || c.scheme.accent != (Scheme.PALETTE[0] | 0xFF000000))
+            throw new RuntimeException("company colors not applied");
+        if (!Company.parse(c.serialize()).scheme.equals(c.scheme)) throw new RuntimeException("company colors not saved");
+        tick(g, 2);
+        shot(g, "03d_hq_desert");
         click(g, 2);
         tick(g, 2);
         shot(g, "04_market");
@@ -487,6 +501,8 @@ public final class DesktopTest {
             shot(g, "47_help_scenarios");
             click(g, 3);
             shot(g, "48_help_time_and_money");
+            click(g, 3);
+            shot(g, "49_help_factions");
         }
         // a crash report: saved when the game dies, shown on the next launch, shared or closed
         {

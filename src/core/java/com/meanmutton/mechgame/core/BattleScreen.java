@@ -735,8 +735,9 @@ public final class BattleScreen extends Screen {
             if (un.destroyed && un.deathShown) continue;
             float x = un.drawX, y = un.drawY;
             int tc = UnitArt.teamColor(un.team);
-            g.fillCircle(x, y, 0.82f, Col.alpha(tc, 0.18f));
-            g.strokeCircle(x, y, 0.82f, 0.05f, Col.alpha(tc, 0.85f));
+            // whose unit it is shows by its ring, whatever its paint
+            g.fillCircle(x, y, 0.84f, Col.alpha(tc, 0.2f));
+            g.strokeCircle(x, y, 0.84f, 0.09f, Col.alpha(tc, 0.95f));
             // facing tick
             float fa = (float) Math.toRadians(un.drawFacing);
             g.line(x + (float) Math.cos(fa) * 0.7f, y + (float) Math.sin(fa) * 0.7f, x + (float) Math.cos(fa) * 0.95f,

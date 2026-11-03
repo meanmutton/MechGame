@@ -209,7 +209,9 @@ public final class MarketScreen extends Screen {
             float tx = b.x + b.h * 1.0f, maxW = b.x + b.w - tx - u * (mark ? 4.5f : 1);
             g.text(Ui.fit(g, p.ch.name, u * 2.8f, maxW), tx, b.y + b.h * 0.24f, u * 2.8f, Col.TEXT, Gfx.ALIGN_LEFT, true);
             String tag = factionTag(p.ch);
-            float tagW = g.textWidth(tag, u * 2f, true) + u * 2.5f;
+            int ex = Faction.exclusive(p.ch.factions);
+            float tagW = g.textWidth(tag, u * 2f, true) + u * (ex >= 0 ? 5.2f : 2.5f);
+            if (ex >= 0) Emblem.draw(g, ex, b.x + b.w - u * 1.5f - g.textWidth(tag, u * 2f, true) - u * 1.6f, b.y + b.h * 0.5f, u * 1.25f);
             g.text(Ui.fit(g, UnitType.SHORT[p.type] + " · " + Chassis.ROLES[p.ch.role], u * 2.2f, b.x + b.w - tx - tagW), tx, b.y + b.h * 0.5f,
                     u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
             g.text(tag, b.x + b.w - u * 1.5f, b.y + b.h * 0.5f, u * 2f, factionColor(p.ch), Gfx.ALIGN_RIGHT, true);
@@ -224,6 +226,9 @@ public final class MarketScreen extends Screen {
             g.fillRoundRect(gridX + gridW + u * 0.5f, by, u * 0.8f, bh, u * 0.4f, 0x66FFFFFF);
         }
         for (Btn b : buttons) if (b.id < CARD) Ui.button(g, b, u);
+        if (faction >= 0) {
+            for (Btn b : buttons) if (b.id == FACTION) Emblem.draw(g, faction, b.x + u * 3, b.y + b.h / 2, u * 2.2f);
+        }
 
         Unit p = previews[sel];
         float rx = gridX + gridW + u * 3, rw = w - rx - u * 3, ry = h * 0.15f;
@@ -233,8 +238,22 @@ public final class MarketScreen extends Screen {
         g.text(UnitType.NAMES[p.type] + ", " + Chassis.ROLES[p.ch.role], rx + u * 19, ry + u * 9.5f, u * 2.6f, Col.TEXT, Gfx.ALIGN_LEFT, false);
         g.text("Weapon class up to " + Info.classTag(UnitType.MAX_CLASS[p.type]) + ", " + p.ch.mounts.length + " mounts, "
                 + p.ch.equipSlots + " equipment slots", rx + u * 19, ry + u * 13.5f, u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
-        g.text(Ui.fit(g, "Built by: " + Faction.names(p.ch.factions), u * 2.2f, rw - u * 19), rx + u * 19, ry + u * 17,
-                u * 2.2f, factionColor(p.ch), Gfx.ALIGN_LEFT, false);
+        // who builds it: each faction's emblem, then the names
+        float bx = rx + u * 19;
+        g.text("Built by:", bx, ry + u * 17, u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+        bx += g.textWidth("Built by:", u * 2.2f, false) + u * 1.2f;
+        int ex = Faction.exclusive(p.ch.factions);
+        if (ex >= 0) Emblem.label(g, ex, bx, ry + u * 17, u * 2.2f, true);
+        else {
+            for (Faction f : Faction.ALL) {
+                if ((p.ch.factions & Faction.bit(f.id)) == 0) continue;
+                Emblem.draw(g, f.id, bx + u * 1.3f, ry + u * 17, u * 1.3f);
+                bx += u * 3.1f;
+            }
+            String bloc = factionTag(p.ch);
+            g.text(bloc.equals("Accord") ? "Northern Accord" : (bloc.equals("Pact") ? "Iron Pact" : (bloc.equals("All") ? "all factions" : "")),
+                    bx + u * 0.6f, ry + u * 17, u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+        }
         float y = Ui.wrap(g, p.ch.desc, rx + u, ry + u * 21, u * 2.3f, rw - u * 2, Col.TEXT) + ry + u * 21.5f;
         y = Info.stats(g, p, rx + u, y, rw - u * 2, u * 2.05f);
         Info.loadout(g, p, rx + u, y + u * 0.5f, rw - u * 2, u * 2.0f);

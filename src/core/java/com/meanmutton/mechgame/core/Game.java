@@ -97,6 +97,9 @@ public final class Game {
     }
 
     public synchronized void render(Gfx g) {
+        Company c = company;
+        Scheme.player = c != null && c.scheme != null ? c.scheme : Scheme.PLAYER_DEFAULT;
+        Scheme.enemy = c != null && c.rival != null && c.rival.scheme != null ? c.rival.scheme : Scheme.ENEMY_DEFAULT;
         screen.resize(w, h);
         screen.render(g);
     }

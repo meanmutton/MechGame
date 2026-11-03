@@ -12,6 +12,8 @@ public final class Unit {
     public String name;
     /** Not part of either company: "garrison" (local troops) or "hired" (enemy stopgaps). Not saved. */
     public String tag;
+    /** Paint for an enemy unit that wears its own colors (a faction's in mercenary play); null for the usual. Not saved. */
+    public Scheme paint;
 
     // ---- loadout ----
     public final int[] weapon;   // per mount, -1 = empty

@@ -6,7 +6,8 @@ public final class HelpScreen extends Screen {
     private int page;
 
     private static final String[] TITLES = {"THE BASICS", "SHOOTING", "DAMAGE", "HEAT, AMMO & EQUIPMENT", "TERRAIN & WEATHER",
-            "UNITS", "CAMPAIGN", "CAMPAIGN SCENARIOS", "TIME AND MONEY"};
+            "UNITS", "CAMPAIGN", "CAMPAIGN SCENARIOS", "TIME AND MONEY", "FACTIONS"};
+    private static final int FACTIONS_PAGE = 9;
     private static final String[][] PAGES = {
             {
                     "Each side fields up to 4 mechs, 6 mechs and vehicles in all (VTOLs count as vehicles), and 4 infantry, on a hex map. A full-size battle lasts up to 20 rounds; campaign scenarios may set smaller limits and shorter battles.",
@@ -78,6 +79,7 @@ public final class HelpScreen extends Screen {
                     "The briefing shows the battle count, both sides' income, and any reserves.",
                     "When a planet is decided, your company can move on to a new one, on either side, keeping its units and money."
             },
+            {},   // the factions page is drawn specially: each faction's emblem, colors and specialty
     };
 
     public HelpScreen(Game game) {
@@ -107,10 +109,32 @@ public final class HelpScreen extends Screen {
         return true;
     }
 
+    /** Every faction with its emblem, colors, bloc and specialty: the same emblem and color mark it everywhere. */
+    private void renderFactions(Gfx g) {
+        float top = h * 0.14f, rowH = (h - top - u * 19) / 4f, colW = (w - u * 9) / 2f;
+        for (Faction f : Faction.ALL) {
+            float x = u * 4 + (f.id % 2) * (colW + u), y = top + (f.id / 2) * rowH;
+            Ui.panel(g, x, y, colW, rowH - u, u * 1.5f);
+            float r = Math.min(rowH * 0.32f, u * 5);
+            Emblem.draw(g, f.id, x + u * 2 + r, y + rowH * 0.45f, r);
+            float tx = x + u * 4 + r * 2;
+            g.text(f.name, tx, y + rowH * 0.2f, u * 3f, f.color, Gfx.ALIGN_LEFT, true);
+            g.text(f.specialty + "  ·  " + (f.bloc >= 0 ? Faction.BLOC_NAMES[f.bloc] : "Independent"), tx, y + rowH * 0.45f, u * 2.2f,
+                    Col.TEXT, Gfx.ALIGN_LEFT, false);
+            // the faction's paint: main, trim, accent
+            int[] cols = {f.scheme.main, f.scheme.trim, f.scheme.accent};
+            for (int i = 0; i < 3; i++) g.fillRoundRect(tx + i * u * 4.5f, y + rowH * 0.62f, u * 4, u * 2.4f, u * 0.5f, cols[i]);
+            Ui.wrap(g, f.desc, tx + u * 15, y + rowH * 0.66f, u * 1.8f, colW - (tx - x) - u * 16, Col.TEXT_DIM);
+        }
+        g.text("Factions matter in mercenary play: who hires you, whose markets you can buy from, and who you fight.",
+                w / 2f, h - u * 16f, u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
+    }
+
     public void render(Gfx g) {
         background(g);
         Ui.title(g, TITLES[page], w / 2f, h * 0.08f, u * 6.5f);
         float y = h * 0.18f;
+        if (page == FACTIONS_PAGE) renderFactions(g);
         for (String s : PAGES[page]) y += Ui.wrap(g, "- " + s, u * 6, y, u * 3, w - u * 12, Col.TEXT) + u * 1.5f;
         g.text("Page " + (page + 1) + " of " + PAGES.length, w - u * 33, h - u * 7.5f, u * 2.6f, Col.TEXT_DIM, Gfx.ALIGN_RIGHT, false);
         renderButtons(g);

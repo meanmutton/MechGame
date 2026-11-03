@@ -34,6 +34,8 @@ public final class Company {
     public int planets;
     /** Battles fought on the current planet (the defender's income grows with it). */
     public int planetBattles;
+    /** The company's paint (null: the default for its side: blue for you, red for the campaign's enemy). */
+    public Scheme scheme;
 
     // next contract
     public int biome;
@@ -143,7 +145,8 @@ public final class Company {
                 .append(',').append(wins).append(',').append(losses).append(',').append(biome).append(',').append(reward)
                 .append(',').append(seed).append(',').append(side).append(',').append(front).append(',').append(scenario)
                 .append(',').append(lastScenario).append(',').append(lastOutcome).append(',').append(edge).append(',').append(over)
-                .append(',').append(planets).append(',').append(planetBattles).append('|');
+                .append(',').append(planets).append(',').append(planetBattles)
+                .append(',').append(scheme == null ? "-" : scheme.serialize()).append('|');
         for (int i = 0; i < armoryW.length; i++) b.append(i > 0 ? "," : "").append(armoryW[i]);
         b.append('|');
         for (int i = 0; i < armoryE.length; i++) b.append(i > 0 ? "," : "").append(armoryE[i]);
@@ -178,6 +181,7 @@ public final class Company {
                 c.over = Integer.parseInt(h[15]);
                 c.planets = Integer.parseInt(h[16]);
                 if (h.length >= 18) c.planetBattles = Integer.parseInt(h[17]);
+                if (h.length >= 19 && !h[18].equals("-")) c.scheme = Scheme.parse(h[18], null);
             }
             String[] aw = p[2].split(",");
             for (int i = 0; i < aw.length && i < c.armoryW.length; i++) c.armoryW[i] = Integer.parseInt(aw[i]);
