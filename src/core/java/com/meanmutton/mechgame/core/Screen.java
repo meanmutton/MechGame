@@ -171,6 +171,9 @@ public abstract class Screen {
     protected void onTouchUp(int pointer, float x, float y) {}
 
     /** Back button. Return true if handled. */
+    /** Mouse wheel or trackpad scroll (positive scrolls down), in screen pixels; phones never send it. */
+    public void wheel(float x, float y, float amount) {}
+
     public boolean back() {
         return false;
     }

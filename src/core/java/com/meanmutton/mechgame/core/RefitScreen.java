@@ -205,6 +205,13 @@ public final class RefitScreen extends Screen {
 
     private int hidden;
 
+    public void wheel(float x, float y, float amount) {
+        if (choosing >= 0 && cMaxScroll > 0) {
+            cScroll = Math.max(0, Math.min(cMaxScroll, cScroll + amount));
+            relayout();
+        }
+    }
+
     // drag to scroll the chooser's list (a drag that starts on an item cancels the press)
     public void touchDown(int pointer, float x, float y) {
         downY = y;

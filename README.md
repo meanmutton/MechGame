@@ -1,6 +1,6 @@
 # Hexfront
 
-A turn-based hex strategy game for Android: you against the computer, with up to 4 mechs, 6 mechs and vehicles in all, and 4 infantry a side, chosen from mechs, tanks, hovertanks, VTOLs, armored cars and infantry.
+A turn-based hex strategy game for Android and the web browser: you against the computer, with up to 4 mechs, 6 mechs and vehicles in all, and 4 infantry a side, chosen from mechs, tanks, hovertanks, VTOLs, armored cars and infantry.
 
 ![Battle](docs/screenshots/battle.png)
 
@@ -10,6 +10,19 @@ A turn-based hex strategy game for Android: you against the computer, with up to
 2. Tap it and allow installs from that app when Android asks. If Play Protect warns about an unknown developer, choose "Install anyway".
 
 Android 5.0 or newer, landscape. No permissions, no network, no ads.
+
+## Play in a browser (Mac, PC, Linux)
+
+`release/Hexfront.html` is the whole game in one file. Download it (on GitHub: open the file, then **Download raw file**) and double-click it; it opens in your browser and runs offline. Chrome, Safari, Edge and Firefox all work.
+
+- **Mouse:** click where you'd tap and drag to pan. Double-click opens a unit's full sheet.
+- **Wheel or two-finger trackpad scroll:** zooms the battle map (a trackpad pinch does too) and scrolls long lists.
+- **Escape:** works like the phone's back button.
+- **Window shape:** the screens are laid out for wide phone screens, so a squarer window (a laptop's 16:10) gets thin bars above and below instead of a squeezed layout.
+- **Saves:** kept in that browser's storage, tied to where the file is. Keep the file in one place (moving it, or opening it in another browser, starts with no save). Clearing the browser's website data deletes them.
+- **Crash reports:** shown at the next start, as on the phone. **Share report** copies it to the clipboard.
+
+`release/web/` holds the same game as a page plus a script, for putting on any web server (GitHub Pages, for example).
 
 ## How it plays
 
@@ -128,8 +141,15 @@ That writes `release/Hexfront.apk`, signed with `keystore/hexfront.keystore` (ke
 
 That also validates every design, plays 20 computer-vs-computer battles headless (checking for crashes and stalls, and printing balance stats), plays a few campaign missions through the scenario system, saves and resumes battles, plays a few thousand random taps through every screen looking for crashes (`monkey`; `monkey-threads` runs the computer on its own thread as the phone does), and renders every screen to `build/shots/`.
 
+```bash
+./build.sh web
+```
+
+That builds the browser version: `release/Hexfront.html` and `release/web/`. It needs only a JDK, Maven (`brew install maven` on a Mac) and Python 3; Maven downloads TeaVM the first time.
+
 ## Code layout
 
 - `src/core/`: the whole game in plain Java (rules, map generation, AI, screens, procedural art and sound), drawing through a small `Gfx` interface.
 - `src/android/`: activity, render loop, Canvas renderer, SoundPool audio, saved data.
 - `src/desktop/`: Java2D test harness (not in the APK).
+- `src/web/` and `web/`: the browser version. [TeaVM](https://teavm.org) compiles `src/core` and the browser shell (canvas renderer, Web Audio, local storage, input) to JavaScript; `web/index.html` is the page. Build it with `./build.sh web` (needs a JDK, Maven and Python 3, not the Android tools).
