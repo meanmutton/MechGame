@@ -95,7 +95,7 @@ public final class Wpn {
     private static final Wpn[] BASE = {
             new Wpn(LIGHT_LASER, "Light Laser", 1, F_ENERGY, 4, 4, 2, 0, 0, 0, 2, 4, 6, 1f, 40, 0, 0, 0,
                     "Cheap, light, reliable. Never runs dry."),
-            new Wpn(LIGHT_BURST, "Light Burst Laser", 1, F_ENERGY, 4, 4, 3, 0, 0, 0, 1, 2, 3, 1f, 55, 15, 0, 0,
+            new Wpn(LIGHT_BURST, "Light Burst Laser", 1, F_ENERGY, 4, 4, 3, 0, 0, 0, 2, 3, 4, 1f, 55, 15, 0, 0,
                     "Rapid pulses: very accurate, but short-ranged and hotter."),
             new Wpn(LASER, "Laser", 2, F_ENERGY, 7, 7, 4, 0, 0, 0, 3, 6, 9, 2f, 110, 0, 0, 0,
                     "The standard line weapon of the battlefield."),
