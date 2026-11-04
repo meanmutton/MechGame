@@ -17,6 +17,9 @@ public interface Platform {
 
     void exit();
 
+    /** False where there is nothing to quit to (a browser tab): the menu then has no Quit button. */
+    boolean canExit();
+
     /** Saves right away (used when the app is about to die, so it must not be deferred). */
     void saveNow(String key, String value);
 

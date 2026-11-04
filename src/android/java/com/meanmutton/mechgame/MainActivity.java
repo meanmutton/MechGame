@@ -251,6 +251,10 @@ public class MainActivity extends Activity implements Platform {
         });
     }
 
+    public boolean canExit() {
+        return true;
+    }
+
     public void exit() {
         runOnUiThread(new Runnable() {
             public void run() {

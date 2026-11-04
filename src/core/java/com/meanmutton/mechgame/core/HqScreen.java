@@ -330,6 +330,15 @@ public final class HqScreen extends Screen {
         relayout();
     }
 
+    public void wheel(float x, float y, float amount) {
+        if (x < u * 3 + rowsW) {
+            if (maxScroll > 0) {
+                scroll = Math.max(0, Math.min(maxScroll, scroll + amount));
+                relayout();
+            }
+        } else if (loadMax > 0) loadScroll = Math.max(0, Math.min(loadMax, loadScroll + amount));
+    }
+
     public boolean back() {
         game.saveCompany();
         game.toMenu();

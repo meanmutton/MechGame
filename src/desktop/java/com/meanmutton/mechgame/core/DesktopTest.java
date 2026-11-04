@@ -32,6 +32,7 @@ public final class DesktopTest {
         public void save(String key, String value) { store.put(key, value); }
         public void promptText(String title, String initial, TextCallback cb) { cb.done(initial + " II"); }
         public void exit() {}
+        public boolean canExit() { return true; }
         public void saveNow(String key, String value) { store.put(key, value); }
         String shared;
         public void share(String subject, String text) { shared = text; }

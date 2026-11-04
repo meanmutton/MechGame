@@ -6,7 +6,7 @@ import java.util.Random;
 
 /** Top level: current screen, input queue, settings, the company, and the flow between screens. */
 public final class Game {
-    public static final int TOUCH_DOWN = 0, TOUCH_MOVE = 1, TOUCH_UP = 2, BACK = 3;
+    public static final int TOUCH_DOWN = 0, TOUCH_MOVE = 1, TOUCH_UP = 2, BACK = 3, WHEEL = 4;
     public static final int[] QUICK_BUDGETS = {6000, 9000, 13000, 18000, 25000};
     public static final int[] CAMPAIGN_FUNDS = {7000, 10000, 14000};
 
@@ -54,6 +54,13 @@ public final class Game {
         }
     }
 
+    /** A mouse wheel or trackpad scroll at (x, y): positive amounts scroll down (desktop and browser only). */
+    public void wheel(float x, float y, float amount) {
+        synchronized (input) {
+            input.add(new float[]{WHEEL, amount, x, y});
+        }
+    }
+
     public void touch(int type, int pointer, float x, float y) {
         synchronized (input) {
             input.add(new float[]{type, pointer, x, y});
@@ -86,6 +93,7 @@ public final class Game {
                     case TOUCH_DOWN: s.touchDown((int) e[1], e[2], e[3]); break;
                     case TOUCH_MOVE: s.touchMove((int) e[1], e[2], e[3]); break;
                     case TOUCH_UP: s.touchUp((int) e[1], e[2], e[3]); break;
+                    case WHEEL: s.wheel(e[2], e[3], e[1]); break;
                     case BACK:
                         if (!s.closeOverlay() && !s.back()) platform.exit();
                         break;

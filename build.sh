@@ -7,8 +7,23 @@
 # Usage:
 #   ./build.sh            build and sign the APK
 #   ./build.sh test       also run the desktop simulation tests and render screenshots
+#   ./build.sh web        build the browser version instead (needs only a JDK, Maven and Python 3):
+#                         release/Hexfront.html (one file, double-click to play) and release/web/ (to host)
+#                         MAVEN_SETTINGS=path/to/settings.xml picks a Maven mirror if you need one.
 set -euo pipefail
 cd "$(dirname "$0")"
+
+if [ "${1:-}" = "web" ]; then
+    command -v mvn > /dev/null || { echo "The browser build needs Maven (brew install maven, or apt-get install maven)."; exit 1; }
+    STAMP=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+    if [ -n "$(git status --porcelain -- src web 2>/dev/null)" ]; then STAMP="$STAMP+changes"; fi
+    STAMP="$STAMP ($(date -u +%Y-%m-%d))"
+    echo "== compiling to JavaScript with TeaVM"
+    rm -rf build/web-maven
+    mvn -q ${MAVEN_SETTINGS:+-s "$MAVEN_SETTINGS"} -f web/pom.xml package
+    python3 tools/make_web_page.py build/web-maven/js/hexfront.js "$STAMP"
+    exit 0
+fi
 
 ANDROID_JAR=${ANDROID_JAR:-/usr/lib/android-sdk/platforms/android-23/android.jar}
 OUT=build

@@ -234,6 +234,13 @@ public final class MarketScreen extends Screen {
         touchInGrid = true;
     }
 
+    public void wheel(float x, float y, float amount) {
+        if (x < gridX + gridW && maxScroll > 0) {
+            scroll = Math.max(0, Math.min(maxScroll, scroll + amount));
+            relayout();
+        }
+    }
+
     public boolean back() {
         game.toHq();
         return true;

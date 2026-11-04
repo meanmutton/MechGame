@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Hexfront</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1220; }
+  #game { display: block; position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; touch-action: none;
+          -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; outline: none; cursor: default; }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+             font: 600 20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+             color: #f5a623; letter-spacing: 0.08em; pointer-events: none; }
+</style>
+<script>window.HEXFRONT_BUILD = "%BUILD%";</script>
+</head>
+<body>
+<canvas id="game" tabindex="0"></canvas>
+<div id="loading">HEXFRONT</div>
+<script>
+(function () {
+  // The game reads this queue once per frame: [type, pointer or wheel amount, x, y] in canvas pixels.
+  // Types match Game.TOUCH_DOWN = 0, TOUCH_MOVE = 1, TOUCH_UP = 2, BACK = 3, WHEEL = 4.
+  var q = window.hexfrontInput = [];
+  var canvas = document.getElementById('game');
+  var down = {};
+
+  // The game's screens are laid out for wide phone screens, so a squarer window (a laptop's 16:10) is
+  // letterboxed to at least 1.9:1 rather than squeezing every screen sideways.
+  var MIN_ASPECT = 1.9;
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    var W = window.innerWidth, H = window.innerHeight;
+    var cw = W, ch = H;
+    if (W / H < MIN_ASPECT) ch = Math.round(W / MIN_ASPECT);
+    canvas.style.width = cw + 'px';
+    canvas.style.height = ch + 'px';
+    canvas.style.left = Math.round((W - cw) / 2) + 'px';
+    canvas.style.top = Math.round((H - ch) / 2) + 'px';
+    var w = Math.round(cw * dpr), h = Math.round(ch * dpr);
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function pos(e) {
+    var r = canvas.getBoundingClientRect(), dpr = canvas.width / Math.max(1, r.width);
+    return [(e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr];
+  }
+
+  // browsers only start sound after the first tap or click
+  function unlockAudio() {
+    var a = window.hexfrontAudio;
+    if (a && a.ctx.state !== 'running') { try { a.ctx.resume(); } catch (e) {} }
+  }
+
+  canvas.addEventListener('pointerdown', function (e) {
+    if (e.button !== undefined && e.button > 0) return;   // left button, touch or pen only
+    unlockAudio();
+    canvas.focus();
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    down[e.pointerId] = true;
+    var p = pos(e);
+    q.push(0, e.pointerId, p[0], p[1]);
+    e.preventDefault();
+  });
+  canvas.addEventListener('pointermove', function (e) {
+    if (!down[e.pointerId]) return;   // only drags, not a mouse passing over
+    var p = pos(e);
+    q.push(1, e.pointerId, p[0], p[1]);
+    e.preventDefault();
+  });
+  function up(e) {
+    if (!down[e.pointerId]) return;
+    delete down[e.pointerId];
+    var p = pos(e);
+    q.push(2, e.pointerId, p[0], p[1]);
+    e.preventDefault();
+  }
+  canvas.addEventListener('pointerup', up);
+  canvas.addEventListener('pointercancel', up);
+
+  // mouse wheel and two-finger trackpad scroll: scrolls lists; over the battle map it zooms (so does a pinch)
+  canvas.addEventListener('wheel', function (e) {
+    var dpr = window.devicePixelRatio || 1;
+    var d = e.deltaY * (e.deltaMode === 1 ? 16 : (e.deltaMode === 2 ? 400 : 1)) * dpr;
+    if (e.ctrlKey) d *= 4;   // a trackpad pinch arrives as a wheel event with Ctrl held
+    var p = pos(e);
+    q.push(4, d, p[0], p[1]);
+    e.preventDefault();
+  }, { passive: false });
+
+  // Escape works like the phone's back button
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { q.push(3, 0, 0, 0); e.preventDefault(); }
+  });
+  canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  // Safari's own pinch zoom on the page
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+
+  // crash reports: copy to the clipboard so they can be pasted into an email or message
+  window.hexfrontCopy = function (subject, text) {
+    function fallback() {
+      var t = document.createElement('textarea');
+      t.value = text;
+      t.style.position = 'fixed'; t.style.opacity = '0';
+      document.body.appendChild(t);
+      t.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(t);
+      window.alert(ok ? subject + ' copied to the clipboard. Paste it into an email or message.'
+                      : 'Copy this ' + subject.toLowerCase() + ':\n\n' + text.slice(0, 1500));
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(function () {
+        window.alert(subject + ' copied to the clipboard. Paste it into an email or message.');
+      }, fallback);
+    } else fallback();
+  };
+
+  window.hexfrontStarted = function () {
+    var l = document.getElementById('loading');
+    if (l) l.parentNode.removeChild(l);
+  };
+})();
+</script>
+%SCRIPT%
+<script>
+  main();
+  window.hexfrontStarted();
+</script>
+</body>
+</html>

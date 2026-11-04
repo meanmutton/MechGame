@@ -25,7 +25,7 @@ public final class MenuScreen extends Screen {
         sound = add(new Btn(SOUND, "").set(x, y + bh * 3.6f, bw * 0.49f, bh));
         speed = add(new Btn(SPEED, "").set(x + bw * 0.51f, y + bh * 3.6f, bw * 0.49f, bh));
         sound.textSize = speed.textSize = u * 3f;
-        add(new Btn(QUIT, "Quit").set(w - u * 26, h - u * 12, u * 23, u * 9));
+        if (game.platform.canExit()) add(new Btn(QUIT, "Quit").set(w - u * 26, h - u * 12, u * 23, u * 9));
     }
 
     public void update(float dt) {

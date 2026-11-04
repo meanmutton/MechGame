@@ -326,6 +326,24 @@ public final class BattleScreen extends Screen {
         super.touchUp(pointer, x, y);
     }
 
+    public void wheel(float x, float y, float amount) {
+        if (pauseMode != 0) return;
+        if (x >= panelX) {
+            if (wMax > 0 && y > listY && y < listY + listH) {
+                wScroll = Math.max(0, Math.min(wMax, wScroll + amount));
+                placeWeaponRows();
+            }
+            return;
+        }
+        if (y < topBar) return;
+        float ns = Math.max(fit, Math.min(fit * 2.8f, cs * (float) Math.pow(1.0012, -amount)));
+        float wx = (x - camX) / cs, wy = (y - camY) / cs;
+        cs = ns;
+        camX = x - wx * cs;
+        camY = y - wy * cs;
+        clampCam();
+    }
+
     private void layoutKeepCamera() {
         int ow = w;
         w = -1;
@@ -1022,9 +1040,14 @@ public final class BattleScreen extends Screen {
             turn = b.active != null ? "Your activation: " + b.active.name : "Your turn: pick a unit (" + ready + " ready)";
         } else turn = "Enemy activation" + (b.active != null ? ": " + b.active.name : "...");
         g.text("Round " + Math.min(b.round, b.maxRounds) + "/" + b.maxRounds, u * 2, topBar / 2, u * 3, Col.TEXT, Gfx.ALIGN_LEFT, true);
-        g.text(Weather.NAMES[b.map.weather.id], u * 24, topBar / 2, u * 2.8f, Col.SHIELD, Gfx.ALIGN_LEFT, false);
-        g.text(turn, mapW / 2 + u * 8, topBar / 2, u * 3, b.side == Battle.PLAYER ? Col.ACCENT : 0xFFFF8A7A, Gfx.ALIGN_CENTER, true);
-        g.text(b.alive(Battle.PLAYER) + " vs " + b.alive(Battle.ENEMY), mapW - u * 11, topBar / 2, u * 3, Col.TEXT, Gfx.ALIGN_RIGHT, true);
+        String wx = Weather.NAMES[b.map.weather.id], vs = b.alive(Battle.PLAYER) + " vs " + b.alive(Battle.ENEMY);
+        g.text(wx, u * 24, topBar / 2, u * 2.8f, Col.SHIELD, Gfx.ALIGN_LEFT, false);
+        g.text(vs, mapW - u * 11, topBar / 2, u * 3, Col.TEXT, Gfx.ALIGN_RIGHT, true);
+        // the turn message gets the room between the weather and the unit count, smaller if it must
+        float lb = u * 24 + g.textWidth(wx, u * 2.8f, false) + u * 2.5f, rb = mapW - u * 11 - g.textWidth(vs, u * 3, true) - u * 2.5f;
+        float ts = u * 3;
+        if (g.textWidth(turn, ts, true) > rb - lb) ts = Math.max(u * 2.2f, ts * (rb - lb) / g.textWidth(turn, ts, true));
+        g.text(Ui.fit(g, turn, ts, rb - lb), (lb + rb) / 2, topBar / 2, ts, b.side == Battle.PLAYER ? Col.ACCENT : 0xFFFF8A7A, Gfx.ALIGN_CENTER, true);
         if (infoHex >= 0) renderTerrainCard(g, infoHex % b.map.cols, infoHex / b.map.cols);
     }
 
