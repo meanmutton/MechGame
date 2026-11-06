@@ -424,7 +424,17 @@ public final class BattleScreen extends Screen {
                 }
                 if (bt.id >= WROW && bt.id < WROW + 50) {
                     int m = bt.id - WROW;
-                    if (m < wsel.length) wsel[m] = !wsel[m];
+                    if (m < wsel.length) {
+                        wsel[m] = !wsel[m];
+                        // only one melee weapon swings per turn: picking one drops any other
+                        Wpn w = a.wpn(m);
+                        if (wsel[m] && w != null && w.isMelee()) {
+                            for (int k = 0; k < wsel.length; k++) {
+                                Wpn o = a.wpn(k);
+                                if (k != m && o != null && o.isMelee()) wsel[k] = false;
+                            }
+                        }
+                    }
                 }
         }
     }

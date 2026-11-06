@@ -4,20 +4,32 @@ package com.meanmutton.mechgame.core;
 public final class Info {
     private Info() {}
 
-    public static int alphaHeat(Unit u) {
-        int h = 0;
+    /** The melee weapon that would swing (the hardest-hitting one), or -1: only one swings per turn. */
+    private static int bestMelee(Unit u) {
+        int best = -1;
         for (int m = 0; m < u.weapon.length; m++) {
             Wpn w = u.wpn(m);
-            if (w != null) h += w.heat;
+            if (w != null && w.isMelee() && (best < 0 || w.dmg > u.wpn(best).dmg)) best = m;
+        }
+        return best;
+    }
+
+    /** Heat of firing everything that can fire in one turn (one melee weapon at most). */
+    public static int alphaHeat(Unit u) {
+        int h = 0, melee = bestMelee(u);
+        for (int m = 0; m < u.weapon.length; m++) {
+            Wpn w = u.wpn(m);
+            if (w != null && (!w.isMelee() || m == melee)) h += w.heat;
         }
         return h;
     }
 
+    /** Damage of firing everything that can fire in one turn (one melee weapon at most). */
     public static int alphaDamage(Unit u) {
-        int d = 0;
+        int d = 0, melee = bestMelee(u);
         for (int m = 0; m < u.weapon.length; m++) {
             Wpn w = u.wpn(m);
-            if (w != null) d += w.dmg;
+            if (w != null && (!w.isMelee() || m == melee)) d += w.dmg;
         }
         return d;
     }

@@ -73,6 +73,10 @@ public final class DesktopTest {
 
     static void validate() {
         int bad = 0;
+        for (Chassis ch : Chassis.ALL) if (new Unit(ch).meleeCount() > 1) {
+            System.out.println("INVALID " + ch.name + ": more than one melee weapon");
+            bad++;
+        }
         System.out.printf("%-24s %-14s %-12s %6s %11s %6s %5s %5s %5s%n", "Unit", "Type", "Role", "Price", "Mass", "Armor", "Dmg", "Heat", "Cool");
         for (Chassis ch : Chassis.ALL) {
             Unit u = new Unit(ch);
@@ -382,6 +386,46 @@ public final class DesktopTest {
             System.arraycopy(saved, 0, c.armoryW, 0, saved.length);
             System.out.println("refit chooser scroll, filter and sort OK (" + rows.size() + " items)");
             c.roster.remove(corona);
+        }
+        // one melee weapon per unit: the workshop won't fit a second, and says why
+        {
+            Chassis br = null;
+            for (Chassis ch : Chassis.ALL) if (ch.name.equals("Bramble")) br = ch;
+            Unit bu = new Unit(br);
+            c.roster.add(bu);
+            int mm = bu.meleeMount(-1);
+            if (mm < 0 || bu.meleeCount() != 1) throw new RuntimeException("the Bramble should carry exactly one melee weapon");
+            int other = -1;
+            for (int k = 0; k < bu.weapon.length && other < 0; k++)
+                if (k != mm && Wpn.canMount(Wpn.ALL[Wpn.VIBRO_BLADE], bu.type, bu.ch.mounts[k].cls)) other = k;
+            c.armoryW[Wpn.VIBRO_BLADE]++;
+            g.setScreen(new RefitScreen(g, bu));
+            tick(g, 2);
+            click(g, 100 + other);
+            Btn blade = find(g, 500 + Wpn.VIBRO_BLADE);
+            if (blade.enabled) throw new RuntimeException("a second melee weapon is offered");
+            g.wheel(W / 2f, H / 2f, 100000);   // down to the melee weapons at the end of the list
+            tick(g, 2);
+            shot(g, "08f_refit_one_melee");
+            click(g, 499);
+            // a unit refitted before the rule, with two: a warning, and only the best one counts toward its damage
+            bu.weapon[other] = Wpn.VIBRO_BLADE;
+            bu.computeMaxes();
+            bu.repairFully();
+            int expect = 0, best = 0;
+            for (int k = 0; k < bu.weapon.length; k++) {
+                Wpn w = bu.wpn(k);
+                if (w == null) continue;
+                if (w.isMelee()) best = Math.max(best, w.dmg);
+                else expect += w.dmg;
+            }
+            if (Info.alphaDamage(bu) != expect + best) throw new RuntimeException("alpha damage counts more than one melee weapon");
+            g.setScreen(new RefitScreen(g, bu));
+            tick(g, 2);
+            shot(g, "08g_refit_two_melee_warning");
+            c.roster.remove(bu);
+            c.armoryW[Wpn.VIBRO_BLADE]--;
+            System.out.println("one melee weapon per unit OK (" + br.name + ", melee in mount " + mm + ", tried mount " + other + ")");
         }
         g.toHq();
         g.prepareMission();
