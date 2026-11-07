@@ -77,7 +77,7 @@ public final class CrashReport {
         try {
             Company c = game.company;
             if (c != null) {
-                s.append("Company: ").append(c.quick ? "quick battle" : (c.merc ? "mercenary" : "campaign")).append(", ").append(Company.DIFFICULTY[c.difficulty])
+                s.append("Company: ").append(c.hotseat ? "two-player battle (seat " + (c.seatNo + 1) + ")" : c.quick ? "quick battle" : (c.merc ? "mercenary" : "campaign")).append(", ").append(Company.DIFFICULTY[c.difficulty])
                         .append(", contract ").append(c.mission).append(", $").append(c.cash).append(", ").append(c.roster.size())
                         .append(" units, ").append(c.deployed.size()).append(" deployed\n");
                 if (c.merc) {
@@ -97,7 +97,7 @@ public final class CrashReport {
             if (game.screen() instanceof BattleScreen) {
                 Battle b = ((BattleScreen) game.screen()).battle();
                 s.append("Battle: round ").append(b.round).append('/').append(b.maxRounds).append(b.deploying ? ", deploying" : "")
-                        .append(", ").append(b.side == Battle.PLAYER ? "your" : "enemy").append(" side, active ")
+                        .append(", ").append(b.hotseat ? "player " + (b.side + 1) + "'s" : (b.side == Battle.PLAYER ? "your" : "enemy")).append(" side, active ")
                         .append(b.active == null ? "-" : b.active.name).append(", result ").append(b.result)
                         .append(", ").append(b.alive(Battle.PLAYER)).append(" vs ").append(b.alive(Battle.ENEMY)).append(" alive, map ")
                         .append(HexMap.BIOME_NAMES[b.map.biome]).append(' ').append(Weather.NAMES[b.map.weather.id]).append('\n');

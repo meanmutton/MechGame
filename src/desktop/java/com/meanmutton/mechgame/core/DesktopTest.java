@@ -612,6 +612,49 @@ public final class DesktopTest {
             tick(g, 120);
             shot(g, "14d_impact_log");
             System.out.println("last log: " + bb.log.get(bb.log.size() - 1));
+            // the map scrolls up far enough that its bottom row clears the combat log, zoomed in or all the way out
+            BattleScreen lbs = (BattleScreen) g.screen();
+            java.lang.reflect.Field lt0 = BattleScreen.class.getDeclaredField("logTop");
+            java.lang.reflect.Field fcs0 = BattleScreen.class.getDeclaredField("cs");
+            lt0.setAccessible(true);
+            fcs0.setAccessible(true);
+            for (int pass = 0; pass < 2; pass++) {
+                if (pass == 1) {
+                    g.wheel(W * 0.3f, H * 0.5f, 100000);   // zoom all the way out: the map sits above the log with no dragging
+                    tick(g, 2);
+                    shot(g, "14g_zoomed_out_no_drag");
+                    float b0 = hexToScreen(lbs, 1, m.rows - 1)[1] + 0.866f * fcs0.getFloat(lbs);
+                    if (b0 > lt0.getFloat(lbs) + 1) throw new RuntimeException("zoomed out, the bottom row starts under the log");
+                }
+                for (int k = 0; k < 3; k++) {
+                    float x = W * 0.3f;
+                    g.touch(Game.TOUCH_DOWN, 0, x, H * 0.8f);
+                    for (int i = 1; i <= 10; i++) g.touch(Game.TOUCH_MOVE, 0, x, H * 0.8f - i * 60);
+                    g.touch(Game.TOUCH_UP, 0, x, H * 0.8f - 600);
+                    tick(g, 2);
+                }
+                java.lang.reflect.Field lt = BattleScreen.class.getDeclaredField("logTop");
+                java.lang.reflect.Field fcs = BattleScreen.class.getDeclaredField("cs");
+                lt.setAccessible(true);
+                fcs.setAccessible(true);
+                float bottom = hexToScreen(lbs, 1, m.rows - 1)[1] + 0.866f * fcs.getFloat(lbs);
+                if (bottom > lt.getFloat(lbs) + 1) throw new RuntimeException("the bottom row stays under the log (" + bottom + " vs " + lt.getFloat(lbs) + ")");
+                shot(g, pass == 0 ? "14e_map_clear_of_log" : "14f_map_clear_of_log_zoomed_out");
+                if (pass == 0) {
+                    // the log grows while the view is at the bottom: the map moves up with it
+                    float before = lt.getFloat(lbs);
+                    for (int k = 0; k < 4; k++)
+                        bb.log("A long entry that wraps onto a second line in the log box so the log is taller than before, number " + k
+                                + ", with plenty of words to make it wrap at this width");
+                    shot(g, "14h_map_follows_log");   // drawing a frame measures the taller log
+                    tick(g, 2);                         // the next update moves the map up with it
+                    shot(g, "14h_map_follows_log");
+                    float after = lt.getFloat(lbs), bot = hexToScreen(lbs, 1, m.rows - 1)[1] + 0.866f * fcs.getFloat(lbs);
+                    if (after >= before) throw new RuntimeException("the test log did not grow");
+                    if (bot > after + 1) throw new RuntimeException("the map did not follow the growing log (" + bot + " vs " + after + ")");
+                }
+            }
+            System.out.println("map scrolls clear of the combat log OK");
         }
         // campaign scenarios: restrictions at HQ, a base assault with garrison and emplacements, the end screen
         {
@@ -871,6 +914,8 @@ public final class DesktopTest {
             System.out.println("battle weapon list OK (" + wr.size() + " weapons, row " + Math.round(wr.get(0).h) + " px"
                     + (scrolls ? ", scrolls to the last" : ", all visible") + ")");
         }
+        // hotseat: two players on one device, building forces, deploying in secret, playing the battle
+        hotseat(new FakePlatform());
         // weather variety on a smaller screen
         W = 1600;
         H = 900;
@@ -890,6 +935,113 @@ public final class DesktopTest {
         }
         W = 2400;
         H = 1080;
+    }
+
+    static void hotseat(FakePlatform hp) throws Exception {
+        Game g = new Game(hp, 61);
+        tick(g, 2);
+        g.newHotseat(9000);
+        tick(g, 2);
+        if (!(g.screen() instanceof HandoffScreen)) throw new RuntimeException("hotseat should start on a hand-over screen");
+        shot(g, "61_hotseat_handoff_p1");
+        click(g, 1);   // I'm Player 1
+        tick(g, 2);
+        Company p1 = g.seats[0], p2 = g.seats[1];
+        if (g.company != p1 || !(g.screen() instanceof HqScreen)) throw new RuntimeException("Player 1 should build first");
+        for (int id : new int[]{21, 21, 4, 11, 0}) { Unit u = new Unit(Chassis.ALL[id]); p1.roster.add(u); p1.deployed.add(u); }
+        g.setScreen(new HqScreen(g));
+        tick(g, 2);
+        click(g, 4);   // Done
+        tick(g, 2);
+        if (!(g.screen() instanceof HandoffScreen) || g.company != p2) throw new RuntimeException("Player 2 should build next");
+        click(g, 1);
+        tick(g, 2);
+        for (int id : new int[]{25, 9, 12, 14, 2, 1}) { Unit u = new Unit(Chassis.ALL[id]); p2.roster.add(u); p2.deployed.add(u); }
+        g.setScreen(new HqScreen(g));
+        tick(g, 2);
+        shot(g, "62_hotseat_hq_p2");
+        click(g, 4);   // Fight
+        tick(g, 2);
+        if (!(g.screen() instanceof BriefingScreen) || g.company != p1) throw new RuntimeException("the briefing should follow Player 2's Fight");
+        click(g, 1);   // Back: Player 2 still holds the device
+        tick(g, 2);
+        if (g.company != p2 || !(g.screen() instanceof HqScreen)) throw new RuntimeException("Back from the briefing should return to Player 2");
+        click(g, 4);
+        tick(g, 2);
+        shot(g, "63_hotseat_briefing");
+        click(g, 2);   // Begin battle
+        tick(g, 5);
+        BattleScreen bs = (BattleScreen) g.screen();
+        Battle b = bs.battle();
+        if (!b.hotseat || !b.deploying || b.deployTeam != Battle.PLAYER) throw new RuntimeException("Player 1 should deploy first");
+        boolean handoff = false;
+        for (Btn bt : buttonsOf(g)) if (bt.id == 207) handoff = true;
+        if (!handoff) throw new RuntimeException("the map should be hidden until Player 1 is ready");
+        shot(g, "64_hotseat_handoff_deploy");
+        click(g, 207);
+        tick(g, 5);
+        // nothing of Player 2's shows or blocks while Player 1 deploys: an infantry ambush onto a Player 2 unit is allowed
+        Unit p1inf = null, p2unit = null;
+        for (Unit u : b.units) {
+            if (u.team == Battle.ENEMY && !b.hidden(u)) throw new RuntimeException("Player 2's units show during Player 1's deployment");
+            if (u.team == Battle.PLAYER && u.type == UnitType.INFANTRY) p1inf = u;
+            if (u.team == Battle.ENEMY && p2unit == null && u.type != UnitType.INFANTRY) p2unit = u;
+        }
+        if (!b.canPlace(p1inf, p2unit.q, p2unit.r)) throw new RuntimeException("a hidden unit gives itself away by blocking placement");
+        b.place(p1inf, p2unit.q, p2unit.r);
+        shot(g, "65_hotseat_deploy_p1");
+        click(g, 13);   // Done: pass to Player 2
+        tick(g, 5);
+        if (b.deployTeam != Battle.ENEMY || !b.deploying) throw new RuntimeException("Player 2 should deploy next");
+        for (Unit u : b.units) if (u.team == Battle.PLAYER && !b.hidden(u)) throw new RuntimeException("Player 1's units show during Player 2's deployment");
+        // the battle saves here and resumes on Player 2's deployment, behind the hand-over screen
+        g.saveBattle(b);
+        Game g2 = new Game(hp, 62);
+        tick(g2, 2);
+        g2.resumeBattle();
+        tick(g2, 5);
+        Battle rb = ((BattleScreen) g2.screen()).battle();
+        if (!rb.hotseat || rb.deployTeam != Battle.ENEMY || !rb.deploying || !g2.company.hotseat || g2.hotseatEnemy == null)
+            throw new RuntimeException("a hotseat battle did not resume as one");
+        boolean hidden = false;
+        for (Btn bt : buttonsOf(g2)) if (bt.id == 207) hidden = true;
+        if (!hidden) throw new RuntimeException("a resumed deployment should start behind the hand-over screen");
+        click(g, 207);
+        tick(g, 5);
+        shot(g, "66_hotseat_deploy_p2");
+        click(g, 13);   // Start battle
+        tick(g, 5);
+        if (b.deploying) throw new RuntimeException("the battle should start after Player 2 deploys");
+        for (Unit u : b.units) for (Unit o : b.units)
+            if (u != o && !u.destroyed && !o.destroyed && u.q == o.q && u.r == o.r) throw new RuntimeException("two units share a hex after deployment");
+        if (p1inf.q == p2unit.q && p1inf.r == p2unit.r) throw new RuntimeException("the clash was not resolved");
+        // each player controls their own side in turn
+        for (int turn = 0; turn < 4; turn++) {
+            for (int i = 0; i < 400 && b.busy(); i++) tick(g, 1);
+            int side = b.side;
+            click(g, 12);   // Next unit
+            tick(g, 2);
+            if (b.active == null || b.active.team != side) throw new RuntimeException("player " + (side + 1) + " could not pick a unit");
+            if (turn == 1) shot(g, "67_hotseat_battle");
+            click(g, 1);    // End turn
+            tick(g, 2);
+        }
+        // the rest of the battle plays itself
+        b.autoPlayer = true;
+        g.headless = true;
+        int frames = 0;
+        while (b.result == Battle.RESULT_NONE && ++frames < 20 * 60 * 120) b.update(1 / 20f);
+        if (b.result == Battle.RESULT_NONE) throw new RuntimeException("the hotseat battle did not finish");
+        g.finishHotseat(b);
+        g.headless = false;
+        tick(g, 2);
+        shot(g, "68_hotseat_end");
+        click(g, 2);   // Rematch
+        tick(g, 2);
+        if (!(g.screen() instanceof BriefingScreen) || g.seats[0].deployed.size() != 5 || g.seats[1].deployed.size() != 6)
+            throw new RuntimeException("the rematch should bring both forces back");
+        for (Unit u : g.seats[1].deployed) if (u.isDamaged()) throw new RuntimeException("rematch forces should be repaired");
+        System.out.println("hotseat OK (result " + b.result + " after " + b.round + " rounds, rematch ready)");
     }
 
     static float[] hexToScreen(BattleScreen bs, int c, int r) throws Exception {

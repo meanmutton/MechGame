@@ -9,12 +9,20 @@ public final class BattleScreen extends Screen {
             REPAIR = 9, PAUSE = 10, CANCEL = 11, NEXT = 12, START = 13, DETAILS = 14, WROW = 100, EQ = 300;
     /** Equipment that is used by pressing a button, in button order. */
     private static final int[] ACTIVE_EQUIP = {Equip.TURBO, Equip.SMOKE, Equip.COOLANT, Equip.REPAIR_KIT};
-    private static final int P_RESUME = 201, P_WITHDRAW = 202, P_SOUND = 203, P_SPEED = 204, P_QUIT = 205, P_CONFIRM = 206;
+    private static final int P_RESUME = 201, P_WITHDRAW = 202, P_SOUND = 203, P_SPEED = 204, P_QUIT = 205, P_CONFIRM = 206, P_READY = 207;
+    /** pauseMode values: none, pause menu, confirm withdrawal, hotseat hand-over (hides the map). */
+    private static final int OV_NONE = 0, OV_PAUSE = 1, OV_CONFIRM = 2, OV_HANDOFF = 3;
 
     private final Battle b;
     private float t;
     // camera
     private float cs, fit, camX, camY, mapW, topBar, panelX, panelW;
+    /** Height the combat log may use (in units of u); older entries drop off sooner rather than grow past it. */
+    private static final float LOG_ROOM = 19;
+    /** The zoom at which the whole map fills the screen height (the starting and closest zoom come from it). */
+    private float fitFull;
+    /** The camera is at the bottom limit: it stays there, just above the combat log, as the log grows or shrinks. */
+    private boolean pinned;
     private boolean camInit;
     // gestures
     private final int[] pid = {-1, -1};
@@ -53,10 +61,34 @@ public final class BattleScreen extends Screen {
     private final java.util.Set<Battle.Fx> counted = new java.util.HashSet<Battle.Fx>();
 
     private int savedVersion = -1;
+    /** Top of the combat log drawn in the bottom-left corner (the screen bottom when it is empty). */
+    private float logTop = -1;
+    // hotseat: who the hand-over screen is waiting for, and a banner when the turn passes to the other player
+    private String handoffTitle, handoffText;
+    private int lastSide = -1;
+    private float turnBanner;
 
     public BattleScreen(Game game, Battle b) {
         super(game);
         this.b = b;
+        if (b.hotseat && b.deploying) handoffDeploy();
+    }
+
+    /** The side the controls act for: the player placing units, or the player whose turn it is. */
+    private int ctl() {
+        if (b.deploying) return b.placingTeam();
+        return b.hotseat ? b.side : Battle.PLAYER;
+    }
+
+    /** Hotseat: hide the map until the next player is holding the device. */
+    private void handoffDeploy() {
+        int t = b.deployTeam;
+        handoffTitle = "PLAYER " + (t + 1) + ": DEPLOY";
+        handoffText = "Pass the device to Player " + (t + 1) + ". Player " + (2 - t) + ", look away: your opponent places units "
+                + (t == Battle.PLAYER ? "on the west edge" : "on the east edge") + ", and infantry can hide anywhere.";
+        pauseMode = OV_HANDOFF;
+        camInit = false;   // frame the new player's own edge of the map
+        layoutOverlay();
     }
 
     public Battle battle() {
@@ -73,7 +105,9 @@ public final class BattleScreen extends Screen {
         mapW = panelX;
         topBar = u * 8;
         float width = 1.5f * (b.map.cols - 1) + 2, height = 1.732f * (b.map.rows + 0.5f);
-        float newFit = Math.min(mapW / width, (h - topBar) / height);
+        // zoomed all the way out, the whole map fits in the space above the combat log (about four entries tall)
+        fitFull = Math.min(mapW / width, (h - topBar) / height);
+        float newFit = Math.min(mapW / width, (h - topBar - (LOG_ROOM + 2) * u) / height);
         if (!camInit || Math.abs(newFit - fit) > 0.01f) {
             fit = newFit;
             boolean first = !camInit;
@@ -81,10 +115,12 @@ public final class BattleScreen extends Screen {
             camX = (mapW - width * cs) / 2 + cs;
             camY = topBar + (h - topBar - height * cs) / 2 + cs * 0.866f;
             camInit = true;
+            if (!first) clampCam();
             if (first) {
-                // start zoomed in a little, showing your own deployment zone on the left
-                cs = fit * 1.3f;
+                // start zoomed in a little, showing your own deployment zone (Player 2's is on the right)
+                cs = fitFull * 1.3f;
                 camX = u * 2 + cs;
+                if (b.hotseat && b.deploying && b.deployTeam == Battle.ENEMY) camX = mapW - u * 2 - (width - 1) * cs;
                 camY = topBar + (h - topBar - height * cs) / 2 + cs * 0.866f;
                 clampCam();
             }
@@ -103,7 +139,7 @@ public final class BattleScreen extends Screen {
         int nw = su == null ? 0 : su.weapon.length;
         // equipment buttons for the unit whose activation it is
         List<Integer> eqIds = new ArrayList<Integer>();
-        if (su != null && su.team == Battle.PLAYER && !b.deploying) {
+        if (su != null && su.team == ctl() && b.human(su.team) && !b.deploying) {
             for (int id : ACTIVE_EQUIP) if (su.equipSlot(id) >= 0) eqIds.add(id);
         }
         float btnArea = u * 24 + (eqIds.isEmpty() ? 0 : u * 10.5f);
@@ -152,7 +188,7 @@ public final class BattleScreen extends Screen {
         bEnd.color = 0xFF2E5D8F;
         bNext = add(new Btn(NEXT, "Next Unit").set(x0, by2, bw2, u * 9.5f));
         bCancel = add(new Btn(CANCEL, "Cancel").set(x0, by2, bw2, u * 9.5f));
-        bStart = add(new Btn(START, "START BATTLE").set(x0, by2, pw, u * 9.5f));
+        bStart = add(new Btn(START, b.hotseat && b.deployTeam == Battle.PLAYER ? "DONE: PASS TO PLAYER 2" : "START BATTLE").set(x0, by2, pw, u * 9.5f));
         bStart.color = 0xFF2E7D4F;
         bDetails = add(new Btn(DETAILS, "Details").set(x0 + pw - u * 16, u * 1.5f, u * 16, u * 7));
         for (Btn bb : buttons) if (bb.id < WROW) bb.textSize = u * 3f;
@@ -168,14 +204,23 @@ public final class BattleScreen extends Screen {
         overlay.clear();
         if (pauseMode == 0) return;
         float bw = u * 52, bh = u * 9.5f, x = (w - bw) / 2, y = h * 0.22f;
-        if (pauseMode == 1) {
+        if (pauseMode == OV_HANDOFF) {
+            overlay.add(new Btn(P_READY, "I'm Player " + (b.deployTeam + 1) + ": show the map").set(x, h * 0.62f, bw, bh * 1.1f).tint(0xFF2E7D4F));
+            return;
+        }
+        if (pauseMode == OV_PAUSE) {
             overlay.add(new Btn(P_RESUME, "Resume").set(x, y, bw, bh).tint(0xFF2E7D4F));
             overlay.add(new Btn(P_SOUND, "Sound: " + (game.settings.sound ? "On" : "Off")).set(x, y + bh * 1.2f, bw, bh));
             overlay.add(new Btn(P_SPEED, "Enemy turns: " + Settings.SPEED_NAMES[game.settings.aiSpeed]).set(x, y + bh * 2.4f, bw, bh));
-            overlay.add(new Btn(P_WITHDRAW, "Withdraw from battle").set(x, y + bh * 3.6f, bw, bh).tint(0xFF8F5A2E));
+            Btn wd = overlay.get(overlay.size() - 1);
+            if (b.hotseat) wd.enabled = false;   // no computer turns to speed up
+            String concede = b.hotseat ? (b.deploying ? "Concede the battle" : "Player " + (b.side + 1) + " concedes") : "Withdraw from battle";
+            Btn cw = new Btn(P_WITHDRAW, concede).set(x, y + bh * 3.6f, bw, bh).tint(0xFF8F5A2E);
+            cw.enabled = !(b.hotseat && b.deploying);
+            overlay.add(cw);
             overlay.add(new Btn(P_QUIT, "Save and quit to menu").set(x, y + bh * 4.8f, bw, bh).tint(0xFF2E6D8F));
         } else {
-            overlay.add(new Btn(P_CONFIRM, "Yes, withdraw").set(w / 2f - u * 32, h * 0.55f, u * 30, bh).tint(0xFF8F3A2E));
+            overlay.add(new Btn(P_CONFIRM, b.hotseat ? "Yes, concede" : "Yes, withdraw").set(w / 2f - u * 32, h * 0.55f, u * 30, bh).tint(0xFF8F3A2E));
             overlay.add(new Btn(P_RESUME, "Keep fighting").set(w / 2f + u * 2, h * 0.55f, u * 30, bh).tint(0xFF2E7D4F));
         }
     }
@@ -190,7 +235,7 @@ public final class BattleScreen extends Screen {
     }
 
     private boolean myActivation() {
-        return b.playerTurn() && b.active != null && b.active.team == Battle.PLAYER && !b.busy();
+        return b.playerTurn() && b.active != null && b.active.team == b.side && !b.busy();
     }
 
     private void refreshButtons() {
@@ -260,13 +305,29 @@ public final class BattleScreen extends Screen {
                 counted.clear();
             }
         }
-        if (b.active != null && b.active.team == Battle.ENEMY) view = b.active;
-        if (target != null && (target.destroyed || b.active == null || b.active.team != Battle.PLAYER)) target = null;
+        if (b.active != null && !b.human(b.active.team)) view = b.active;
+        if (target != null && (target.destroyed || b.active == null || b.active.team != b.side || !b.human(b.side))) target = null;
+        // hotseat: a banner when the turn passes from one player to the other
+        if (b.hotseat && !b.deploying && b.result == Battle.RESULT_NONE) {
+            if (lastSide >= 0 && lastSide != b.side) {
+                turnBanner = 1.6f;
+                view = null;
+                game.sfx(Platform.SND_ALERT, 0.5f);
+            }
+            lastSide = b.side;
+        }
+        if (turnBanner > 0) turnBanner -= dt;
+        // keep the bottom row clear of the combat log as it changes height, if the view is at the bottom
+        if (pinned && camInit) {
+            camY -= h;
+            clampCam();
+        }
         if (b.result != Battle.RESULT_NONE && !b.busy()) {
             endTimer += dt;
             if (endTimer > 2f && !finished) {
                 finished = true;
-                game.finishBattle(b);
+                if (b.hotseat) game.finishHotseat(b);
+                else game.finishBattle(b);
                 return;
             }
         }
@@ -336,7 +397,7 @@ public final class BattleScreen extends Screen {
             return;
         }
         if (y < topBar) return;
-        float ns = Math.max(fit, Math.min(fit * 2.8f, cs * (float) Math.pow(1.0012, -amount)));
+        float ns = Math.max(fit, Math.min(fitFull * 2.8f, cs * (float) Math.pow(1.0012, -amount)));
         float wx = (x - camX) / cs, wy = (y - camY) / cs;
         cs = ns;
         camX = x - wx * cs;
@@ -372,6 +433,7 @@ public final class BattleScreen extends Screen {
         switch (bt.id) {
             case PAUSE: pauseMode = 1; layoutOverlay(); return;
             case P_RESUME: pauseMode = 0; return;
+            case P_READY: pauseMode = OV_NONE; layoutKeepCamera(); return;
             case P_SOUND: game.settings.sound = !game.settings.sound; game.saveSettings(); layoutOverlay(); return;
             case P_SPEED: game.settings.aiSpeed = (game.settings.aiSpeed + 1) % 3; game.saveSettings(); layoutOverlay(); return;
             case P_WITHDRAW: pauseMode = 2; layoutOverlay(); return;
@@ -388,6 +450,8 @@ public final class BattleScreen extends Screen {
                 b.finishDeployment();
                 deploySel = null;
                 view = null;
+                if (b.hotseat && b.deploying) handoffDeploy();   // Player 2's turn to deploy
+                else layoutKeepCamera();
                 return;
             default: break;
         }
@@ -442,7 +506,7 @@ public final class BattleScreen extends Screen {
     private void selectNextReady() {
         if (!b.playerTurn() || b.active != null) return;
         for (Unit un : b.units) {
-            if (un.team == Battle.PLAYER && !un.destroyed && !un.activated) {
+            if (un.team == ctl() && !un.destroyed && !un.activated) {
                 activate(un);
                 centerOn(un);
                 return;
@@ -502,6 +566,7 @@ public final class BattleScreen extends Screen {
 
     private void tapHex(int c, int r) {
         Unit at = b.unitAt(c, r);
+        if (at != null && b.hidden(at)) at = null;   // hotseat deployment: the other player's units aren't there
         int k = b.map.idx(c, r);
         infoHex = -1;
         if (at != null && doubleTap(at)) {
@@ -509,7 +574,7 @@ public final class BattleScreen extends Screen {
             return;
         }
         if (b.deploying) {
-            if (at != null && at.team == Battle.PLAYER) {
+            if (at != null && at.team == b.placingTeam()) {
                 deploySel = at;
                 view = at;
             } else if (deploySel != null && b.canPlace(deploySel, c, r)) {
@@ -527,7 +592,7 @@ public final class BattleScreen extends Screen {
         }
         if (b.playerTurn()) {
             Unit a = b.active;
-            if (at != null && at.team == Battle.PLAYER) {
+            if (at != null && at.team == ctl()) {
                 if (a == null && !at.activated) {
                     activate(at);
                     return;
@@ -541,7 +606,7 @@ public final class BattleScreen extends Screen {
                 view = at;
                 return;
             }
-            if (at != null && at.team == Battle.ENEMY) {
+            if (at != null && at.team != ctl()) {
                 if (a != null && !a.fired) {
                     target = at;
                     recomputeSelection();
@@ -606,7 +671,7 @@ public final class BattleScreen extends Screen {
         py[i] = y;
         if (pinching && pid[1] >= 0) {
             float mx = (px[0] + px[1]) / 2, my = (py[0] + py[1]) / 2;
-            float ns = Math.max(fit, Math.min(fit * 2.8f, pinchScale * dist() / pinchDist));
+            float ns = Math.max(fit, Math.min(fitFull * 2.8f, pinchScale * dist() / pinchDist));
             // zoom around the midpoint
             float wx = (mx - camX) / cs, wy = (my - camY) / cs;
             cs = ns;
@@ -658,12 +723,22 @@ public final class BattleScreen extends Screen {
     private void clampCam() {
         float width = (1.5f * (b.map.cols - 1) + 2) * cs, height = 1.732f * (b.map.rows + 0.5f) * cs;
         float margin = u * 4;
+        // the combat log sits over the bottom of the map: the map can scroll up until its bottom row clears the log
+        float pad = Math.max(margin, logTop > 0 ? h - logTop + u : margin);
         float minX = mapW - width + cs - margin, maxX = cs + margin;
-        float minY = h - height + cs * 0.866f - margin, maxY = topBar + cs * 0.866f + margin;
+        float minY = h - pad - height + cs * 0.866f, maxY = topBar + cs * 0.866f + margin;
         if (width < mapW) minX = maxX = (mapW - width) / 2 + cs;
-        if (height < h - topBar) minY = maxY = topBar + (h - topBar - height) / 2 + cs * 0.866f;
+        if (height < h - topBar) {
+            // the whole map fits: centred, or lifted (no higher than the top bar) to clear the log
+            float centred = topBar + (h - topBar - height) / 2 + cs * 0.866f;
+            maxY = centred;
+            minY = Math.max(topBar + cs * 0.866f, Math.min(centred, h - pad - height + cs * 0.866f));
+        }
         camX = Math.max(minX, Math.min(maxX, camX));
         camY = Math.max(minY, Math.min(maxY, camY));
+        // all the way out, the map sits above the log; scrolled to the bottom, it stays clear of the log from now on
+        if (cs <= fit * 1.001f) camY = minY;
+        pinned = camY <= minY + 0.5f;
     }
 
     private int[] screenToHex(float sx, float sy) {
@@ -687,6 +762,7 @@ public final class BattleScreen extends Screen {
     }
 
     public boolean back() {
+        if (pauseMode == OV_HANDOFF) return true;   // the map stays hidden until the next player says so
         if (pauseMode != 0) pauseMode = 0;
         else if (target != null) target = null;
         else {
@@ -716,19 +792,41 @@ public final class BattleScreen extends Screen {
         renderLog(g);
         renderPanel(g);
         if (b.result != Battle.RESULT_NONE && !b.busy()) {
-            String[] titles = {"", "VICTORY", "DEFEAT", "DRAW", "WITHDRAWING"};
+            String[] titles = b.hotseat ? new String[]{"", "PLAYER 1 WINS", "PLAYER 2 WINS", "DRAW", ""}
+                    : new String[]{"", "VICTORY", "DEFEAT", "DRAW", "WITHDRAWING"};
             float k = Math.min(1f, endTimer * 2);
             g.fillRect(0, h * 0.38f, mapW, h * 0.16f, Col.alpha(0xCC000000, k));
-            g.text(titles[b.result], mapW / 2, h * 0.46f, u * 9, Col.alpha(b.result == Battle.RESULT_WIN ? Col.GOOD : Col.ACCENT, k), Gfx.ALIGN_CENTER, true);
+            int tc = b.hotseat ? (b.result == Battle.RESULT_WIN ? UnitArt.PLAYER_COLOR : (b.result == Battle.RESULT_LOSS ? UnitArt.ENEMY_COLOR : Col.ACCENT))
+                    : (b.result == Battle.RESULT_WIN ? Col.GOOD : Col.ACCENT);
+            g.text(titles[b.result], mapW / 2, h * 0.46f, u * 9, Col.alpha(tc, k), Gfx.ALIGN_CENTER, true);
+        }
+        if (turnBanner > 0 && b.result == Battle.RESULT_NONE) {
+            float k = Math.min(1f, turnBanner * 2.5f);
+            int tc = UnitArt.teamColor(b.side);
+            g.fillRect(0, h * 0.4f, mapW, h * 0.12f, Col.alpha(0xCC000000, k));
+            g.text("PLAYER " + (b.side + 1) + "'S TURN", mapW / 2, h * 0.46f, u * 7, Col.alpha(tc, k), Gfx.ALIGN_CENTER, true);
         }
         if (flash > 0) g.fillRect(0, 0, mapW, h, Col.alpha(0xFFFFFFFF, flash));
-        if (pauseMode != 0) {
+        if (pauseMode == OV_HANDOFF) {
+            // opaque: the next player must not see the map before taking the device
+            background(g);
+            int tc = UnitArt.teamColor(b.deployTeam);
+            Ui.title(g, handoffTitle, w / 2f, h * 0.24f, u * 8);
+            g.fillRect(w / 2f - u * 30, h * 0.33f, u * 60, u * 0.8f, tc);
+            Ui.wrap(g, handoffText, w / 2f - u * 55, h * 0.42f, u * 3, u * 110, Col.TEXT);
+            for (Btn bb : overlay) Ui.button(g, bb, u);
+        } else if (pauseMode != 0) {
             g.fillRect(0, 0, w, h, 0xB0000000);
-            if (pauseMode == 1) Ui.title(g, "PAUSED", w / 2f, h * 0.12f, u * 8);
+            if (pauseMode == OV_PAUSE) Ui.title(g, "PAUSED", w / 2f, h * 0.12f, u * 8);
             else {
                 Ui.panel(g, w * 0.2f, h * 0.25f, w * 0.6f, h * 0.48f, u * 3);
-                g.text("Withdraw from this battle?", w / 2f, h * 0.35f, u * 4.5f, Col.ACCENT, Gfx.ALIGN_CENTER, true);
-                g.text("It counts as a loss. Units already destroyed are lost; the rest come home.", w / 2f, h * 0.44f, u * 2.6f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
+                if (b.hotseat) {
+                    g.text("Concede the battle, Player " + (b.side + 1) + "?", w / 2f, h * 0.35f, u * 4.5f, Col.ACCENT, Gfx.ALIGN_CENTER, true);
+                    g.text("Player " + (2 - b.side) + " wins.", w / 2f, h * 0.44f, u * 2.6f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
+                } else {
+                    g.text("Withdraw from this battle?", w / 2f, h * 0.35f, u * 4.5f, Col.ACCENT, Gfx.ALIGN_CENTER, true);
+                    g.text("It counts as a loss. Units already destroyed are lost; the rest come home.", w / 2f, h * 0.44f, u * 2.6f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
+                }
             }
             for (Btn bb : overlay) Ui.button(g, bb, u);
         }
@@ -737,13 +835,14 @@ public final class BattleScreen extends Screen {
 
     private void renderOverlays(Gfx g) {
         if (b.deploying) {
-            for (int c = 0; c < Math.min(Battle.DEPLOY_COLS, b.map.cols); c++) {
+            int zone0 = b.placingTeam() == Battle.PLAYER ? 0 : Math.max(0, b.map.cols - Battle.DEPLOY_COLS);
+            for (int c = zone0; c < Math.min(zone0 + Battle.DEPLOY_COLS, b.map.cols); c++) {
                 for (int r = 0; r < b.map.rows; r++) HexRender.fillHex(g, c, r, 0.94f, 0x223F8EF0);
             }
             if (deploySel != null) {
                 boolean[] ok = new boolean[b.map.cols * b.map.rows];
                 for (int c = 0; c < b.map.cols; c++) {
-                    for (int r = 0; r < b.map.rows; r++) ok[b.map.idx(c, r)] = b.canPlace(deploySel, c, r) && b.unitAt(c, r) == null;
+                    for (int r = 0; r < b.map.rows; r++) ok[b.map.idx(c, r)] = b.canPlace(deploySel, c, r);
                 }
                 ok[b.map.idx(deploySel.q, deploySel.r)] = true;
                 highlightArea(g, ok, deploySel);
@@ -752,7 +851,7 @@ public final class BattleScreen extends Screen {
             } else {
                 float p = 0.5f + 0.5f * (float) Math.sin(t * 5);
                 for (Unit un : b.units) {
-                    if (un.team == Battle.PLAYER && !un.destroyed) HexRender.strokeHex(g, un.q, un.r, 0.95f, 0.07f, Col.alpha(0xFF7AD8FF, 0.4f + 0.5f * p));
+                    if (un.team == b.placingTeam() && !un.destroyed) HexRender.strokeHex(g, un.q, un.r, 0.95f, 0.07f, Col.alpha(0xFF7AD8FF, 0.4f + 0.5f * p));
                 }
             }
         }
@@ -784,7 +883,7 @@ public final class BattleScreen extends Screen {
         if (b.playerTurn() && b.active == null && !b.busy()) {
             float p = 0.5f + 0.5f * (float) Math.sin(t * 5);
             for (Unit un : b.units) {
-                if (un.team == Battle.PLAYER && !un.destroyed && !un.activated) {
+                if (un.team == ctl() && !un.destroyed && !un.activated) {
                     HexRender.strokeHex(g, un.q, un.r, 0.95f, 0.07f, Col.alpha(0xFF7AD8FF, 0.4f + 0.5f * p));
                 }
             }
@@ -857,7 +956,7 @@ public final class BattleScreen extends Screen {
             g.fillCircle(x + sm * 0.2f, y - sm * 0.6f, 0.15f + sm * 0.2f, Col.alpha(0xFF555555, 0.5f * (1 - sm / 2)));
         }
         for (Unit un : b.units) {
-            if (un.destroyed && un.deathShown) continue;
+            if ((un.destroyed && un.deathShown) || b.hidden(un)) continue;
             float x = un.drawX, y = un.drawY;
             int tc = UnitArt.teamColor(un.team);
             // whose unit it is shows by its ring, whatever its paint
@@ -1042,12 +1141,15 @@ public final class BattleScreen extends Screen {
     private void renderTop(Gfx g) {
         g.fillRectVGradient(0, 0, mapW, topBar, 0xDD0A0F18, 0x880A0F18);
         String turn;
-        if (b.deploying) turn = "Deployment: place your units, then Start Battle";
+        if (b.deploying) turn = b.hotseat ? "Player " + (b.deployTeam + 1) + ": place your units, then " + (b.deployTeam == Battle.PLAYER ? "Done" : "Start Battle")
+                : "Deployment: place your units, then Start Battle";
         else if (b.result != Battle.RESULT_NONE) turn = "Battle over";
-        else if (b.side == Battle.PLAYER) {
+        else if (b.human(b.side)) {
             int ready = 0;
-            for (Unit un : b.units) if (un.team == Battle.PLAYER && !un.destroyed && !un.activated) ready++;
-            turn = b.active != null ? "Your activation: " + b.active.name : "Your turn: pick a unit (" + ready + " ready)";
+            for (Unit un : b.units) if (un.team == b.side && !un.destroyed && !un.activated) ready++;
+            String who = b.hotseat ? "Player " + (b.side + 1) : "Your";
+            turn = b.active != null ? (b.hotseat ? who + ": " + b.active.name : "Your activation: " + b.active.name)
+                    : (b.hotseat ? who + ": pick a unit (" + ready + " ready)" : "Your turn: pick a unit (" + ready + " ready)");
         } else turn = "Enemy activation" + (b.active != null ? ": " + b.active.name : "...");
         g.text("Round " + Math.min(b.round, b.maxRounds) + "/" + b.maxRounds, u * 2, topBar / 2, u * 3, Col.TEXT, Gfx.ALIGN_LEFT, true);
         String wx = Weather.NAMES[b.map.weather.id], vs = b.alive(Battle.PLAYER) + " vs " + b.alive(Battle.ENEMY);
@@ -1057,7 +1159,9 @@ public final class BattleScreen extends Screen {
         float lb = u * 24 + g.textWidth(wx, u * 2.8f, false) + u * 2.5f, rb = mapW - u * 11 - g.textWidth(vs, u * 3, true) - u * 2.5f;
         float ts = u * 3;
         if (g.textWidth(turn, ts, true) > rb - lb) ts = Math.max(u * 2.2f, ts * (rb - lb) / g.textWidth(turn, ts, true));
-        g.text(Ui.fit(g, turn, ts, rb - lb), (lb + rb) / 2, topBar / 2, ts, b.side == Battle.PLAYER ? Col.ACCENT : 0xFFFF8A7A, Gfx.ALIGN_CENTER, true);
+        int turnColor = b.hotseat ? (b.deploying ? UnitArt.teamColor(b.deployTeam) : UnitArt.teamColor(b.side))
+                : (b.side == Battle.PLAYER ? Col.ACCENT : 0xFFFF8A7A);
+        g.text(Ui.fit(g, turn, ts, rb - lb), (lb + rb) / 2, topBar / 2, ts, turnColor, Gfx.ALIGN_CENTER, true);
         if (infoHex >= 0) renderTerrainCard(g, infoHex % b.map.cols, infoHex / b.map.cols);
     }
 
@@ -1143,6 +1247,7 @@ public final class BattleScreen extends Screen {
             for (String l : lines) tw = Math.max(tw, g.textWidth(l, ts, false));
             float bh = lines.size() * lh + u;
             float boxTop = y + u * 2 - bh;
+            if (i > 0 && boxTop < h - LOG_ROOM * u) break;   // the newest entries always show; older ones keep under the cap
             g.fillRoundRect(u * 1.5f, boxTop, tw + u * 2, bh, u, Col.alpha(0xB0000000, a));
             int col = s.contains(" fired at ") ? 0xFFE8EEF8 : (s.contains("destroyed") ? 0xFFFF8A7A : 0xFFFFD27A);
             for (int k = 0; k < lines.size(); k++) {
@@ -1150,6 +1255,7 @@ public final class BattleScreen extends Screen {
             }
             y = boxTop - u * 0.6f;
         }
+        logTop = n == 0 ? h : y;
     }
 
     private static List<String> wrapLines(Gfx g, String s, float size, float maxW, int maxLines) {
@@ -1191,8 +1297,8 @@ public final class BattleScreen extends Screen {
         g.fillRoundRect(x0, top, pw, bottom - top, u * 1.5f, 0xFF140E10);
         g.strokeRoundRect(x0, top, pw, bottom - top, u * 1.5f, u * 0.3f, 0xFFB8322A);
         int total = impactTotal;
-        boolean mine = tu.team == Battle.PLAYER;
-        g.text(mine ? "YOUR UNIT HIT" : "TARGET HIT", x0 + u * 1.5f, top + u * 2.6f, u * 2.2f, mine ? 0xFFFF6A5A : Col.ACCENT, Gfx.ALIGN_LEFT, true);
+        boolean mine = b.hotseat ? false : tu.team == Battle.PLAYER;
+        g.text(b.hotseat ? "PLAYER " + (tu.team + 1) + " UNIT HIT" : (mine ? "YOUR UNIT HIT" : "TARGET HIT"), x0 + u * 1.5f, top + u * 2.6f, u * 2.2f, mine ? 0xFFFF6A5A : Col.ACCENT, Gfx.ALIGN_LEFT, true);
         g.text(Ui.fit(g, tu.name, u * 3f, pw * 0.6f), x0 + u * 1.5f, top + u * 6f, u * 3f, Col.TEXT, Gfx.ALIGN_LEFT, true);
         g.text("-" + total, x0 + pw - u * 1.5f, top + u * 4.5f, u * 5.5f, 0xFFFF5A3A, Gfx.ALIGN_RIGHT, true);
         float ds = Math.min(pw * 0.7f, bottom - top - u * 14);
@@ -1240,7 +1346,7 @@ public final class BattleScreen extends Screen {
         int tc = UnitArt.teamColor(su.team);
         g.fillRect(panelX + u * 0.4f, 0, u * 1.2f, u * 10, tc);
         g.text(Ui.fit(g, su.name, u * 3.6f, pw - u * 19), x0 + u, u * 3.5f, u * 3.6f, Col.TEXT, Gfx.ALIGN_LEFT, true);
-        g.text(UnitType.NAMES[su.type] + " · " + Chassis.ROLES[su.ch.role] + (su.team == Battle.ENEMY ? " · ENEMY" : ""),
+        g.text(UnitType.NAMES[su.type] + " · " + Chassis.ROLES[su.ch.role] + (b.hotseat ? " · PLAYER " + (su.team + 1) : (su.team == Battle.ENEMY ? " · ENEMY" : "")),
                 x0 + u, u * 7.5f, u * 2.3f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
         UnitArt.doll(g, su, dollX, dollY, dollW, dollH, u * 3, -1);
 
@@ -1284,7 +1390,7 @@ public final class BattleScreen extends Screen {
                 eq.append(ee.shortName).append(su.eqBroken[e] ? "(x)" : (ee.uses > 0 ? "(" + su.eqUses[e] + ")" : ""));
             }
             if (eq.length() > 0) Ui.wrap(g, eq.toString(), sx, y, u * 2f, sw, Col.SHIELD);
-            if (b.inEcm(su) && su.team == Battle.PLAYER) g.text("In ECM cover", sx, dollY + dollH - u, u * 2f, 0xFF7AD8FF, Gfx.ALIGN_LEFT, false);
+            if (b.inEcm(su) && b.human(su.team)) g.text("In ECM cover", sx, dollY + dollH - u, u * 2f, 0xFF7AD8FF, Gfx.ALIGN_LEFT, false);
         }
 
         // weapons: the other buttons as usual, the weapon rows clipped to their (scrolling) list
