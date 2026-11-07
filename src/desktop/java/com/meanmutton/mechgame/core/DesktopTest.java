@@ -71,7 +71,62 @@ public final class DesktopTest {
 
     // ------------------------------------------------------------------
 
+    /** The Text helpers must give exactly what the Java methods they replace give (saves depend on split). */
+    static void textHelpers() {
+        String[] samples = {"", ",", ",,", "a", "a,", "a,,", ",a", ",a,", "a,b", "a,,b", "a,b,,", " a b ", "a|b||", "|", "x:y:z",
+                "a\tb\t\t", "a\nb\n", "\n", "1,2,3,4,5,6,7,8,9,10,,", "Hex front"};
+        char[] seps = {',', '|', ':', '\t', '\n', ' '};
+        int checks = 0;
+        for (String str : samples) {
+            for (char sep : seps) {
+                String rx = sep == '|' ? "\\|" : String.valueOf(sep);
+                if (!java.util.Arrays.equals(str.split(rx), Text.split(str, sep)))
+                    throw new RuntimeException("Text.split differs for \"" + str + "\" on '" + sep + "'");
+                if (!java.util.Arrays.equals(str.split(rx, -1), Text.split(str, sep, true)))
+                    throw new RuntimeException("Text.split(-1) differs for \"" + str + "\" on '" + sep + "'");
+                checks += 2;
+            }
+            if (!java.util.Arrays.equals(str.trim().split("\\s+"), Text.words(str)))
+                throw new RuntimeException("Text.words differs for \"" + str + "\"");
+            if (!str.toLowerCase(java.util.Locale.ROOT).equals(Text.lower(str)) || !str.toUpperCase(java.util.Locale.ROOT).equals(Text.upper(str)))
+                throw new RuntimeException("Text case differs for \"" + str + "\"");
+            checks += 2;
+        }
+        for (Chassis ch : Chassis.ALL) {
+            for (String n : new String[]{ch.name, Chassis.ROLES[ch.role], UnitType.NAMES[ch.type]})
+                if (!n.toLowerCase(java.util.Locale.ROOT).equals(Text.lower(n))) throw new RuntimeException("not ASCII: " + n);
+        }
+        double[] nums = {0, 0.004, 0.005, 0.015, 0.125, 1.25, 1.35, 2.675, 9.995, 12.3456, 99.95, 1234.5, -0.4, -1.25, -0.004};
+        for (double v : nums) {
+            for (int dec = 1; dec <= 2; dec++) {
+                String want = String.format(java.util.Locale.US, "%." + dec + "f", v);
+                if (!want.equals(Text.fixed(v, dec))) throw new RuntimeException("Text.fixed(" + v + ", " + dec + ") = " + Text.fixed(v, dec) + ", want " + want);
+                checks++;
+            }
+        }
+        // the game passes floats: income multipliers, move costs, clock times
+        java.util.Random fr = new java.util.Random(9);
+        for (int i = 0; i < 4000; i++) {
+            float f = i < 2000 ? fr.nextInt(4000) / 100f : fr.nextFloat() * 1000f;
+            for (int dec = 1; dec <= 2; dec++) {
+                String want = String.format(java.util.Locale.US, "%." + dec + "f", f);
+                if (!want.equals(Text.fixed(f, dec))) throw new RuntimeException("Text.fixed(" + f + "f, " + dec + ") = " + Text.fixed(f, dec) + ", want " + want);
+                checks++;
+            }
+        }
+        java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US);
+        df.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        long[] times = {0L, 951782400000L, 1709208000123L, 1793923199999L, 4102444800000L, System.currentTimeMillis()};
+        for (long t : times) {
+            if (!(df.format(new java.util.Date(t)) + " UTC").equals(Text.utc(t))) throw new RuntimeException("Text.utc(" + t + ") = " + Text.utc(t));
+            checks++;
+        }
+        if (!"   12.5s".equals(Text.pad(Text.fixed(12.5, 1), 7) + "s")) throw new RuntimeException("Text.pad");
+        System.out.println("text helpers match Java's (" + checks + " checks)");
+    }
+
     static void validate() {
+        textHelpers();
         int bad = 0;
         for (Chassis ch : Chassis.ALL) if (new Unit(ch).meleeCount() > 1) {
             System.out.println("INVALID " + ch.name + ": more than one melee weapon");

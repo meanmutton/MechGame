@@ -514,7 +514,7 @@ public final class RefitScreen extends Screen {
         g.text("Free capacity " + fmt(un.ch.capacity - un.mass()) + " t (plus whatever you remove)", px + u * 3, py + u * 9, u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
         if (!eq && meleeElsewhere >= 0) {
             String why = "Melee weapons unavailable: only one swings per turn, and the "
-                    + UnitType.locNames(un.type)[un.ch.mounts[meleeElsewhere].loc].toLowerCase() + " has the " + un.wpn(meleeElsewhere).name;
+                    + Text.lower(UnitType.locNames(un.type)[un.ch.mounts[meleeElsewhere].loc]) + " has the " + un.wpn(meleeElsewhere).name;
             float room = pw - u * 31 - g.textWidth("Free capacity " + fmt(un.ch.capacity - un.mass()) + " t (plus whatever you remove)", u * 2.2f, false);
             g.text(Ui.fit(g, why, u * 2.2f, room), px + pw - u * 28, py + u * 9, u * 2.2f, Col.ACCENT, Gfx.ALIGN_RIGHT, true);
         }
@@ -551,7 +551,7 @@ public final class RefitScreen extends Screen {
                 boolean secondMelee = wp.isMelee() && meleeElsewhere >= 0 && un.weapon[choosing] != wp.id;
                 if (secondMelee) {
                     Wpn other = un.wpn(meleeElsewhere);
-                    st = "One melee weapon per unit: the " + UnitType.locNames(un.type)[un.ch.mounts[meleeElsewhere].loc].toLowerCase() + " already has the " + other.name;
+                    st = "One melee weapon per unit: the " + Text.lower(UnitType.locNames(un.type)[un.ch.mounts[meleeElsewhere].loc]) + " already has the " + other.name;
                 }
                 g.text(Ui.fit(g, st, u * 1.9f, b.w * 0.94f), tx, b.y + b.h * 0.7f, u * 1.9f, secondMelee ? Col.ACCENT : Col.TEXT_DIM,
                         Gfx.ALIGN_LEFT, false);

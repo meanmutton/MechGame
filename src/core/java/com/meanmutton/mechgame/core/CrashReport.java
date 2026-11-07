@@ -2,9 +2,6 @@ package com.meanmutton.mechgame.core;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
 
 /**
  * Builds a plain-text report when the game crashes: the error and where it happened, the build and device, what
@@ -48,7 +45,7 @@ public final class CrashReport {
 
     public static String build(Game game, Thread thread, Throwable error) {
         StringBuilder s = new StringBuilder("Hexfront crash report\n");
-        s.append("When: ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date())).append('\n');
+        s.append("When: ").append(Text.utc(System.currentTimeMillis())).append('\n');
         try {
             s.append("Build: ").append(game.platform.buildInfo()).append('\n');
         } catch (Throwable t) {
@@ -62,7 +59,7 @@ public final class CrashReport {
 
     private static String context(Game game, StringBuilder s, String trace) {
         if (s.indexOf("When: ") < 0) {
-            s.append("When: ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date())).append('\n');
+            s.append("When: ").append(Text.utc(System.currentTimeMillis())).append('\n');
             try {
                 s.append("Build: ").append(game.platform.buildInfo()).append('\n');
             } catch (Throwable t) {

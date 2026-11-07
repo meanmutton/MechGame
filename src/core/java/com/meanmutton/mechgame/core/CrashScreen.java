@@ -11,7 +11,7 @@ public final class CrashScreen extends Screen {
     public CrashScreen(Game game, String report) {
         super(game);
         this.report = report;
-        this.lines = report.split("\n");
+        this.lines = Text.split(report, '\n');
     }
 
     protected void layout() {

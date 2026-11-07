@@ -76,7 +76,7 @@ public final class Ui {
 
     /** Draws word-wrapped text starting at (x, y) (center of first line). Returns the height used. */
     public static float wrap(Gfx g, String s, float x, float y, float size, float maxW, int color) {
-        String[] words = s.split(" ");
+        String[] words = Text.split(s, ' ');
         StringBuilder line = new StringBuilder();
         float lh = size * 1.3f, cy = y;
         for (String word : words) {

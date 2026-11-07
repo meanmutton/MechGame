@@ -120,7 +120,7 @@ public final class Game {
     /** Remembers a recent action for crash reports (screen changes, button taps). */
     public void crumb(String s) {
         synchronized (crumbs) {
-            crumbs[crumbCount % crumbs.length] = String.format(java.util.Locale.US, "%7.1fs %s", time, s);
+            crumbs[crumbCount % crumbs.length] = Text.pad(Text.fixed(time, 1), 7) + "s " + s;
             crumbCount++;
         }
     }

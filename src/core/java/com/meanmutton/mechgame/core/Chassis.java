@@ -51,7 +51,7 @@ public final class Chassis {
         this.heatCap = heatCap;
         this.maxExtraSinks = maxExtraSinks;
         this.equipSlots = equipSlots;
-        String[] m = mounts.trim().split("\\s+");
+        String[] m = Text.words(mounts);
         this.mounts = new Mount[m.length];
         for (int i = 0; i < m.length; i++) this.mounts[i] = parseMount(type, m[i]);
         this.stockArmor = stockArmor;

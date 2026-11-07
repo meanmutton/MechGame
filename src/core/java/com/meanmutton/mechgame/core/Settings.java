@@ -18,7 +18,7 @@ public final class Settings {
         Settings st = new Settings();
         if (s == null || !s.startsWith("S1,")) return st;
         try {
-            String[] f = s.split(",");
+            String[] f = Text.split(s, ',');
             st.sound = Integer.parseInt(f[1]) != 0;
             st.aiSpeed = Math.max(0, Math.min(2, Integer.parseInt(f[2])));
         } catch (RuntimeException ignored) {

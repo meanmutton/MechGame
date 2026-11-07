@@ -53,7 +53,7 @@ public final class Scheme {
 
     public static Scheme parse(String s, Scheme fallback) {
         try {
-            String[] p = s.split(":");
+            String[] p = Text.split(s, ':');
             return new Scheme(Integer.parseInt(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2]));
         } catch (RuntimeException e) {
             return fallback;

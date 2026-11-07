@@ -212,9 +212,9 @@ public final class Company {
     public static Company parse(String s) {
         if (s == null || !s.startsWith("C1|")) return null;
         try {
-            String[] p = s.split("\\|", -1);
+            String[] p = Text.split(s, '|', true);
             Company c = new Company();
-            String[] h = p[1].split(",");
+            String[] h = Text.split(p[1], ',');
             c.quick = Integer.parseInt(h[0]) != 0;
             c.difficulty = Integer.parseInt(h[1]);
             c.cash = Integer.parseInt(h[2]);
@@ -237,23 +237,23 @@ public final class Company {
                 if (h.length >= 19 && !h[18].equals("-")) c.scheme = Scheme.parse(h[18], null);
                 if (h.length >= 25) {
                     c.merc = h[19].equals("1");
-                    String[] rp = h[20].split(":");
+                    String[] rp = Text.split(h[20], ':');
                     for (int i = 0; i < rp.length && i < c.rep.length; i++) c.rep[i] = Integer.parseInt(rp[i]);
                     if (!h[21].equals("-")) c.planet = Merc.Planet.parse(h[21]);
-                    if (!h[22].equals("-")) for (String k : h[22].split("/")) c.contracts.add(Merc.Contract.parse(k));
+                    if (!h[22].equals("-")) for (String k : Text.split(h[22], '/')) c.contracts.add(Merc.Contract.parse(k));
                     c.contract = Integer.parseInt(h[23]);
-                    String[] of = h[24].split(":");
+                    String[] of = Text.split(h[24], ':');
                     c.offerChassis = Integer.parseInt(of[0]);
                     c.offerItem = Integer.parseInt(of[1]);
                 }
             }
-            String[] aw = p[2].split(",");
+            String[] aw = Text.split(p[2], ',');
             for (int i = 0; i < aw.length && i < c.armoryW.length; i++) c.armoryW[i] = Integer.parseInt(aw[i]);
-            String[] ae = p[3].split(",");
+            String[] ae = Text.split(p[3], ',');
             for (int i = 0; i < ae.length && i < c.armoryE.length; i++) c.armoryE[i] = Integer.parseInt(ae[i]);
             for (int i = 5; i < p.length; i++) c.roster.add(Unit.parse(p[i]));
             if (p[4].length() > 0) {
-                for (String d : p[4].split(",")) {
+                for (String d : Text.split(p[4], ',')) {
                     int k = Integer.parseInt(d);
                     if (k >= 0 && k < c.roster.size()) c.deployed.add(c.roster.get(k));
                 }

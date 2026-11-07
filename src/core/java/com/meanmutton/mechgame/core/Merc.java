@@ -78,7 +78,7 @@ public final class Merc {
         }
 
         static Planet parse(String s) {
-            String[] p = s.split(":");
+            String[] p = Text.split(s, ':');
             return new Planet(Long.parseLong(p[0]), p[1], Integer.parseInt(p[2]), Integer.parseInt(p[3]));
         }
     }
@@ -130,7 +130,7 @@ public final class Merc {
         }
 
         static Contract parse(String s) {
-            String[] p = s.split(";");
+            String[] p = Text.split(s, ';');
             return new Contract(Integer.parseInt(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]),
                     Integer.parseInt(p[4]), Integer.parseInt(p[5]), Integer.parseInt(p[6]), Long.parseLong(p[7]));
         }

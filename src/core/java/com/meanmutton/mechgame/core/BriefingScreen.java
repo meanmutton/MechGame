@@ -59,8 +59,8 @@ public final class BriefingScreen extends Screen {
                     u * 3, h * 0.105f, u * 2.6f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
             my = h * 0.15f;
         } else {
-            g.text((c.merc ? "JOB: " : "CONTRACT " + c.mission + ": ") + sc.name.toUpperCase(), u * 3, h * 0.05f, u * 5, Col.ACCENT, Gfx.ALIGN_LEFT, true);
-            g.text("You are the " + Scenario.SIDE_NAMES[c.side].toLowerCase(), w - u * 3, h * 0.05f, u * 3,
+            g.text((c.merc ? "JOB: " : "CONTRACT " + c.mission + ": ") + Text.upper(sc.name), u * 3, h * 0.05f, u * 5, Col.ACCENT, Gfx.ALIGN_LEFT, true);
+            g.text("You are the " + Text.lower(Scenario.SIDE_NAMES[c.side]), w - u * 3, h * 0.05f, u * 3,
                     UnitArt.PLAYER_COLOR, Gfx.ALIGN_RIGHT, true);
             float dy = Ui.wrap(g, HexMap.BIOME_NAMES[map.biome] + " region. " + sc.desc, u * 3, h * 0.095f, u * 2.4f, w - u * 6, Col.TEXT);
             my = h * 0.095f + dy + u;
@@ -187,7 +187,7 @@ public final class BriefingScreen extends Screen {
     }
 
     static String fmt(float f) {
-        return String.format(java.util.Locale.US, "%.2f", f);
+        return Text.fixed(f, 2);
     }
 
     private static int rivalCap(Company c, Scenario sc) {
