@@ -26,7 +26,7 @@ public final class HelpScreen extends Screen {
                     "Mechs stand taller than vehicles and see over low hills and light woods more easily. VTOLs fly and see almost everything, but they are also seen by everything.",
                     "Weapons fire within an arc: mech weapons cover a wide 240 degrees, vehicle hull weapons a 120-degree front arc, and turrets all around.",
                     "Artillery is the opposite of other weapons: most accurate at long range, a little worse at medium range, and very inaccurate at short range or inside its minimum range. It fires indirectly: it can hit anything any friendly unit can see. ECM stops spotting unless the spotter has a Sensor Suite. Shells that miss land in a neighboring hex, and all artillery splashes onto adjacent hexes, friends included.",
-                    "Melee weapons (mechs only) strike adjacent units. Only one melee weapon swings per activation."
+                    "Melee weapons (mechs only) strike adjacent units. Only one melee weapon swings per activation, so a mech can carry only one."
             },
             {
                     "Every unit has hit locations, each with armor and infrastructure. Damage strips armor first, then infrastructure. A location with no infrastructure left is destroyed, along with the weapons mounted there.",

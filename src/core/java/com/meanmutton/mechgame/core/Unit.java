@@ -115,6 +115,26 @@ public final class Unit {
         return w.ammo * (1 + bins[mount]);
     }
 
+    /** A mount other than {@code except} that holds a melee weapon, or -1. Only one melee weapon swings per turn. */
+    public int meleeMount(int except) {
+        for (int m = 0; m < weapon.length; m++) {
+            if (m == except) continue;
+            Wpn w = wpn(m);
+            if (w != null && w.isMelee()) return m;
+        }
+        return -1;
+    }
+
+    /** How many melee weapons the unit carries (custom refits from before the one-per-unit rule can have more). */
+    public int meleeCount() {
+        int n = 0;
+        for (int m = 0; m < weapon.length; m++) {
+            Wpn w = wpn(m);
+            if (w != null && w.isMelee()) n++;
+        }
+        return n;
+    }
+
     public float mass() {
         float m = armorTotal * ARMOR_MASS + extraSinks;
         for (int i = 0; i < weapon.length; i++) {

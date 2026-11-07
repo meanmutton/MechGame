@@ -108,11 +108,15 @@ public final class RefitScreen extends Screen {
             int m = choosing;
             Wpn cur = un.wpn(m);
             float freeMass = un.ch.capacity - un.mass() + (cur != null ? cur.mass + un.bins[m] * cur.binMass : 0);
+            meleeElsewhere = un.meleeMount(m);
             for (Wpn wp : Wpn.ALL) {
                 if (!Wpn.canMount(wp, un.type, un.ch.mounts[m].cls)) continue;
                 boolean mine = cur != null && cur.id == wp.id;
                 if (!c.canBuy(wp) && c.armoryW[wp.id] == 0 && !mine) continue;
-                boolean ok = wp.mass <= freeMass + 0.001f && (c.armoryW[wp.id] > 0 || (c.canBuy(wp) && c.cash >= wp.cost) || mine);
+                // one melee weapon per unit: another mount already has one (it can still be swapped in that mount)
+                boolean secondMelee = wp.isMelee() && meleeElsewhere >= 0 && !mine;
+                boolean ok = !secondMelee && wp.mass <= freeMass + 0.001f
+                        && (c.armoryW[wp.id] > 0 || (c.canBuy(wp) && c.cash >= wp.cost) || mine);
                 opts.add(new int[]{wp.id, ok ? 1 : 0});
             }
         }
@@ -204,6 +208,8 @@ public final class RefitScreen extends Screen {
     }
 
     private int hidden;
+    /** While choosing a weapon: another mount that already holds a melee weapon, or -1. */
+    private int meleeElsewhere = -1;
 
     public void wheel(float x, float y, float amount) {
         if (choosing >= 0 && cMaxScroll > 0) {
@@ -357,6 +363,10 @@ public final class RefitScreen extends Screen {
         if (old == wid) return;
         if (wid >= 0) {
             Wpn nw = Wpn.ALL[wid];
+            if (nw.isMelee() && un.meleeMount(m) >= 0) {
+                note("Only one melee weapon per unit: only one can swing each turn");
+                return;
+            }
             boolean owned = c.armoryW[wid] > 0;
             if (!owned && !c.canBuy(nw)) {
                 note(nw.name + " isn't for sale here");
@@ -458,6 +468,9 @@ public final class RefitScreen extends Screen {
         renderButtons(g);
         float rx = lx + lw + u * 4;
         g.text("Weapon mounts", rx, h * 0.14f, u * 2.4f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+        int melee = un.meleeCount();
+        if (melee > 1) g.text("Only one melee weapon can swing each turn: remove " + (melee - 1) + (melee > 2 ? " of them" : " of the two"),
+                w - u * 3, h * 0.14f, u * 2.3f, Col.BAD, Gfx.ALIGN_RIGHT, true);
         for (Btn b : buttons) {
             if (b.id >= MOUNT && b.id < MOUNT + 50) {
                 int m = b.id - MOUNT;
@@ -499,6 +512,12 @@ public final class RefitScreen extends Screen {
                 + " (" + Info.classTag(un.ch.mounts[choosing].cls) + " mount)";
         g.text(title, px + u * 3, py + u * 5.5f, u * 3.8f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
         g.text("Free capacity " + fmt(un.ch.capacity - un.mass()) + " t (plus whatever you remove)", px + u * 3, py + u * 9, u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+        if (!eq && meleeElsewhere >= 0) {
+            String why = "Melee weapons unavailable: only one swings per turn, and the "
+                    + UnitType.locNames(un.type)[un.ch.mounts[meleeElsewhere].loc].toLowerCase() + " has the " + un.wpn(meleeElsewhere).name;
+            float room = pw - u * 31 - g.textWidth("Free capacity " + fmt(un.ch.capacity - un.mass()) + " t (plus whatever you remove)", u * 2.2f, false);
+            g.text(Ui.fit(g, why, u * 2.2f, room), px + pw - u * 28, py + u * 9, u * 2.2f, Col.ACCENT, Gfx.ALIGN_RIGHT, true);
+        }
         if (cMaxScroll > 0) {
             float lh = cBottom - cTop, bh = lh * lh / (lh + cMaxScroll), by = cTop + (lh - bh) * (cScroll / cMaxScroll);
             g.fillRoundRect(px + pw - u * 1.6f, by, u * 0.8f, bh, u * 0.4f, 0x66FFFFFF);
@@ -529,7 +548,13 @@ public final class RefitScreen extends Screen {
                         makerColor(wp.maker, tc), Gfx.ALIGN_LEFT, true);
                 String st = Wpn.FAMILY[wp.family] + ": " + wp.dmg + " dmg, " + wp.heat + " heat, range " + wp.rangeText()
                         + (wp.usesAmmo() ? ", " + wp.ammo + " shots/bin" : "") + (wp.bonus != null ? " · " + wp.bonus : "");
-                g.text(Ui.fit(g, st, u * 1.9f, b.w * 0.94f), tx, b.y + b.h * 0.7f, u * 1.9f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+                boolean secondMelee = wp.isMelee() && meleeElsewhere >= 0 && un.weapon[choosing] != wp.id;
+                if (secondMelee) {
+                    Wpn other = un.wpn(meleeElsewhere);
+                    st = "One melee weapon per unit: the " + UnitType.locNames(un.type)[un.ch.mounts[meleeElsewhere].loc].toLowerCase() + " already has the " + other.name;
+                }
+                g.text(Ui.fit(g, st, u * 1.9f, b.w * 0.94f), tx, b.y + b.h * 0.7f, u * 1.9f, secondMelee ? Col.ACCENT : Col.TEXT_DIM,
+                        Gfx.ALIGN_LEFT, false);
                 String price = c.armoryW[id] > 0 ? "spare x" + c.armoryW[id] : "$" + Ui.money(wp.cost);
                 g.text(fmt(wp.mass) + " t  " + price, b.x + b.w - u * 1.5f, b.y + b.h * 0.32f, u * 2.2f,
                         c.armoryW[id] > 0 ? Col.GOOD : Col.MONEY, Gfx.ALIGN_RIGHT, false);
