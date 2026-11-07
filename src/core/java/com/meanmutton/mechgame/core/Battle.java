@@ -515,9 +515,9 @@ public final class Battle {
             if (d < w.rMin) chance += mod(why, -15 * (w.rMin - d), "minimum range");
         }
         if (indirect) chance += mod(why, -20, "indirect fire");
-        chance += mod(why, map.weather.hitAll, Weather.NAMES[map.weather.id].toLowerCase());
-        if (d > w.rShort && d <= w.rMed) chance += mod(why, map.weather.hitMed, Weather.NAMES[map.weather.id].toLowerCase());
-        if (d > w.rMed) chance += mod(why, map.weather.hitLong, Weather.NAMES[map.weather.id].toLowerCase());
+        chance += mod(why, map.weather.hitAll, Text.lower(Weather.NAMES[map.weather.id]));
+        if (d > w.rShort && d <= w.rMed) chance += mod(why, map.weather.hitMed, Text.lower(Weather.NAMES[map.weather.id]));
+        if (d > w.rMed) chance += mod(why, map.weather.hitLong, Text.lower(Weather.NAMES[map.weather.id]));
         if (map.weather.darkness && d > 4 && !sensorsWork(a)) chance += mod(why, -15, "night");
         if (w.family == Wpn.F_MISSILE) {
             chance += mod(why, map.weather.missileMod, "weather");
@@ -691,7 +691,7 @@ public final class Battle {
         for (int i = 0; i < d.length; i++) {
             if (d[i] <= 0) continue;
             if (b.length() > 0) b.append(", ");
-            b.append(d[i]).append(" to ").append(names[i].toLowerCase());
+            b.append(d[i]).append(" to ").append(Text.lower(names[i]));
         }
         return b.toString();
     }
@@ -838,8 +838,8 @@ public final class Battle {
             int over = rem - before;
             if (rnd.nextFloat() < 0.3f) crit = true;
             if (t.infra[il] <= 0 && before > 0) {
-                queue(Fx.text(UnitType.locNames(t.type)[il].toUpperCase() + " DESTROYED", t, when + 0.15f, 0xFFFF5A3A));
-                logAt(t.name + ": " + UnitType.locNames(t.type)[il].toLowerCase() + " destroyed", when + 0.15f);
+                queue(Fx.text(Text.upper(UnitType.locNames(t.type)[il]) + " DESTROYED", t, when + 0.15f, 0xFFFF5A3A));
+                logAt(t.name + ": " + Text.lower(UnitType.locNames(t.type)[il]) + " destroyed", when + 0.15f);
                 queue(Fx.explosion(map, t.q, t.r, when + 0.1f, 0.55f));
             }
             if (over > 0 && transfers(t, loc)) overflow = Math.max(1, Math.round(over * 0.5f));

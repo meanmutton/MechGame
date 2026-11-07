@@ -341,8 +341,8 @@ public final class Unit {
     }
 
     public static Unit parse(String s) {
-        String[] parts = s.split(";", -1);
-        String[] h = parts[0].split(",");
+        String[] parts = Text.split(s, ';', true);
+        String[] h = Text.split(parts[0], ',');
         Chassis ch = Chassis.ALL[Integer.parseInt(h[0])];
         Unit u = new Unit(ch);
         u.name = h[1].length() == 0 ? ch.name : h[1];
@@ -351,26 +351,26 @@ public final class Unit {
         u.sinksLost = Integer.parseInt(h[4]);
         u.mpLost = Integer.parseInt(h[5]);
         u.destroyed = Integer.parseInt(h[6]) != 0;
-        String[] ws = parts[1].split("/");
+        String[] ws = Text.split(parts[1], '/');
         for (int i = 0; i < ws.length && i < u.weapon.length; i++) {
-            String[] f = ws[i].split(":");
+            String[] f = Text.split(ws[i], ':');
             u.weapon[i] = Integer.parseInt(f[0]);
             u.bins[i] = Integer.parseInt(f[1]);
             u.ammo[i] = Integer.parseInt(f[2]);
             u.wpnBroken[i] = Integer.parseInt(f[3]) != 0;
         }
         if (parts[2].length() > 0) {
-            String[] es = parts[2].split("/");
+            String[] es = Text.split(parts[2], '/');
             for (int i = 0; i < es.length && i < u.equip.length; i++) {
-                String[] f = es[i].split(":");
+                String[] f = Text.split(es[i], ':');
                 u.equip[i] = Integer.parseInt(f[0]);
                 u.eqBroken[i] = Integer.parseInt(f[1]) != 0;
             }
         }
         u.computeMaxes();
-        String[] ls = parts[3].split("/");
+        String[] ls = Text.split(parts[3], '/');
         for (int i = 0; i < ls.length && i < u.armor.length; i++) {
-            String[] f = ls[i].split(":");
+            String[] f = Text.split(ls[i], ':');
             u.armor[i] = Math.min(u.armorMax[i], Integer.parseInt(f[0]));
             u.infra[i] = Math.min(u.infraMax[i], Integer.parseInt(f[1]));
         }

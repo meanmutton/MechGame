@@ -85,23 +85,23 @@ public final class BattleSave {
             String[] battle = null;
             String[] map = null;
             List<String> unitLines = new ArrayList<String>(), log = new ArrayList<String>();
-            for (String line : s.split("\n")) {
+            for (String line : Text.split(s, '\n')) {
                 int tab = line.indexOf('\t');
                 if (tab < 0) continue;
                 String key = line.substring(0, tab), val = line.substring(tab + 1);
                 if (key.equals("company")) c = Company.parse(val);
                 else if (key.equals("rival")) rival = Company.parse(val);
-                else if (key.equals("battle")) battle = val.split(",");
-                else if (key.equals("map")) map = val.split("\t", -1);
+                else if (key.equals("battle")) battle = Text.split(val, ',');
+                else if (key.equals("map")) map = Text.split(val, '\t', true);
                 else if (key.equals("unit")) unitLines.add(val);
                 else if (key.equals("log")) log.add(val);
             }
             if (c == null || battle == null || map == null || unitLines.isEmpty()) return null;
             c.rival = rival;
-            String[] mh = map[0].split(",");
+            String[] mh = Text.split(map[0], ',');
             int cols = Integer.parseInt(mh[0]), rows = Integer.parseInt(mh[1]);
             HexMap m = new HexMap(cols, rows, Integer.parseInt(mh[2]), new Weather(Integer.parseInt(mh[3])));
-            String[] smoke = map[4].split(",");
+            String[] smoke = Text.split(map[4], ',');
             for (int i = 0; i < cols * rows; i++) {
                 m.terrain[i] = map[1].charAt(i) - '0';
                 m.elev[i] = map[2].charAt(i) - '0';
@@ -112,7 +112,7 @@ public final class BattleSave {
             List<Unit> mine = new ArrayList<Unit>();
             for (String ul : unitLines) {
                 int tab = ul.indexOf('\t');
-                String[] f = ul.substring(0, tab).split(",");
+                String[] f = Text.split(ul.substring(0, tab), ',');
                 Unit u = Unit.parse(ul.substring(tab + 1));
                 int own = Integer.parseInt(f[0]), idx = Integer.parseInt(f[1]);
                 u.tag = f[2].equals("-") ? null : f[2];
@@ -139,7 +139,7 @@ public final class BattleSave {
                 u.kills = Integer.parseInt(f[11]);
                 u.damageDealt = Float.parseFloat(f[12]);
                 if (!f[13].equals("-")) {
-                    String[] us = f[13].split("/");
+                    String[] us = Text.split(f[13], '/');
                     for (int i = 0; i < us.length && i < u.eqUses.length; i++) u.eqUses[i] = Integer.parseInt(us[i]);
                 }
                 u.deathShown = u.destroyed;

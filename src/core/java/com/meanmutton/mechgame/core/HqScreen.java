@@ -5,6 +5,7 @@ public final class HqScreen extends Screen {
     private static final int MENU = 1, MARKET = 2, REPAIR_ALL = 3, LAUNCH = 4, REFIT = 5, REPAIR = 6, SELL = 7, RENAME = 8, COLORS = 9, CONTRACTS = 10,
             SORT = 11, TAB = 20, ROW = 100, DEPLOY = 200;
     static final String[] TABS = {"All", "Mechs", "Vehicles", "VTOL & Inf."};
+    private static final String[] TAB_NOUNS = {"units", "mechs", "vehicles", "VTOLs or infantry"};
     static final String[] SORTS = {"Roster order", "Name", "Type", "Value", "Condition", "Deployed first"};
     // the roster's filter and order stay as you left them while the game runs
     private static int tab, sort;
@@ -372,7 +373,7 @@ public final class HqScreen extends Screen {
                         u * 2.5f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
             }
         } else if (sc != null) {
-            String next = "You are the " + Scenario.SIDE_NAMES[c.side].toLowerCase() + ", front " + Scenario.frontName(c.front)
+            String next = "You are the " + Text.lower(Scenario.SIDE_NAMES[c.side]) + ", front " + Scenario.frontName(c.front)
                     + ".   Next: " + sc.name + ". " + sc.limits(c.limits()) + ".";
             g.text(Ui.fit(g, next, u * 2.6f, w - u * 6), u * 3, h * 0.15f, u * 2.6f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
         }
@@ -387,7 +388,7 @@ public final class HqScreen extends Screen {
         if (c.roster.isEmpty()) {
             g.text("No units yet. Open the Market to buy some.", lx + lw / 2, h * 0.45f, u * 3.5f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
         } else if (shown.isEmpty()) {
-            g.text("No " + TABS[tab].toLowerCase().replace("vtol", "VTOLs").replace(" & inf.", " or infantry") + " on the roster.",
+            g.text("No " + TAB_NOUNS[tab] + " on the roster.",
                     lx + lw / 2, h * 0.45f, u * 3, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
         }
         g.save();

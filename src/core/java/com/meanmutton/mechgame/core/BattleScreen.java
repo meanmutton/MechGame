@@ -1075,7 +1075,7 @@ public final class BattleScreen extends Screen {
         float hx = camX + HexMap.px(c, r) * cs;
         float x = hx < mapW / 2 ? mapW - cw - u * 2 : u * 2, y = topBar + u;
         String name = m.road[k] ? (m.terrain[k] == HexMap.SHALLOW ? "Bridge" : "Road") : HexMap.TERRAIN_NAMES[m.terrain[k]];
-        if (m.road[k] && m.terrain[k] != HexMap.SHALLOW) name += " (through " + HexMap.TERRAIN_NAMES[m.terrain[k]].toLowerCase() + ")";
+        if (m.road[k] && m.terrain[k] != HexMap.SHALLOW) name += " (through " + Text.lower(HexMap.TERRAIN_NAMES[m.terrain[k]]) + ")";
         String climb = "Climbing costs 1 MP more per level. Vehicles can't climb 2 levels or drive off a drop of 2.";
         String reachLine = null;
         Unit a = b.active;
@@ -1128,7 +1128,7 @@ public final class BattleScreen extends Screen {
     }
 
     private static String mp(float v) {
-        return v == Math.round(v) ? String.valueOf(Math.round(v)) : String.format(java.util.Locale.US, "%.1f", v);
+        return v == Math.round(v) ? String.valueOf(Math.round(v)) : Text.fixed(v, 1);
     }
 
     private void renderLog(Gfx g) {
@@ -1155,7 +1155,7 @@ public final class BattleScreen extends Screen {
     private static List<String> wrapLines(Gfx g, String s, float size, float maxW, int maxLines) {
         List<String> out = new ArrayList<String>();
         StringBuilder line = new StringBuilder();
-        for (String word : s.split(" ")) {
+        for (String word : Text.split(s, ' ')) {
             String cand = line.length() == 0 ? word : line + " " + word;
             if (g.textWidth(cand, size, false) > maxW && line.length() > 0) {
                 out.add(line.toString());
@@ -1249,7 +1249,7 @@ public final class BattleScreen extends Screen {
             int arc = b.attackArc(su, target);
             g.text("Target", sx, dollY + u * 1.5f, u * 2.2f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
             g.text(Ui.fit(g, target.name, u * 2.8f, sw), sx, dollY + u * 5, u * 2.8f, 0xFFFF8A7A, Gfx.ALIGN_LEFT, true);
-            g.text("hitting its " + UnitType.ARC_NAMES[arc].toUpperCase(), sx, dollY + u * 8.5f, u * 2.2f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
+            g.text("hitting its " + Text.upper(UnitType.ARC_NAMES[arc]), sx, dollY + u * 8.5f, u * 2.2f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
             float tdw = Math.min(sw, dollH - u * 11);
             UnitArt.doll(g, target, sx, dollY + u * 10.5f, tdw, tdw, u * 2.2f, -1);
         } else {
