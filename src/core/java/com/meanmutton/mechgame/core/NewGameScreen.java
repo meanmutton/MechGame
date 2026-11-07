@@ -2,13 +2,13 @@ package com.meanmutton.mechgame.core;
 
 /** Choose a campaign, a mercenary career or a one-off quick battle. */
 public final class NewGameScreen extends Screen {
-    private static final int BACK = 1, QUICK = 3, MERC = 4, C_DIFF = 10, C_FUNDS = 20, Q_DIFF = 30, Q_BUDGET = 40, C_SIDE = 50,
+    private static final int BACK = 1, QUICK = 3, MERC = 4, HOTSEAT = 5, C_DIFF = 10, C_FUNDS = 20, Q_DIFF = 30, Q_BUDGET = 40, C_SIDE = 50,
             M_DIFF = 60, M_FUNDS = 70;
     private static final String[] DIFF_TEXT = {"Smaller enemy forces; the computer takes more risks.",
             "Even fights; the computer plays carefully.",
             "Bigger enemy forces that focus fire and protect themselves."};
     private int cDiff = 1, cFunds = 1, mDiff = 1, mFunds = 1, qDiff = 1, qBudget = 2, cSide = Scenario.ATTACKER;
-    private boolean confirmOverwrite, confirmMerc, confirmQuick;
+    private boolean confirmOverwrite, confirmMerc, confirmQuick, confirmHotseat;
 
     public NewGameScreen(Game game) {
         super(game);
@@ -62,9 +62,14 @@ public final class NewGameScreen extends Screen {
         Btn m = add(new Btn(MERC, confirmMerc ? "Overwrite save?" : "Start as Mercenary").set(px(1) + bx, h - u * 25.5f, bwid, bh));
         m.sub = confirmMerc ? "tap again to replace it" : "find work on a contested planet";
         m.color = confirmMerc ? 0xFF8F3A2E : 0xFF5A4A2A;
-        Btn qb = add(new Btn(QUICK, confirmQuick ? "Abandon the battle?" : "Build Force").set(px(2) + bx, h - u * 25.5f, bwid, bh));
+        float half = (bwid - u) / 2;
+        Btn qb = add(new Btn(QUICK, confirmQuick ? "Abandon battle?" : "vs Computer").set(px(2) + bx, h - u * 25.5f, half, bh));
         qb.color = confirmQuick ? 0xFF8F3A2E : 0xFF2E6D8F;
-        if (confirmQuick) qb.sub = "tap again to start anyway";
+        qb.sub = confirmQuick ? "tap again to start" : "build your force";
+        Btn hb = add(new Btn(HOTSEAT, confirmHotseat ? "Abandon battle?" : "Two Players").set(px(2) + bx + half + u, h - u * 25.5f, half, bh));
+        hb.color = confirmHotseat ? 0xFF8F3A2E : 0xFF6A3A8F;
+        hb.sub = confirmHotseat ? "tap again to start" : "one device, take turns";
+        qb.textSize = hb.textSize = u * 3f;
         add(new Btn(BACK, "Back").set(u * 4, h - u * 12, u * 24, u * 9));
     }
 
@@ -100,10 +105,21 @@ public final class NewGameScreen extends Screen {
         if (id == QUICK) {
             if (game.hasBattle() && !confirmQuick) {
                 confirmQuick = true;
+                confirmHotseat = false;
                 relayout();
                 return;
             }
             game.quickBattle(qDiff, Game.QUICK_BUDGETS[qBudget]);
+            return;
+        }
+        if (id == HOTSEAT) {
+            if (game.hasBattle() && !confirmHotseat) {
+                confirmHotseat = true;
+                confirmQuick = false;
+                relayout();
+                return;
+            }
+            game.newHotseat(Game.QUICK_BUDGETS[qBudget]);
             return;
         }
         if (id >= C_DIFF && id < C_DIFF + 3) cDiff = id - C_DIFF;
@@ -136,7 +152,7 @@ public final class NewGameScreen extends Screen {
         panel(g, 0, "Campaign", "A fight for a planet, battle by battle. Damage, losses and money carry over.", cDiff, "Starting funds");
         panel(g, 1, "Mercenary", "Go planet to planet taking single contracts for pay. Who you fight decides who will hire you and sell to you.",
                 mDiff, "Starting funds");
-        panel(g, 2, "Quick Battle", "Spend a budget on a force and fight one battle.", qDiff, "Budget");
+        panel(g, 2, "Quick Battle", "Spend a budget on a force and fight one battle, against the computer or a friend.", qDiff, "Budget");
         float py = py(), pw = pw();
         Ui.wrap(g, "Eight factions, their own designs and makes, and rare prototypes for allies who trust you.",
                 px(1) + u * 3, py + u * 44, u * 2.1f, pw - u * 6, Col.TEXT_DIM);

@@ -36,13 +36,19 @@ public final class BriefingScreen extends Screen {
     }
 
     protected void onClick(Btn b) {
-        if (b.id == BACK) game.toHq();
+        if (b.id == BACK) backToHq();
         else game.startBattle(map, enemy, allies);
     }
 
     public boolean back() {
-        game.toHq();
+        backToHq();
         return true;
+    }
+
+    /** Hotseat: Player 2 pressed Fight and is still holding the device, so Back returns to Player 2's force. */
+    private void backToHq() {
+        if (game.company != null && game.company.hotseat && game.seats != null) game.company = game.seats[1];
+        game.toHq();
     }
 
     public void render(Gfx g) {
@@ -53,7 +59,7 @@ public final class BriefingScreen extends Screen {
         float mx = u * 3, mw = w * 0.55f;
         float my;
         if (sc == null) {
-            g.text("BATTLE BRIEFING", u * 3, h * 0.055f, u * 5, Col.ACCENT, Gfx.ALIGN_LEFT, true);
+            g.text(c.hotseat ? "TWO PLAYERS: BRIEFING" : "BATTLE BRIEFING", u * 3, h * 0.055f, u * 5, Col.ACCENT, Gfx.ALIGN_LEFT, true);
             g.text(HexMap.BIOME_NAMES[map.biome] + " battlefield.  Destroy the enemy force. " + rounds
                             + " rounds; if time runs out, the side that kept more of its value wins.",
                     u * 3, h * 0.105f, u * 2.6f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
@@ -82,7 +88,8 @@ public final class BriefingScreen extends Screen {
         g.restore();
         g.strokeRoundRect(mx, my, mw, mh, u, u * 0.3f, Col.BORDER);
         float by = my + mh + u * 3;
-        g.text("You deploy on the west (blue), the enemy on the east (red).", mx, by, u * 2.3f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
+        g.text(c.hotseat ? "Player 1 deploys on the west (blue), Player 2 on the east (red). Neither sees the other's setup."
+                : "You deploy on the west (blue), the enemy on the east (red).", mx, by, u * 2.3f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
         Merc.Contract job = c.job();
         if (job != null) {
             // who hired you, and who you are about to make an enemy of
@@ -136,7 +143,8 @@ public final class BriefingScreen extends Screen {
             }
             if (job == null) y += Ui.wrap(g, sc.stakes(c.front, c.side), rx + u, y + u * 0.5f, u * 2.2f, rw - u * 2, Col.TEXT) + u;
         }
-        g.text("Enemy force (" + enemy.size() + ")", rx + u, y + u, u * 2.8f, Col.BAD, Gfx.ALIGN_LEFT, true);
+        g.text((c.hotseat ? "Player 2 force (" : "Enemy force (") + enemy.size() + ")", rx + u, y + u, u * 2.8f, c.hotseat ? UnitArt.ENEMY_COLOR : Col.BAD,
+                Gfx.ALIGN_LEFT, true);
         if (job != null) {
             Faction tf = Faction.ALL[job.target];
             float lw = g.textWidth(tf.shortName, u * 2.2f, true) + u * 2.8f;
@@ -157,7 +165,8 @@ public final class BriefingScreen extends Screen {
             if (e.tag == null) ev += e.value();
         }
         y += ((twoCols ? (enemy.size() + 1) / 2 : enemy.size())) * rowH + u * 0.5f;
-        g.text("Your force (" + (c.deployed.size() + allies.size()) + ")", rx + u, y, u * 2.8f, UnitArt.PLAYER_COLOR, Gfx.ALIGN_LEFT, true);
+        g.text((c.hotseat ? "Player 1 force (" : "Your force (") + (c.deployed.size() + allies.size()) + ")", rx + u, y, u * 2.8f, UnitArt.PLAYER_COLOR,
+                Gfx.ALIGN_LEFT, true);
         y += u * 3.5f;
         StringBuilder names = new StringBuilder();
         for (Unit un : c.deployed) names.append(names.length() > 0 ? ", " : "").append(un.name);
@@ -167,7 +176,7 @@ public final class BriefingScreen extends Screen {
             for (int i = 0; i < allies.size(); i++) an.append(i > 0 ? ", " : "").append(allies.get(i).name);
             y += Ui.wrap(g, an.toString(), rx + u, y, u * 2.1f, rw - u * 2, Col.ACCENT);
         }
-        g.text("Value: yours $" + Ui.money(c.deployedValue()) + "  vs  theirs $" + Ui.money(ev)
+        g.text((c.hotseat ? "Value: Player 1 $" + Ui.money(c.deployedValue()) + "  vs  Player 2 $" : "Value: yours $" + Ui.money(c.deployedValue()) + "  vs  theirs $") + Ui.money(ev)
                 + (c.quick || c.rival == null ? "" : " (capped at $" + Ui.money(rivalCap(c, sc)) + ")")
                 + (c.quick ? "" : ".  Pay $" + Ui.money(c.reward) + " for a win"), rx + u, y + u, u * 2.1f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);
         y += u * 3.5f;

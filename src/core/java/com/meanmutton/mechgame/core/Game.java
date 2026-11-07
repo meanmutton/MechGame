@@ -108,6 +108,7 @@ public final class Game {
         Company c = company;
         Scheme.player = c != null && c.scheme != null ? c.scheme : Scheme.PLAYER_DEFAULT;
         Scheme.enemy = c != null && c.rival != null && c.rival.scheme != null ? c.rival.scheme : Scheme.ENEMY_DEFAULT;
+        if (c != null && c.hotseat && c.seatNo == 0 && hotseatEnemy != null) Scheme.enemy = hotseatEnemy;
         screen.resize(w, h);
         screen.render(g);
     }
@@ -294,6 +295,91 @@ public final class Game {
         setScreen(new ContractsScreen(this));
     }
 
+    // ---------------- hotseat: two players on one device ----------------
+
+    /** Hotseat: the two players' companies while they build their forces. */
+    public Company[] seats;
+    /** Hotseat: Player 2's colors, for drawing their side in battle. */
+    public Scheme hotseatEnemy;
+
+    /** Two players, one device: each builds a force with the same budget, Player 1 first. */
+    public void newHotseat(int budget) {
+        clearBattle();
+        seats = new Company[2];
+        for (int i = 0; i < 2; i++) {
+            Company c = new Company();
+            c.quick = true;
+            c.hotseat = true;
+            c.seatNo = i;
+            c.difficulty = 1;
+            c.cash = budget;
+            c.rollContract(rng);
+            if (i == 1) c.scheme = Scheme.ENEMY_DEFAULT;   // Player 2 starts in red, as their side looks in battle
+            seats[i] = c;
+        }
+        company = seats[0];
+        setScreen(new HandoffScreen(this, 0, "BUILD YOUR FORCE",
+                "Player 1 builds first. Buy units in the Market with your $" + Ui.money(budget) + ", customize them, tick the ones to deploy, then press Done.",
+                new HqScreen(this)));
+    }
+
+    /** Hotseat: Player 1 is done building; Player 2 builds next without seeing Player 1's force. */
+    public void hotseatNext() {
+        company = seats[1];
+        setScreen(new HandoffScreen(this, 1, "BUILD YOUR FORCE",
+                "Pass the device to Player 2. Buy units in the Market with your $" + Ui.money(seats[1].cash)
+                        + ", customize them, tick the ones to deploy, then press Fight.", new HqScreen(this)));
+    }
+
+    /** Hotseat: both forces are ready. A map for them, then the briefing; the battle sees it from Player 1's side. */
+    public void prepareHotseat() {
+        Company p1 = seats[0], p2 = seats[1];
+        company = p1;
+        hotseatEnemy = p2.scheme;
+        Random r = new Random(p1.seed ^ (p2.seed * 31));
+        int biome = r.nextInt(HexMap.BIOME_NAMES.length);
+        HexMap map = new HexMap(20, 13, biome, Weather.random(biome, r));
+        map.generate(r);
+        p1.biome = biome;
+        setScreen(new BriefingScreen(this, map, new ArrayList<Unit>(p2.deployed)));
+    }
+
+    /** Hotseat: the battle is over. */
+    public void finishHotseat(Battle b) {
+        clearBattle();
+        setScreen(new HotseatEndScreen(this, b));
+    }
+
+    /** Hotseat: the same two forces, fully repaired, on a new map. */
+    public void hotseatRematch(Battle b) {
+        if (seats == null) {   // a battle resumed from a save: rebuild the seats from the battle's units
+            seats = new Company[2];
+            for (int i = 0; i < 2; i++) {
+                Company c = new Company();
+                c.quick = true;
+                c.hotseat = true;
+                c.seatNo = i;
+                c.difficulty = 1;
+                c.scheme = i == 0 ? (company != null ? company.scheme : null) : hotseatEnemy;
+                seats[i] = c;
+            }
+        }
+        for (int i = 0; i < 2; i++) {
+            Company c = seats[i];
+            c.roster.clear();
+            c.deployed.clear();
+            for (Unit u : b.units) {
+                if (u.team != i || u.tag != null) continue;
+                Unit fresh = u.copyLoadout();
+                fresh.name = u.name;
+                c.roster.add(fresh);
+                c.deployed.add(fresh);
+            }
+            c.rollContract(rng);
+        }
+        prepareHotseat();
+    }
+
     public void quickBattle(int difficulty, int budget) {
         clearBattle();
         company = new Company();
@@ -410,7 +496,7 @@ public final class Game {
         Company c = company;
         List<Unit> mine = new ArrayList<Unit>(c.deployed);
         mine.addAll(allies);
-        Battle b = new Battle(this, mine, enemy, map, new Random(c.seed ^ 0x5DEECE66DL), c.difficulty);
+        Battle b = new Battle(this, mine, enemy, map, new Random(c.seed ^ 0x5DEECE66DL), c.difficulty, c.hotseat);
         Scenario sc = c.next();
         if (sc != null) {
             boolean attacking = c.side == Scenario.ATTACKER;

@@ -51,12 +51,23 @@ public final class Battle {
     volatile Ai.Planner aiPlanner;
     /** Bumped whenever the battle state changes in a way worth saving (see BattleSave). */
     public int version;
-    /** Tests: the computer plays the player's side too. */
+    /** Tests: the computer plays the player's side too (and, in a hotseat battle, both sides). */
     public boolean autoPlayer;
+    /** Two people on one device: both sides are human, Player 1 is PLAYER (west) and Player 2 is ENEMY (east). */
+    public final boolean hotseat;
+    /** Hotseat deployment: whose units are being placed (the other side's are hidden meanwhile). */
+    public int deployTeam = PLAYER;
+    /** Hotseat: the side that conceded, or -1. */
+    public int conceded = -1;
     public float aiDelay;
 
     public Battle(Game game, List<Unit> mine, List<Unit> theirs, HexMap map, Random rnd, int difficulty) {
+        this(game, mine, theirs, map, rnd, difficulty, false);
+    }
+
+    public Battle(Game game, List<Unit> mine, List<Unit> theirs, HexMap map, Random rnd, int difficulty, boolean hotseat) {
         this.game = game;
+        this.hotseat = hotseat;
         this.map = map;
         this.rnd = rnd;
         this.difficulty = difficulty;
@@ -82,13 +93,14 @@ public final class Battle {
             startValue[u.team] += u.value();
         }
         deploy();
-        deployInfantryForward(ENEMY);
+        if (!hotseat) deployInfantryForward(ENEMY);   // in a hotseat battle Player 2 places their own
         deploying = true;   // the player places units, then finishDeployment() starts round 1
     }
 
     /** Rebuilds a battle from a save (BattleSave): the units already carry their positions and state. */
-    Battle(Game game, List<Unit> all, HexMap map, Random rnd, int difficulty) {
+    Battle(Game game, List<Unit> all, HexMap map, Random rnd, int difficulty, boolean hotseat) {
         this.game = game;
+        this.hotseat = hotseat;
         this.map = map;
         this.rnd = rnd;
         this.difficulty = difficulty;
@@ -108,15 +120,39 @@ public final class Battle {
     public boolean deploying;
     public static final int DEPLOY_COLS = 4;
 
-    /** Infantry may be placed on any open hex; everything else stays in the home deployment zone. */
+    /** Is this side played by a person (rather than the computer)? */
+    public boolean human(int team) {
+        return !autoPlayer && (hotseat || team == PLAYER);
+    }
+
+    /** The side a person is placing units for right now. */
+    public int placingTeam() {
+        return hotseat ? deployTeam : PLAYER;
+    }
+
+    /** Hotseat deployment hides the other side's units, so neither player sees where the other set up. */
+    public boolean hidden(Unit u) {
+        return hotseat && deploying && u.team != deployTeam;
+    }
+
+    /** Is the hex inside this side's home deployment zone (its own edge of the map)? */
+    public boolean inHomeZone(int team, int c) {
+        return team == PLAYER ? c < DEPLOY_COLS : c >= map.cols - DEPLOY_COLS;
+    }
+
+    /**
+     * Infantry may be placed on any open hex; everything else stays in the home deployment zone. Hidden units
+     * don't block (that would give them away); clashes are sorted out when deployment ends.
+     */
     public boolean canPlace(Unit u, int c, int r) {
-        if (!deploying || u.team != PLAYER || u.destroyed || !map.in(c, r)) return false;
-        Unit at = unitAt(c, r);
-        if (at != null && at != u) return false;
+        if (!deploying || u.team != placingTeam() || u.destroyed || !map.in(c, r)) return false;
+        for (Unit at : units) {
+            if (at != u && !at.destroyed && at.q == c && at.r == r && !hidden(at)) return false;
+        }
         if (!map.passable(u.type, c, r)) return false;
         if (u.ch.fixed()) return false;   // emplacements are built where they stand
         if (u.type == UnitType.INFANTRY) return true;
-        return c < DEPLOY_COLS;
+        return inHomeZone(u.team, c);
     }
 
     public void place(Unit u, int c, int r) {
@@ -131,9 +167,50 @@ public final class Battle {
     public void finishDeployment() {
         version++;
         if (!deploying) return;
+        if (hotseat && deployTeam == PLAYER) {
+            // Player 1 is done: Player 2 places their units next, without seeing Player 1's
+            if (autoPlayer) deployInfantryForward(PLAYER);
+            deployTeam = ENEMY;
+            return;
+        }
+        if (hotseat) {
+            if (autoPlayer) deployInfantryForward(ENEMY);
+            resolveClashes();
+        } else if (autoPlayer) deployInfantryForward(PLAYER);
         deploying = false;
-        if (autoPlayer) deployInfantryForward(PLAYER);
         startRound();
+    }
+
+    /**
+     * Hotseat: two players placed units without seeing each other's, so two can end up on one hex. The unit away
+     * from its own home zone (an ambush) gives way and sets up on the nearest open hex it can stand on.
+     */
+    private void resolveClashes() {
+        for (Unit u : units) {
+            if (u.destroyed) continue;
+            Unit other = null;
+            for (Unit o : units) if (o != u && !o.destroyed && o.q == u.q && o.r == u.r) other = o;
+            if (other == null) continue;
+            Unit mover = inHomeZone(u.team, u.q) && !inHomeZone(other.team, other.q) ? other : u;
+            int bestC = -1, bestR = -1, bestD = Integer.MAX_VALUE;
+            for (int c = 0; c < map.cols; c++) {
+                for (int r = 0; r < map.rows; r++) {
+                    if (unitAt(c, r) != null || !map.passable(mover.type, c, r)) continue;
+                    if (mover.type != UnitType.INFANTRY && !inHomeZone(mover.team, c)) continue;
+                    int d = HexMap.distance(mover.q, mover.r, c, r);
+                    if (d < bestD) {
+                        bestD = d;
+                        bestC = c;
+                        bestR = r;
+                    }
+                }
+            }
+            if (bestC < 0) continue;
+            log(mover.name + "'s spot was taken; it set up nearby");
+            mover.q = bestC;
+            mover.r = bestR;
+            syncDraw(mover);
+        }
     }
 
     /** Computer-controlled infantry dig in on cover hexes out in the field (towns and woods first). */
@@ -237,8 +314,14 @@ public final class Battle {
         return mover != null || !fx.isEmpty();
     }
 
+    /** Is it a person's turn (rather than the computer's)? In a hotseat battle it always is. */
     public boolean playerTurn() {
-        return !deploying && result == RESULT_NONE && side == PLAYER;
+        return !deploying && result == RESULT_NONE && human(side);
+    }
+
+    /** "Player 1" / "Player 2" in a hotseat battle; "you" / "the enemy" otherwise. */
+    public String sideName(int team) {
+        return hotseat ? "Player " + (team + 1) : (team == PLAYER ? "you" : "the enemy");
     }
 
     public int mpAvailable(Unit u) {
@@ -321,7 +404,7 @@ public final class Battle {
         undoR = u.r;
         undoFacing = u.facing;
         undoMoved = u.movedHexes;
-        undoAvailable = u.team == PLAYER;
+        undoAvailable = human(u.team);
         mover = u;
         movePath = path;
         moveT = 0;
@@ -1059,7 +1142,7 @@ public final class Battle {
         float roll = rnd.nextFloat();
         initiative = round == 1 && firstInitiative >= 0 ? firstInitiative : (roll < playerInitiative ? PLAYER : ENEMY);
         side = initiative;
-        log("Round " + round + ": " + (initiative == PLAYER ? "you have" : "the enemy has") + " initiative");
+        log("Round " + round + ": " + (hotseat ? sideName(initiative) + " has" : (initiative == PLAYER ? "you have" : "the enemy has")) + " initiative");
         beginSideActivation();
     }
 
@@ -1077,12 +1160,12 @@ public final class Battle {
         }
         active = null;
         aiTurn = null;
-        if (side == ENEMY || autoPlayer) aiDelay = 0.4f;
+        if (!human(side)) aiDelay = 0.4f;
         else game.sfx(Platform.SND_ALERT, 0.5f);
         // A human side with only shut-down units left just restarts one of them automatically.
-        if (side == PLAYER && !autoPlayer && onlyShutdownLeft(PLAYER)) {
+        if (human(side) && onlyShutdownLeft(side)) {
             for (Unit u : units) {
-                if (u.team == PLAYER && !u.destroyed && !u.activated && u.shutdown) {
+                if (u.team == side && !u.destroyed && !u.activated && u.shutdown) {
                     beginActivation(u);
                     endActivation(u);
                     return;
@@ -1168,6 +1251,13 @@ public final class Battle {
     }
 
     public void withdraw() {
+        if (hotseat) {
+            // the side whose turn it is concedes, and the other side wins
+            conceded = side;
+            result = side == PLAYER ? RESULT_LOSS : RESULT_WIN;
+            log(sideName(side) + " concedes.");
+            return;
+        }
         result = RESULT_WITHDRAW;
     }
 
@@ -1194,7 +1284,7 @@ public final class Battle {
         }
         if (fx.isEmpty()) fxClock = 0;
         for (Unit u : units) if (u.hitFlash > 0) u.hitFlash -= dt;
-        if (!deploying && result == RESULT_NONE && (side == ENEMY || autoPlayer) && !busy()) {
+        if (!deploying && result == RESULT_NONE && !human(side) && !busy()) {
             aiDelay -= dt * game.settings.aiSpeedFactor();
             if (aiDelay <= 0) Ai.step(this);
         }

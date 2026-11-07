@@ -26,7 +26,7 @@ public final class BattleSave {
     /** True when the battle is at a point that can be saved and resumed exactly. */
     static boolean quiet(Battle b) {
         if (b.result != Battle.RESULT_NONE || b.busy() || b.aiPlanner != null || b.aiTurn != null) return false;
-        return b.active == null || (b.active.team == Battle.PLAYER && !b.autoPlayer);
+        return b.active == null || b.human(b.active.team);
     }
 
     public static String write(Company c, Battle b) {
@@ -66,6 +66,9 @@ public final class BattleSave {
                     .append(u.damageDealt).append(',').append(uses.length() == 0 ? "-" : uses.toString())
                     .append('\t').append(u.serialize()).append('\n');
         }
+        // hotseat battles: whose deployment it is, and who conceded (older builds ignore this line)
+        if (b.hotseat) s.append("hotseat\t").append(b.deployTeam).append(',').append(b.conceded).append(',')
+                .append(b.game.hotseatEnemy == null ? "-" : b.game.hotseatEnemy.serialize()).append('\n');
         int from = Math.max(0, b.log.size() - 12);
         for (int i = from; i < b.log.size(); i++) s.append("log\t").append(b.log.get(i).replace('\n', ' ').replace('\t', ' ')).append('\n');
         return s.toString();
@@ -83,7 +86,7 @@ public final class BattleSave {
         try {
             Company c = null, rival = null;
             String[] battle = null;
-            String[] map = null;
+            String[] map = null, hot = null;
             List<String> unitLines = new ArrayList<String>(), log = new ArrayList<String>();
             for (String line : Text.split(s, '\n')) {
                 int tab = line.indexOf('\t');
@@ -95,6 +98,7 @@ public final class BattleSave {
                 else if (key.equals("map")) map = Text.split(val, '\t', true);
                 else if (key.equals("unit")) unitLines.add(val);
                 else if (key.equals("log")) log.add(val);
+                else if (key.equals("hotseat")) hot = Text.split(val, ',');
             }
             if (c == null || battle == null || map == null || unitLines.isEmpty()) return null;
             c.rival = rival;
@@ -147,7 +151,15 @@ public final class BattleSave {
             }
             c.deployed.clear();
             c.deployed.addAll(mine);
-            Battle b = new Battle(game, units, m, new Random(), Integer.parseInt(battle[10]));
+            Battle b = new Battle(game, units, m, new Random(), Integer.parseInt(battle[10]), hot != null);
+            if (hot != null) {
+                b.deployTeam = Integer.parseInt(hot[0]);
+                b.conceded = Integer.parseInt(hot[1]);
+                game.hotseatEnemy = hot.length > 2 && !hot[2].equals("-") ? Scheme.parse(hot[2], null) : Scheme.ENEMY_DEFAULT;
+                c.hotseat = true;
+                c.seatNo = 0;
+                game.seats = null;   // a resumed battle: a rematch rebuilds the two forces from the battle
+            }
             b.round = Integer.parseInt(battle[0]);
             b.initiative = Integer.parseInt(battle[1]);
             b.side = Integer.parseInt(battle[2]);

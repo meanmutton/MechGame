@@ -62,7 +62,8 @@ public final class HelpScreen extends Screen {
                     "Units destroyed in a battle you win (or draw) are recovered as wrecks you can repair. Lose or withdraw and they are gone for good.",
                     "The enemy is a company too. It starts with funds like yours, is paid after every battle (more when it wins), repairs what it can afford, loses units left on a field it lost, and buys reinforcements. Beat it down and it gets poorer; let it win and it grows. HQ and the briefing show its money and roster.",
                     "To customize a unit, select it at HQ and press CUSTOMIZE. Tap any weapon mount or equipment slot to swap what's in it, and use - / + to change armor, heat sinks and ammunition, all within the unit's weight limit. Removed parts go to your spares for free reuse. The Market sells new units with factory loadouts.",
-                    "Quick Battle gives you a budget, lets you buy and refit a force, and fights a single battle."
+                    "Quick Battle gives you a budget, lets you buy and refit a force, and fights a single battle.",
+                    "Two Players (in the Quick Battle panel) is for two people on one device. Each builds a force with the same budget, then each deploys while the other looks away: a hand-over screen hides the map, and neither sees where the other set up until the battle starts. Player 1 is blue on the west edge, Player 2 red on the east; on your turn, play your units as usual. Pause to concede."
             },
             {
                     "A campaign is the fight for one planet. You choose to attack or defend when you start. The front runs from the attacker's dropships (-1) to the defender's base (6) and starts at 2, so the defender has the upper hand.",

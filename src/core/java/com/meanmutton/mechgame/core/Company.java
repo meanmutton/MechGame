@@ -12,6 +12,10 @@ public final class Company {
     public static final String[] DIFFICULTY = {"Easy", "Normal", "Hard"};
 
     public boolean quick;
+    /** Two players on one device (a quick battle each builds a force for); not saved with the company. */
+    public boolean hotseat;
+    /** Hotseat: 0 for Player 1, 1 for Player 2. */
+    public int seatNo;
     /** Campaign only: the opposing company (saved separately). */
     public Company rival;
     public int difficulty = 1;
