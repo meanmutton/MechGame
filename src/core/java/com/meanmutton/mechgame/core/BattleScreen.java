@@ -17,6 +17,12 @@ public final class BattleScreen extends Screen {
     private float t;
     // camera
     private float cs, fit, camX, camY, mapW, topBar, panelX, panelW;
+    /** Height the combat log may use (in units of u); older entries drop off sooner rather than grow past it. */
+    private static final float LOG_ROOM = 19;
+    /** The zoom at which the whole map fills the screen height (the starting and closest zoom come from it). */
+    private float fitFull;
+    /** The camera is at the bottom limit: it stays there, just above the combat log, as the log grows or shrinks. */
+    private boolean pinned;
     private boolean camInit;
     // gestures
     private final int[] pid = {-1, -1};
@@ -99,7 +105,9 @@ public final class BattleScreen extends Screen {
         mapW = panelX;
         topBar = u * 8;
         float width = 1.5f * (b.map.cols - 1) + 2, height = 1.732f * (b.map.rows + 0.5f);
-        float newFit = Math.min(mapW / width, (h - topBar) / height);
+        // zoomed all the way out, the whole map fits in the space above the combat log (about four entries tall)
+        fitFull = Math.min(mapW / width, (h - topBar) / height);
+        float newFit = Math.min(mapW / width, (h - topBar - (LOG_ROOM + 2) * u) / height);
         if (!camInit || Math.abs(newFit - fit) > 0.01f) {
             fit = newFit;
             boolean first = !camInit;
@@ -107,9 +115,10 @@ public final class BattleScreen extends Screen {
             camX = (mapW - width * cs) / 2 + cs;
             camY = topBar + (h - topBar - height * cs) / 2 + cs * 0.866f;
             camInit = true;
+            if (!first) clampCam();
             if (first) {
                 // start zoomed in a little, showing your own deployment zone (Player 2's is on the right)
-                cs = fit * 1.3f;
+                cs = fitFull * 1.3f;
                 camX = u * 2 + cs;
                 if (b.hotseat && b.deploying && b.deployTeam == Battle.ENEMY) camX = mapW - u * 2 - (width - 1) * cs;
                 camY = topBar + (h - topBar - height * cs) / 2 + cs * 0.866f;
@@ -308,6 +317,11 @@ public final class BattleScreen extends Screen {
             lastSide = b.side;
         }
         if (turnBanner > 0) turnBanner -= dt;
+        // keep the bottom row clear of the combat log as it changes height, if the view is at the bottom
+        if (pinned && camInit) {
+            camY -= h;
+            clampCam();
+        }
         if (b.result != Battle.RESULT_NONE && !b.busy()) {
             endTimer += dt;
             if (endTimer > 2f && !finished) {
@@ -383,7 +397,7 @@ public final class BattleScreen extends Screen {
             return;
         }
         if (y < topBar) return;
-        float ns = Math.max(fit, Math.min(fit * 2.8f, cs * (float) Math.pow(1.0012, -amount)));
+        float ns = Math.max(fit, Math.min(fitFull * 2.8f, cs * (float) Math.pow(1.0012, -amount)));
         float wx = (x - camX) / cs, wy = (y - camY) / cs;
         cs = ns;
         camX = x - wx * cs;
@@ -657,7 +671,7 @@ public final class BattleScreen extends Screen {
         py[i] = y;
         if (pinching && pid[1] >= 0) {
             float mx = (px[0] + px[1]) / 2, my = (py[0] + py[1]) / 2;
-            float ns = Math.max(fit, Math.min(fit * 2.8f, pinchScale * dist() / pinchDist));
+            float ns = Math.max(fit, Math.min(fitFull * 2.8f, pinchScale * dist() / pinchDist));
             // zoom around the midpoint
             float wx = (mx - camX) / cs, wy = (my - camY) / cs;
             cs = ns;
@@ -722,6 +736,9 @@ public final class BattleScreen extends Screen {
         }
         camX = Math.max(minX, Math.min(maxX, camX));
         camY = Math.max(minY, Math.min(maxY, camY));
+        // all the way out, the map sits above the log; scrolled to the bottom, it stays clear of the log from now on
+        if (cs <= fit * 1.001f) camY = minY;
+        pinned = camY <= minY + 0.5f;
     }
 
     private int[] screenToHex(float sx, float sy) {
@@ -1230,6 +1247,7 @@ public final class BattleScreen extends Screen {
             for (String l : lines) tw = Math.max(tw, g.textWidth(l, ts, false));
             float bh = lines.size() * lh + u;
             float boxTop = y + u * 2 - bh;
+            if (i > 0 && boxTop < h - LOG_ROOM * u) break;   // the newest entries always show; older ones keep under the cap
             g.fillRoundRect(u * 1.5f, boxTop, tw + u * 2, bh, u, Col.alpha(0xB0000000, a));
             int col = s.contains(" fired at ") ? 0xFFE8EEF8 : (s.contains("destroyed") ? 0xFFFF8A7A : 0xFFFFD27A);
             for (int k = 0; k < lines.size(); k++) {

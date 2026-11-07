@@ -614,10 +614,17 @@ public final class DesktopTest {
             System.out.println("last log: " + bb.log.get(bb.log.size() - 1));
             // the map scrolls up far enough that its bottom row clears the combat log, zoomed in or all the way out
             BattleScreen lbs = (BattleScreen) g.screen();
+            java.lang.reflect.Field lt0 = BattleScreen.class.getDeclaredField("logTop");
+            java.lang.reflect.Field fcs0 = BattleScreen.class.getDeclaredField("cs");
+            lt0.setAccessible(true);
+            fcs0.setAccessible(true);
             for (int pass = 0; pass < 2; pass++) {
                 if (pass == 1) {
-                    g.wheel(W * 0.3f, H * 0.5f, 100000);   // zoom all the way out
+                    g.wheel(W * 0.3f, H * 0.5f, 100000);   // zoom all the way out: the map sits above the log with no dragging
                     tick(g, 2);
+                    shot(g, "14g_zoomed_out_no_drag");
+                    float b0 = hexToScreen(lbs, 1, m.rows - 1)[1] + 0.866f * fcs0.getFloat(lbs);
+                    if (b0 > lt0.getFloat(lbs) + 1) throw new RuntimeException("zoomed out, the bottom row starts under the log");
                 }
                 for (int k = 0; k < 3; k++) {
                     float x = W * 0.3f;
@@ -633,6 +640,19 @@ public final class DesktopTest {
                 float bottom = hexToScreen(lbs, 1, m.rows - 1)[1] + 0.866f * fcs.getFloat(lbs);
                 if (bottom > lt.getFloat(lbs) + 1) throw new RuntimeException("the bottom row stays under the log (" + bottom + " vs " + lt.getFloat(lbs) + ")");
                 shot(g, pass == 0 ? "14e_map_clear_of_log" : "14f_map_clear_of_log_zoomed_out");
+                if (pass == 0) {
+                    // the log grows while the view is at the bottom: the map moves up with it
+                    float before = lt.getFloat(lbs);
+                    for (int k = 0; k < 4; k++)
+                        bb.log("A long entry that wraps onto a second line in the log box so the log is taller than before, number " + k
+                                + ", with plenty of words to make it wrap at this width");
+                    shot(g, "14h_map_follows_log");   // drawing a frame measures the taller log
+                    tick(g, 2);                         // the next update moves the map up with it
+                    shot(g, "14h_map_follows_log");
+                    float after = lt.getFloat(lbs), bot = hexToScreen(lbs, 1, m.rows - 1)[1] + 0.866f * fcs.getFloat(lbs);
+                    if (after >= before) throw new RuntimeException("the test log did not grow");
+                    if (bot > after + 1) throw new RuntimeException("the map did not follow the growing log (" + bot + " vs " + after + ")");
+                }
             }
             System.out.println("map scrolls clear of the combat log OK");
         }
