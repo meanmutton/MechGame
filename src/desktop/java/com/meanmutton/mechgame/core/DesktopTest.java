@@ -612,6 +612,29 @@ public final class DesktopTest {
             tick(g, 120);
             shot(g, "14d_impact_log");
             System.out.println("last log: " + bb.log.get(bb.log.size() - 1));
+            // the map scrolls up far enough that its bottom row clears the combat log, zoomed in or all the way out
+            BattleScreen lbs = (BattleScreen) g.screen();
+            for (int pass = 0; pass < 2; pass++) {
+                if (pass == 1) {
+                    g.wheel(W * 0.3f, H * 0.5f, 100000);   // zoom all the way out
+                    tick(g, 2);
+                }
+                for (int k = 0; k < 3; k++) {
+                    float x = W * 0.3f;
+                    g.touch(Game.TOUCH_DOWN, 0, x, H * 0.8f);
+                    for (int i = 1; i <= 10; i++) g.touch(Game.TOUCH_MOVE, 0, x, H * 0.8f - i * 60);
+                    g.touch(Game.TOUCH_UP, 0, x, H * 0.8f - 600);
+                    tick(g, 2);
+                }
+                java.lang.reflect.Field lt = BattleScreen.class.getDeclaredField("logTop");
+                java.lang.reflect.Field fcs = BattleScreen.class.getDeclaredField("cs");
+                lt.setAccessible(true);
+                fcs.setAccessible(true);
+                float bottom = hexToScreen(lbs, 1, m.rows - 1)[1] + 0.866f * fcs.getFloat(lbs);
+                if (bottom > lt.getFloat(lbs) + 1) throw new RuntimeException("the bottom row stays under the log (" + bottom + " vs " + lt.getFloat(lbs) + ")");
+                shot(g, pass == 0 ? "14e_map_clear_of_log" : "14f_map_clear_of_log_zoomed_out");
+            }
+            System.out.println("map scrolls clear of the combat log OK");
         }
         // campaign scenarios: restrictions at HQ, a base assault with garrison and emplacements, the end screen
         {

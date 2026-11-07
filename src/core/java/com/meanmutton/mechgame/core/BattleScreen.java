@@ -55,6 +55,8 @@ public final class BattleScreen extends Screen {
     private final java.util.Set<Battle.Fx> counted = new java.util.HashSet<Battle.Fx>();
 
     private int savedVersion = -1;
+    /** Top of the combat log drawn in the bottom-left corner (the screen bottom when it is empty). */
+    private float logTop = -1;
     // hotseat: who the hand-over screen is waiting for, and a banner when the turn passes to the other player
     private String handoffTitle, handoffText;
     private int lastSide = -1;
@@ -707,10 +709,17 @@ public final class BattleScreen extends Screen {
     private void clampCam() {
         float width = (1.5f * (b.map.cols - 1) + 2) * cs, height = 1.732f * (b.map.rows + 0.5f) * cs;
         float margin = u * 4;
+        // the combat log sits over the bottom of the map: the map can scroll up until its bottom row clears the log
+        float pad = Math.max(margin, logTop > 0 ? h - logTop + u : margin);
         float minX = mapW - width + cs - margin, maxX = cs + margin;
-        float minY = h - height + cs * 0.866f - margin, maxY = topBar + cs * 0.866f + margin;
+        float minY = h - pad - height + cs * 0.866f, maxY = topBar + cs * 0.866f + margin;
         if (width < mapW) minX = maxX = (mapW - width) / 2 + cs;
-        if (height < h - topBar) minY = maxY = topBar + (h - topBar - height) / 2 + cs * 0.866f;
+        if (height < h - topBar) {
+            // the whole map fits: centred, or lifted (no higher than the top bar) to clear the log
+            float centred = topBar + (h - topBar - height) / 2 + cs * 0.866f;
+            maxY = centred;
+            minY = Math.max(topBar + cs * 0.866f, Math.min(centred, h - pad - height + cs * 0.866f));
+        }
         camX = Math.max(minX, Math.min(maxX, camX));
         camY = Math.max(minY, Math.min(maxY, camY));
     }
@@ -1228,6 +1237,7 @@ public final class BattleScreen extends Screen {
             }
             y = boxTop - u * 0.6f;
         }
+        logTop = n == 0 ? h : y;
     }
 
     private static List<String> wrapLines(Gfx g, String s, float size, float maxW, int maxLines) {
