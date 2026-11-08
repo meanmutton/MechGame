@@ -81,14 +81,14 @@ The relay may also send `GONE` (the other player disconnected), `NOROOM`, `FULL`
 
 `local_relay.py` runs the same relay code, read from `relay.yaml`, with an in-memory table, at
 `ws://localhost:8765` (needs `pip install websockets pyyaml`). The desktop test harness plays two games through it
-(`DesktopTest online 1 ws://localhost:8765`), and the online browser page uses it when the page sets
+(`DesktopTest online 1 ws://localhost:8765`), and the browser page uses it when the page sets
 `window.HEXFRONT_RELAY` to its address.
 
 ## Pointing the game at the relay
 
 The game's address for the relay is `Online.RELAY` in `src/core/java/com/meanmutton/mechgame/core/Online.java`.
-Put the `WebSocketUrl` output there and rebuild; the Online button then shows in the Android app and the online
-browser page. While it is empty, the button stays hidden.
+Put the `WebSocketUrl` output there and rebuild; the Online button then shows in the Android app and the browser
+page. While it is empty, the button stays hidden.
 
 ## Test
 

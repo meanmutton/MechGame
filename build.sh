@@ -8,8 +8,7 @@
 #   ./build.sh            build and sign the APK
 #   ./build.sh test       also run the desktop simulation tests and render screenshots
 #   ./build.sh web        build the browser version instead (needs only a JDK, Maven and Python 3):
-#                         release/Hexfront.html (one file, double-click to play), Hexfront-online.html (the same
-#                         with online play) and release/web/ (the online version, to host)
+#                         release/Hexfront.html (one file, double-click to play) and release/web/ (to host)
 #                         MAVEN_SETTINGS=path/to/settings.xml picks a Maven mirror if you need one.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -22,7 +21,7 @@ if [ "${1:-}" = "web" ]; then
     echo "== compiling to JavaScript with TeaVM"
     rm -rf build/web-maven
     mvn -q ${MAVEN_SETTINGS:+-s "$MAVEN_SETTINGS"} -f web/pom.xml package
-    python3 tools/make_web_page.py build/web-maven/js/hexfront.js build/web-maven/js/hexfront-online.js "$STAMP"
+    python3 tools/make_web_page.py build/web-maven/js/hexfront.js "$STAMP"
     exit 0
 fi
 

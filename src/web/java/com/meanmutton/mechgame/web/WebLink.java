@@ -5,10 +5,7 @@ import com.meanmutton.mechgame.core.Link;
 import org.teavm.jso.JSBody;
 import org.teavm.jso.JSObject;
 
-/**
- * The browser's WebSocket as a Link: received messages wait in a plain array until the game reads them. Only the
- * online page (WebOnlineMain) uses this, so the offline page's JavaScript has no network code at all.
- */
+/** The browser's WebSocket as a Link: received messages wait in a plain array until the game reads them. */
 final class WebLink implements Link {
     private final JSObject ws;
 
