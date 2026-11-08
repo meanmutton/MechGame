@@ -1,0 +1,298 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Hexfront online relay. Pairs two players by a six-letter room code and passes
+  their messages between them. It knows nothing about the game itself.
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Description: Email address that gets a message if this costs more than the monthly budget.
+    AllowedPattern: ".+@.+"
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    Description: Monthly spending in US dollars that triggers the email.
+
+Resources:
+  # Rooms (r#CODE: host and guest connections and their rejoin tokens) and
+  # connections (c#ID: which room and role). Items expire after 12 hours.
+  # 5 read and 5 write units sit inside DynamoDB's always-free allowance.
+  Rooms:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TimeToLiveSpecification:
+        AttributeName: exp
+        Enabled: true
+
+  Api:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: hexfront-relay
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: "$request.body.action"
+
+  RelayLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/hexfront-relay
+      RetentionInDays: 14
+
+  RelayRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: relay
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt RelayLogs.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt Rooms.Arn
+              - Effect: Allow
+                Action: execute-api:ManageConnections
+                Resource: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*"
+
+  Relay:
+    Type: AWS::Lambda::Function
+    DependsOn: RelayLogs
+    Properties:
+      FunctionName: hexfront-relay
+      Runtime: python3.12
+      Handler: index.handler
+      MemorySize: 128
+      Timeout: 10
+      Role: !GetAtt RelayRole.Arn
+      Environment:
+        Variables:
+          TABLE: !Ref Rooms
+      Code:
+        # Protocol (plain text, one message per WebSocket frame, under 32 KB):
+        #   HOST <version>          -> ROOM <code> <token>
+        #   JOIN <code>             -> JOINED <code> <token> <host version>; host gets GUEST
+        #   BACK <code> <h|g> <tok> -> BACKOK <1 if the other player is connected>; other gets BACK
+        #   D <anything>            -> forwarded unchanged to the other player (AWAY if they are not there)
+        #   PING                    -> PONG (API Gateway drops a connection after 10 idle minutes)
+        # Also sent: GONE (the other player disconnected), NOROOM, FULL, ERR <reason>.
+        ZipFile: |
+          import os, time, secrets, boto3
+          from botocore.exceptions import ClientError
+          T = boto3.resource('dynamodb').Table(os.environ['TABLE'])
+          AZ = 'ABCDEFGHJKMNPQRSTUVWXYZ'
+          TTL = 12 * 3600
+          OK = {'statusCode': 200}
+          apis = {}
+
+          def handler(e, ctx):
+              rc = e['requestContext']
+              cid, route = rc['connectionId'], rc['routeKey']
+              if route == '$connect':
+                  return OK
+              url = 'https://%s/%s' % (rc['domainName'], rc['stage'])
+              if url not in apis:
+                  apis[url] = boto3.client('apigatewaymanagementapi', endpoint_url=url)
+              api = apis[url]
+
+              def send(to, text):
+                  try:
+                      api.post_to_connection(ConnectionId=to, Data=text.encode())
+                      return True
+                  except ClientError:
+                      return False
+
+              def room(code):
+                  return T.get_item(Key={'pk': 'r#' + code}).get('Item')
+
+              def link(code, role):
+                  T.put_item(Item={'pk': 'c#' + cid, 'code': code, 'role': role, 'exp': int(time.time()) + TTL})
+
+              me = T.get_item(Key={'pk': 'c#' + cid}).get('Item')
+              if route == '$disconnect':
+                  if me:
+                      T.delete_item(Key={'pk': 'c#' + cid})
+                      r = room(me['code'])
+                      if r and r.get(me['role']) == cid:
+                          o = r.get('g' if me['role'] == 'h' else 'h')
+                          if o:
+                              send(o, 'GONE')
+                  return OK
+
+              body = e.get('body') or ''
+              if e.get('isBase64Encoded'):
+                  send(cid, 'ERR text only')
+                  return OK
+              w = body.split()
+              cmd = w[0] if w else ''
+              exp = int(time.time()) + TTL
+              if cmd == 'D':
+                  r = room(me['code']) if me else None
+                  if not r:
+                      send(cid, 'NOROOM')
+                      return OK
+                  o = r.get('g' if me['role'] == 'h' else 'h')
+                  if not o or not send(o, body):
+                      send(cid, 'AWAY')
+              elif cmd == 'PING':
+                  send(cid, 'PONG')
+              elif cmd == 'HOST':
+                  ver = w[1] if len(w) > 1 else '?'
+                  tok = secrets.token_hex(8)
+                  for _ in range(20):
+                      code = ''.join(secrets.choice(AZ) for _ in range(6))
+                      try:
+                          T.put_item(Item={'pk': 'r#' + code, 'h': cid, 'ht': tok, 'v': ver, 'exp': exp},
+                                     ConditionExpression='attribute_not_exists(pk)')
+                          break
+                      except ClientError:
+                          code = None
+                  if not code:
+                      send(cid, 'ERR busy')
+                      return OK
+                  link(code, 'h')
+                  send(cid, 'ROOM %s %s' % (code, tok))
+              elif cmd == 'JOIN' and len(w) > 1:
+                  code = w[1].upper()
+                  r = room(code)
+                  if not r:
+                      send(cid, 'NOROOM')
+                      return OK
+                  tok = secrets.token_hex(8)
+                  try:
+                      T.update_item(Key={'pk': 'r#' + code}, UpdateExpression='SET g = :c, gt = :t',
+                                    ConditionExpression='attribute_not_exists(gt)',
+                                    ExpressionAttributeValues={':c': cid, ':t': tok})
+                  except ClientError:
+                      send(cid, 'FULL')
+                      return OK
+                  link(code, 'g')
+                  send(cid, 'JOINED %s %s %s' % (code, tok, r['v']))
+                  send(r['h'], 'GUEST')
+              elif cmd == 'BACK' and len(w) > 3 and w[2] in ('h', 'g'):
+                  code, role, tok = w[1].upper(), w[2], w[3]
+                  r = room(code)
+                  if not r or r.get(role + 't') != tok:
+                      send(cid, 'NOROOM')
+                      return OK
+                  T.update_item(Key={'pk': 'r#' + code}, UpdateExpression='SET #r = :c',
+                                ExpressionAttributeNames={'#r': role}, ExpressionAttributeValues={':c': cid})
+                  link(code, role)
+                  o = r.get('g' if role == 'h' else 'h')
+                  send(cid, 'BACKOK %s' % ('1' if o else '0'))
+                  if o:
+                      send(o, 'BACK')
+              else:
+                  send(cid, 'ERR unknown')
+              return OK
+
+  RelayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref Relay
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*"
+
+  RelayIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref Api
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Relay.Arn}/invocations"
+
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: $connect
+      Target: !Sub "integrations/${RelayIntegration}"
+
+  DisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: $disconnect
+      Target: !Sub "integrations/${RelayIntegration}"
+
+  DefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: $default
+      Target: !Sub "integrations/${RelayIntegration}"
+
+  Deployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - ConnectRoute
+      - DisconnectRoute
+      - DefaultRoute
+    Properties:
+      ApiId: !Ref Api
+
+  # The rate limits cap what anyone who finds the address can cost you.
+  LiveStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref Api
+      StageName: live
+      DeploymentId: !Ref Deployment
+      DefaultRouteSettings:
+        ThrottlingRateLimit: 20
+        ThrottlingBurstLimit: 40
+
+  Budget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: hexfront-relay
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+
+Outputs:
+  WebSocketUrl:
+    Description: The address the game connects to. Send this to Claude.
+    Value: !Sub "wss://${Api}.execute-api.${AWS::Region}.amazonaws.com/live"
