@@ -2,13 +2,15 @@ package com.meanmutton.mechgame.core;
 
 /** Choose a campaign, a mercenary career or a one-off quick battle. */
 public final class NewGameScreen extends Screen {
-    private static final int BACK = 1, QUICK = 3, MERC = 4, HOTSEAT = 5, C_DIFF = 10, C_FUNDS = 20, Q_DIFF = 30, Q_BUDGET = 40, C_SIDE = 50,
+    private static final int BACK = 1, QUICK = 3, MERC = 4, HOTSEAT = 5, C_VS = 6, C_DIFF = 10, C_FUNDS = 20, Q_DIFF = 30, Q_BUDGET = 40, C_SIDE = 50,
             M_DIFF = 60, M_FUNDS = 70;
     private static final String[] DIFF_TEXT = {"Smaller enemy forces; the computer takes more risks.",
             "Even fights; the computer plays carefully.",
             "Bigger enemy forces that focus fire and protect themselves."};
     private int cDiff = 1, cFunds = 1, mDiff = 1, mFunds = 1, qDiff = 1, qBudget = 2, cSide = Scenario.ATTACKER;
     private boolean confirmOverwrite, confirmMerc, confirmQuick, confirmHotseat;
+    /** Campaign against a second player on this device instead of the computer. */
+    private boolean cPvp;
 
     public NewGameScreen(Game game) {
         super(game);
@@ -37,8 +39,12 @@ public final class NewGameScreen extends Screen {
         buttons.clear();
         float pw = pw(), py = py();
         float bw = (pw - u * 6) / 3;
+        Btn vs = add(new Btn(C_VS, cPvp ? "vs Player 2" : "vs Computer").set(px(0) + pw - u * 25, py + u * 0.9f, u * 23, u * 5.2f));
+        vs.textSize = u * 2.4f;
+        vs.color = cPvp ? 0xFF6A3A8F : 0xFF2A3346;
         for (int i = 0; i < 3; i++) {
-            choice(C_DIFF + i, Company.DIFFICULTY[i], px(0) + u * 2 + i * (bw + u), py + u * 17, bw, cDiff == i);
+            Btn cd = choice(C_DIFF + i, Company.DIFFICULTY[i], px(0) + u * 2 + i * (bw + u), py + u * 17, bw, cDiff == i && !cPvp);
+            cd.enabled = !cPvp;   // difficulty is the computer's; two players don't need it
             choice(M_DIFF + i, Company.DIFFICULTY[i], px(1) + u * 2 + i * (bw + u), py + u * 17, bw, mDiff == i);
             choice(Q_DIFF + i, Company.DIFFICULTY[i], px(2) + u * 2 + i * (bw + u), py + u * 17, bw, qDiff == i);
         }
@@ -56,7 +62,8 @@ public final class NewGameScreen extends Screen {
             boolean confirm = confirmOverwrite && cSide == i;
             Btn c = add(new Btn(C_SIDE + i, confirm ? "Overwrite save?" : (i == Scenario.ATTACKER ? "Start as Attacker" : "Start as Defender"))
                     .set(px(0) + bx, h - u * (i == Scenario.ATTACKER ? 35.5f : 25.5f), bwid, bh));
-            c.sub = confirm ? "tap again to replace it" : (i == Scenario.ATTACKER ? "land and take the planet" : "hold the planet; the defender starts ahead");
+            c.sub = confirm ? "tap again to replace it" : cPvp ? (i == Scenario.ATTACKER ? "Player 1 attacks, Player 2 defends" : "Player 1 defends, Player 2 attacks")
+                    : (i == Scenario.ATTACKER ? "land and take the planet" : "hold the planet; the defender starts ahead");
             c.color = confirm ? 0xFF8F3A2E : (i == Scenario.ATTACKER ? 0xFF8F4A2E : 0xFF2E7D4F);
         }
         Btn m = add(new Btn(MERC, confirmMerc ? "Overwrite save?" : "Start as Mercenary").set(px(1) + bx, h - u * 25.5f, bwid, bh));
@@ -91,7 +98,8 @@ public final class NewGameScreen extends Screen {
                 confirmMerc = false;
                 cSide = side;
                 relayout();
-            } else game.newCampaign(cDiff, Game.CAMPAIGN_FUNDS[cFunds], side);
+            } else if (cPvp) game.newPvpCampaign(Game.CAMPAIGN_FUNDS[cFunds], side);
+            else game.newCampaign(cDiff, Game.CAMPAIGN_FUNDS[cFunds], side);
             return;
         }
         if (id == MERC) {
@@ -122,7 +130,8 @@ public final class NewGameScreen extends Screen {
             game.newHotseat(Game.QUICK_BUDGETS[qBudget]);
             return;
         }
-        if (id >= C_DIFF && id < C_DIFF + 3) cDiff = id - C_DIFF;
+        if (id == C_VS) cPvp = !cPvp;
+        else if (id >= C_DIFF && id < C_DIFF + 3) cDiff = id - C_DIFF;
         else if (id >= C_FUNDS && id < C_FUNDS + 3) cFunds = id - C_FUNDS;
         else if (id >= M_DIFF && id < M_DIFF + 3) mDiff = id - M_DIFF;
         else if (id >= M_FUNDS && id < M_FUNDS + 3) mFunds = id - M_FUNDS;
@@ -141,8 +150,9 @@ public final class NewGameScreen extends Screen {
         Ui.panel(g, x, py, pw, ph, u * 2);
         g.text(title, x + u * 3, py + u * 4.2f, u * 4.2f, Col.ACCENT, Gfx.ALIGN_LEFT, true);
         Ui.wrap(g, desc, x + u * 3, py + u * 8f, u * 2.1f, pw - u * 6, Col.TEXT_DIM);
-        g.text("Difficulty", x + u * 3, py + u * 15f, u * 2.5f, Col.TEXT, Gfx.ALIGN_LEFT, true);
-        Ui.wrap(g, DIFF_TEXT[diff], x + u * 3, py + u * 27, u * 2.1f, pw - u * 6, Col.TEXT_DIM);
+        g.text("Difficulty", x + u * 3, py + u * 15f, u * 2.5f, i == 0 && cPvp ? Col.TEXT_DIM : Col.TEXT, Gfx.ALIGN_LEFT, true);
+        String dt = i == 0 && cPvp ? "Two players on this device take turns at their HQs and fight each battle." : DIFF_TEXT[diff];
+        Ui.wrap(g, dt, x + u * 3, py + u * 27, u * 2.1f, pw - u * 6, Col.TEXT_DIM);
         g.text(second, x + u * 3, py + u * 32.5f, u * 2.5f, Col.TEXT, Gfx.ALIGN_LEFT, true);
     }
 

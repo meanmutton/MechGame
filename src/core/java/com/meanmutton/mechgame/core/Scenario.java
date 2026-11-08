@@ -203,6 +203,11 @@ public final class Scenario {
 
     /** Which way the scenario leans, from the player's point of view (null if it's even). */
     public String leanText(int playerSide) {
+        return leanText(playerSide, "you", "the enemy");
+    }
+
+    /** Which side the scenario favours, naming the two sides (two-player campaigns use "Player 1" and "Player 2"). */
+    public String leanText(int playerSide, String me, String them) {
         int score = 0;
         if (attackerInitiative > 0.5f) score++;
         if (attackerInitiative < 0.5f) score--;
@@ -216,7 +221,7 @@ public final class Scenario {
         if (score == 0) return null;
         boolean forAttacker = score > 0;
         boolean forMe = forAttacker == (playerSide == ATTACKER);
-        return "Leans toward the " + (forAttacker ? "attacker" : "defender") + (forMe ? " (you)" : " (the enemy)");
+        return "Leans toward the " + (forAttacker ? "attacker" : "defender") + " (" + (forMe ? me : them) + ")";
     }
 
     /** Front after this battle, given who won. */

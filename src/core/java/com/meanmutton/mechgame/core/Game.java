@@ -168,14 +168,193 @@ public final class Game {
     }
 
     public void saveCompany() {
-        if (company != null && !company.quick) {
-            platform.save("company", company.serialize());
-            if (company.rival != null) platform.save("rival", company.rival.serialize());
+        Company c = campaignMain();
+        if (c != null && !c.quick) {
+            platform.save("company", c.serialize());
+            if (c.rival != null) platform.save("rival", c.rival.serialize());
         }
+    }
+
+    // ---------------- two-player campaign ----------------
+
+    /** Two-player campaign: Player 1's company while Player 2 has the HQ (then {@link #company} is Player 2's). */
+    public Company pvpMain;
+
+    /** The company the campaign save belongs to: Player 1's, whoever is at the HQ. */
+    public Company campaignMain() {
+        return pvpMain != null ? pvpMain : company;
+    }
+
+    /** A campaign for two people on one device: Player 1 takes the chosen side, Player 2 the other. */
+    public void newPvpCampaign(int funds, int side) {
+        clearBattle();
+        pvpMain = null;
+        Company c = new Company();
+        c.pvp = true;
+        c.difficulty = 1;
+        c.side = side;
+        c.cash = Math.round(funds * Scenario.startFunds(side));
+        c.rollContract(rng);
+        Company rv = new Company();
+        rv.pvp = true;
+        rv.difficulty = 1;
+        rv.cash = Math.round(funds * Scenario.startFunds(1 - side));
+        rv.scheme = Scheme.ENEMY_DEFAULT;   // Player 2 starts in red, as their side looks in battle
+        c.rival = rv;
+        rv.rival = c;
+        syncRival(c);
+        company = c;
+        saveCompany();
+        setScreen(pvpHandoff(0));
+    }
+
+    /**
+     * Player 2's company follows the campaign from the other side: the same front, scenario and battle count, the
+     * opposite role, and its own pay for the next battle.
+     */
+    public void syncRival(Company c) {
+        Company rv = c.rival;
+        if (rv == null) return;
+        rv.pvp = true;
+        rv.rival = c;
+        rv.difficulty = c.difficulty;
+        rv.side = 1 - c.side;
+        rv.front = c.front;
+        rv.scenario = c.scenario;
+        rv.lastScenario = c.lastScenario;
+        rv.lastOutcome = c.lastOutcome;
+        rv.edge = c.edge;
+        rv.over = c.over;
+        rv.planets = c.planets;
+        rv.planetBattles = c.planetBattles;
+        rv.mission = c.mission;
+        if (c.over == 0) rv.rollContract(rng);
+        rv.biome = c.biome;
+        rv.seed = c.seed;
+    }
+
+    /** The hand-over screen in front of a player's HQ. */
+    private Screen pvpHandoff(int seat) {
+        Company c = campaignMain();
+        Company mine = seat == 0 ? c : c.rival;
+        Scenario sc = mine.next();
+        String role = Text.lower(Scenario.SIDE_NAMES[mine.side]);
+        String text = (seat == 0 ? "Player 1" : "Pass the device to Player 2. Player 2") + " is the " + role + ". Next: "
+                + (sc != null ? sc.name : "battle") + ". Repair, buy, customize and tick the units to send, then press "
+                + (seat == 0 ? "Done." : "Fight.");
+        return new HandoffScreen(this, seat, "YOUR HQ", text, new HqScreen(this));
+    }
+
+    /** After a battle: Player 1's turn at the HQ comes next. */
+    public void pvpNextTurn() {
+        setScreen(pvpHandoff(0));
+    }
+
+    /** Player 1 is done at the HQ: Player 2's turn. */
+    public void pvpHandToP2() {
+        Company c = campaignMain();
+        c.pvpTurn = 1;
+        syncRival(c);
+        pvpMain = c;
+        company = c.rival;
+        company.fitDeployment();
+        saveCompany();
+        setScreen(pvpHandoff(1));
+    }
+
+    /** Back to Player 2's HQ (from the briefing, which Player 2 opened). */
+    public void pvpBackToP2() {
+        Company c = campaignMain();
+        pvpMain = c;
+        company = c.rival;
+        setScreen(new HqScreen(this));
+    }
+
+    /** Player 2 is ready: the briefing, then the battle, seen from Player 1's side as every campaign battle is. */
+    public void pvpFight() {
+        Company c = campaignMain();
+        pvpMain = null;
+        company = c;
+        prepareMission();
+    }
+
+    /** A player has no unit that may fight in the next scenario: they forfeit, and the other player wins it. */
+    public void pvpForfeit(int team) {
+        Company c = campaignMain();
+        pvpMain = null;
+        company = c;
+        int result = team == Battle.PLAYER ? Battle.RESULT_LOSS : Battle.RESULT_WIN;
+        Debrief d = settleSide(c, null, Battle.PLAYER, result);
+        d.p2 = settleSide(c.rival, null, Battle.ENEMY, flip(result));
+        d.forfeit = true;
+        d.forfeitTeam = team;
+        settle(d, result, 0, null);
+    }
+
+    static int flip(int result) {
+        return result == Battle.RESULT_WIN ? Battle.RESULT_LOSS : (result == Battle.RESULT_DRAW ? result : Battle.RESULT_WIN);
+    }
+
+    /**
+     * One company's share of a battle's result, as the player's is settled: pay for the result, a bonus and salvage
+     * for what it destroyed, and its destroyed units recovered as wrecks (win or draw) or lost for good.
+     */
+    private Debrief settleSide(Company c, Battle b, int team, int result) {
+        Debrief d = new Debrief();
+        d.result = result;
+        d.pay = result == Battle.RESULT_WIN ? c.reward : (result == Battle.RESULT_DRAW ? c.reward / 2 : c.reward / 4);
+        int destroyedValue = 0;
+        boolean recover = result == Battle.RESULT_WIN || result == Battle.RESULT_DRAW;
+        if (b != null) {
+            for (Unit u : b.units) {
+                if (u.team == team || !u.destroyed) continue;
+                destroyedValue += u.value();
+                d.enemyLost.add(u.name);
+                if (!recover) continue;
+                List<Integer> intact = new ArrayList<Integer>();
+                for (int m = 0; m < u.weapon.length; m++) if (u.weapon[m] >= 0 && !u.wpnBroken[m]) intact.add(u.weapon[m]);
+                if (!intact.isEmpty() && b.rnd.nextFloat() < 0.6f) {
+                    int wid = intact.get(b.rnd.nextInt(intact.size()));
+                    c.armoryW[wid]++;
+                    d.salvage.add(Wpn.ALL[wid].name);
+                }
+                for (int e = 0; e < u.equip.length; e++) {
+                    if (u.equip[e] >= 0 && !u.eqBroken[e] && b.rnd.nextFloat() < 0.25f) {
+                        c.armoryE[u.equip[e]]++;
+                        d.salvage.add(Equip.ALL[u.equip[e]].name);
+                        break;
+                    }
+                }
+            }
+        }
+        if (result == Battle.RESULT_WIN) d.bonus = destroyedValue * 15 / 100;
+        else if (result == Battle.RESULT_DRAW) d.bonus = destroyedValue * 8 / 100;
+        c.cash += d.pay + d.bonus;
+        for (Unit u : new ArrayList<Unit>(c.deployed)) {
+            u.shutdown = false;
+            u.staggered = false;
+            u.ionized = false;
+            u.heat = 0;
+            if (u.destroyed) {
+                if (recover) d.wrecked.add(u.name);
+                else {
+                    d.lost.add(u.name);
+                    c.roster.remove(u);
+                }
+                c.deployed.remove(u);
+            }
+        }
+        return d;
     }
 
     public boolean hasSave() {
         return Company.parse(platform.load("company")) != null;
+    }
+
+    /** True if the saved campaign is a two-player one (for the menu's Continue label). */
+    public boolean saveIsPvp() {
+        Company c = Company.parse(platform.load("company"));
+        return c != null && c.pvp;
     }
 
     /** True if the saved company is a mercenary one (for the menu's Continue label). */
@@ -232,7 +411,9 @@ public final class Game {
 
     /** After a campaign ends: the same company moves on to a new planet against a fresh enemy. */
     public void nextPlanet(int side) {
-        Company c = company;
+        Company c = campaignMain();
+        company = c;
+        pvpMain = null;
         c.over = 0;
         c.side = side;
         c.front = Scenario.FRONT_START;
@@ -242,6 +423,17 @@ public final class Game {
         c.edge = -1;
         c.planets++;
         c.planetBattles = 0;
+        if (c.pvp && c.rival != null) {
+            // two players: the same two companies meet on the next planet, Player 1 on the chosen side
+            c.rollContract(rng);
+            c.pvpTurn = 0;
+            syncRival(c);
+            c.fitDeployment();
+            c.rival.fitDeployment();
+            saveCompany();
+            setScreen(pvpHandoff(0));
+            return;
+        }
         int worth = c.cash;
         for (Unit u : c.roster) worth += u.value();
         // a fresh enemy matched to your company's worth, scaled by which side has the bigger starting purse
@@ -394,6 +586,21 @@ public final class Game {
         Company c = Company.parse(platform.load("company"));
         if (c == null) return;
         company = c;
+        pvpMain = null;
+        if (c.pvp) {
+            c.rival = Company.parse(platform.load("rival"));
+            if (c.rival == null) return;
+            syncRival(c);
+            c.fitDeployment();
+            c.rival.fitDeployment();
+            if (c.over != 0) setScreen(new CampaignEndScreen(this));
+            else if (c.pvpTurn == 1) {
+                pvpMain = c;
+                company = c.rival;
+                setScreen(pvpHandoff(1));
+            } else setScreen(pvpHandoff(0));
+            return;
+        }
         if (c.merc) {
             c.fitDeployment();
             setScreen(new HqScreen(this));
@@ -474,6 +681,12 @@ public final class Game {
                 g.paint = Faction.ALL[k.target].scheme;
                 enemy.add(g);
             }
+        } else if (sc != null && c.pvp && c.rival != null) {
+            // two players: Player 2's chosen force, with each side's garrison
+            boolean attacking = c.side == Scenario.ATTACKER;
+            enemy = new ArrayList<Unit>(c.rival.deployed);
+            allies.addAll(Scenario.garrison(attacking ? sc.attackerGarrison : sc.defenderGarrison));
+            enemy.addAll(Scenario.garrison(attacking ? sc.defenderGarrison : sc.attackerGarrison));
         } else if (sc != null && c.rival != null) {
             militia = Rival.ensureForce(c.rival);
             boolean attacking = c.side == Scenario.ATTACKER;
@@ -496,7 +709,7 @@ public final class Game {
         Company c = company;
         List<Unit> mine = new ArrayList<Unit>(c.deployed);
         mine.addAll(allies);
-        Battle b = new Battle(this, mine, enemy, map, new Random(c.seed ^ 0x5DEECE66DL), c.difficulty, c.hotseat);
+        Battle b = new Battle(this, mine, enemy, map, new Random(c.seed ^ 0x5DEECE66DL), c.difficulty, c.twoPlayer());
         Scenario sc = c.next();
         if (sc != null) {
             boolean attacking = c.side == Scenario.ATTACKER;
@@ -523,6 +736,13 @@ public final class Game {
     public void finishBattle(Battle b) {
         clearBattle();
         Company c = company;
+        if (c.pvp && c.rival != null) {
+            // two players: both companies are settled as the player's is
+            Debrief d = settleSide(c, b, Battle.PLAYER, b.result);
+            d.p2 = settleSide(c.rival, b, Battle.ENEMY, flip(b.result));
+            settle(d, b.result, 0, b);
+            return;
+        }
         Debrief d = new Debrief();
         d.result = b.result;
         int pay;
@@ -633,9 +853,12 @@ public final class Game {
             if (c.over != 0 && wonPlanet) {
                 d.campaignBonus = 3000 + 1500 * c.difficulty;
                 c.cash += d.campaignBonus;
+            } else if (c.over != 0 && c.pvp && rv != null && d.p2 != null) {
+                d.p2.campaignBonus = 3000 + 1500 * c.difficulty;   // Player 2 took the planet
+                rv.cash += d.p2.campaignBonus;
             }
         }
-        if (!c.quick && rv != null) {
+        if (!c.quick && rv != null && !c.pvp) {
             float mult = Rival.incomeMult(c.difficulty);
             // The rival's backers pay a base budget every contract, plus a bonus when it wins or draws.
             // Your contract pay carries your side's income rate; the rival is paid at its own side's rate.
@@ -663,6 +886,19 @@ public final class Game {
         c.rollContract(rng);
         c.fitDeployment();
         d.repairCost = c.repairAllCost();
+        if (c.pvp && rv != null && d.p2 != null) {
+            // Player 2's record and next pay; then Player 1 has the next turn at the HQ
+            if (result == Battle.RESULT_WIN) rv.losses++;
+            else if (result == Battle.RESULT_LOSS) rv.wins++;
+            syncRival(c);
+            rv.fitDeployment();
+            d.p2.repairCost = rv.repairAllCost();
+            c.pvpTurn = 0;
+            pvpMain = null;
+            saveCompany();
+            setScreen(new PvpDebriefScreen(this, b, d));
+            return;
+        }
         saveCompany();
         setScreen(new DebriefScreen(this, b, d));
     }
@@ -689,6 +925,9 @@ public final class Game {
         // mercenary play: standing changes by faction, and who the job was for and against
         public int[] rep;
         public int employer = -1, target = -1;
+        // two-player campaign: Player 2's share, and who forfeited (if a player had nothing that could fight)
+        public Debrief p2;
+        public int forfeitTeam = -1;
         public final List<String> rivalBought = new ArrayList<String>();
     }
 }

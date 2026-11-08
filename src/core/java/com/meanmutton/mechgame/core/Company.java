@@ -16,6 +16,15 @@ public final class Company {
     public boolean hotseat;
     /** Hotseat: 0 for Player 1, 1 for Player 2. */
     public int seatNo;
+    /** Two-player campaign: the rival company is Player 2's, not the computer's (saved). */
+    public boolean pvp;
+    /** Two-player campaign: whose turn it is at HQ, 0 for Player 1 and 1 for Player 2 (saved with Player 1's company). */
+    public int pvpTurn;
+
+    /** Two people play this: a hotseat quick battle or a two-player campaign. */
+    public boolean twoPlayer() {
+        return hotseat || pvp;
+    }
     /** Campaign only: the opposing company (saved separately). */
     public Company rival;
     public int difficulty = 1;
@@ -203,6 +212,7 @@ public final class Company {
                 .append(',').append(scheme == null ? "-" : scheme.serialize())
                 .append(',').append(merc ? 1 : 0).append(',').append(repString()).append(',').append(planet == null ? "-" : planet.serialize())
                 .append(',').append(contractString()).append(',').append(contract).append(',').append(offerChassis).append(':').append(offerItem)
+                .append(',').append(pvp ? 1 : 0).append(',').append(pvpTurn)
                 .append('|');
         for (int i = 0; i < armoryW.length; i++) b.append(i > 0 ? "," : "").append(armoryW[i]);
         b.append('|');
@@ -249,6 +259,10 @@ public final class Company {
                     String[] of = Text.split(h[24], ':');
                     c.offerChassis = Integer.parseInt(of[0]);
                     c.offerItem = Integer.parseInt(of[1]);
+                }
+                if (h.length >= 27) {   // two-player campaigns (older saves are against the computer)
+                    c.pvp = h[25].equals("1");
+                    c.pvpTurn = Integer.parseInt(h[26]);
                 }
             }
             String[] aw = Text.split(p[2], ',');
