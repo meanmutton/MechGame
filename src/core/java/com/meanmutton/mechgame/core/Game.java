@@ -111,7 +111,8 @@ public final class Game {
         Scheme.player = c != null && c.scheme != null ? c.scheme : Scheme.PLAYER_DEFAULT;
         Scheme.enemy = c != null && c.rival != null && c.rival.scheme != null ? c.rival.scheme : Scheme.ENEMY_DEFAULT;
         if (c != null && c.hotseat && c.seatNo == 0 && hotseatEnemy != null) Scheme.enemy = hotseatEnemy;
-        if (online != null && online.schemes != null) {   // an online battle: each side in its own player's colors
+        if (online != null && online.schemes != null && (screen instanceof BattleScreen || screen instanceof HotseatEndScreen)) {
+            // an online battle: each side in its own player's colors (the HQ shows this device's own)
             Scheme.player = online.schemes[0];
             Scheme.enemy = online.schemes[1];
         }
@@ -174,6 +175,7 @@ public final class Game {
     }
 
     public void saveCompany() {
+        if (online != null && !online.host) return;   // an online campaign belongs to the host: the guest keeps no copy
         Company c = campaignMain();
         if (c != null && !c.quick) {
             platform.save("company", c.serialize());
@@ -437,6 +439,11 @@ public final class Game {
             c.fitDeployment();
             c.rival.fitDeployment();
             saveCompany();
+            if (online != null && online.campaign) {
+                online.sendCampaign();   // both go to their HQs for the new planet
+                setScreen(new HqScreen(this));
+                return;
+            }
             setScreen(pvpHandoff(0));
             return;
         }
@@ -599,6 +606,10 @@ public final class Game {
             syncRival(c);
             c.fitDeployment();
             c.rival.fitDeployment();
+            if (c.onlineCampaign) {
+                hostOnlineCampaign();   // a new room: the friend joins with its code and picks up Player 2's company
+                return;
+            }
             if (c.over != 0) setScreen(new CampaignEndScreen(this));
             else if (c.pvpTurn == 1) {
                 pvpMain = c;
@@ -663,9 +674,8 @@ public final class Game {
     }
 
     /** Builds everything for the next battle and shows the briefing. */
-    public void prepareMission() {
-        Company c = company;
-        Random r = new Random(c.seed);
+    /** The next mission's map: the contract's region, the scenario's weather, river and town. */
+    private HexMap missionMap(Company c, Random r) {
         Scenario sc = c.next();
         Weather wx = sc != null && sc.weather >= 0 ? new Weather(sc.weather) : Weather.random(c.biome, r);
         HexMap map = new HexMap(20, 13, c.biome, wx);
@@ -674,6 +684,14 @@ public final class Game {
             map.forceTown = sc.town;
         }
         map.generate(r);
+        return map;
+    }
+
+    public void prepareMission() {
+        Company c = company;
+        Random r = new Random(c.seed);
+        Scenario sc = c.next();
+        HexMap map = missionMap(c, r);
         List<Unit> enemy;
         List<Unit> allies = new ArrayList<Unit>();
         boolean militia = false;
@@ -755,6 +773,64 @@ public final class Game {
             online.leave();
             online = null;
         }
+    }
+
+    /** A two-player campaign against a friend online: this device is Player 1, keeps the campaign and hosts. */
+    public void newOnlineCampaign(int funds, int side) {
+        newPvpCampaign(funds, side);
+        company.onlineCampaign = true;
+        saveCompany();
+        hostOnlineCampaign();
+    }
+
+    /** Opens a room for the campaign in {@link #company} (Player 1's, with Player 2's as its rival). */
+    public void hostOnlineCampaign() {
+        leaveOnline();
+        pvpMain = null;
+        online = Online.hostCampaign(this);
+        setScreen(new OnlineScreen(this));
+    }
+
+    public boolean saveIsOnlineCampaign() {
+        Company c = Company.parse(platform.load("company"));
+        return c != null && c.pvp && c.onlineCampaign;
+    }
+
+    /** Online campaign, host: Player 1's turn at the HQ (or the choice of the next planet), Player 2's on their device. */
+    void onlineCampaignTurn() {
+        Company c = campaignMain();
+        pvpMain = null;
+        company = c;
+        c.fitDeployment();
+        setScreen(c.over != 0 ? new CampaignEndScreen(this) : new HqScreen(this));
+    }
+
+    /** Online campaign, guest: the campaign as the host sent it; this device plays Player 2's company. */
+    void onlineCampaignGuest(Company p1, Company p2) {
+        p1.rival = p2;
+        p2.rival = p1;
+        p1.pvp = p2.pvp = true;
+        pvpMain = p1;
+        company = p2;
+        setScreen(p1.over != 0 ? new CampaignEndScreen(this) : new HqScreen(this));
+    }
+
+    /** Online campaign, host: both forces are in; the battle on the scenario's map, with each side's garrison. */
+    Battle onlineCampaignBattle() {
+        Company c = campaignMain();
+        pvpMain = null;
+        company = c;
+        Random r = new Random(c.seed);
+        Scenario sc = c.next();
+        HexMap map = missionMap(c, r);
+        List<Unit> enemy = new ArrayList<Unit>(c.rival.deployed);
+        List<Unit> allies = new ArrayList<Unit>();
+        if (sc != null) {
+            boolean attacking = c.side == Scenario.ATTACKER;
+            allies.addAll(Scenario.garrison(attacking ? sc.attackerGarrison : sc.defenderGarrison));
+            enemy.addAll(Scenario.garrison(attacking ? sc.defenderGarrison : sc.attackerGarrison));
+        }
+        return newBattle(c, map, enemy, allies, new Rng(c.seed ^ 0x5DEECE66DL), true);
     }
 
     /** Online: both players are in the room. Build a force with the host's budget, as in a quick battle. */
@@ -958,6 +1034,7 @@ public final class Game {
             c.pvpTurn = 0;
             pvpMain = null;
             saveCompany();
+            if (online != null && online.campaign) online.campaignSettled(d);   // Player 2 sees it on their device
             setScreen(new PvpDebriefScreen(this, b, d));
             return;
         }
@@ -991,6 +1068,42 @@ public final class Game {
         // two-player campaign: Player 2's share, and who forfeited (if a player had nothing that could fight)
         public Debrief p2;
         public int forfeitTeam = -1;
+
+        /** One player's side of a two-player debrief as one line of text (an online campaign sends it to Player 2). */
+        String serialize() {
+            StringBuilder b = new StringBuilder();
+            int[] v = {result, pay, bonus, repairCost, campaignBonus, forfeit ? 1 : 0, forfeitTeam, outcome, frontBefore, frontAfter, over};
+            for (int i = 0; i < v.length; i++) b.append(i > 0 ? "," : "").append(v[i]);
+            b.append('\t').append(scenario == null ? "" : scenario.replace('\t', ' '));
+            for (List<String> l : new List[]{salvage, lost, wrecked, enemyLost}) {
+                b.append('\t');
+                for (int i = 0; i < l.size(); i++) b.append(i > 0 ? "|" : "").append(l.get(i).replace('|', '/').replace('\t', ' '));
+            }
+            return b.toString();
+        }
+
+        static Debrief parse(String s) {
+            String[] f = Text.split(s, '\t', true);
+            String[] v = Text.split(f[0], ',');
+            Debrief d = new Debrief();
+            d.result = Integer.parseInt(v[0]);
+            d.pay = Integer.parseInt(v[1]);
+            d.bonus = Integer.parseInt(v[2]);
+            d.repairCost = Integer.parseInt(v[3]);
+            d.campaignBonus = Integer.parseInt(v[4]);
+            d.forfeit = v[5].equals("1");
+            d.forfeitTeam = Integer.parseInt(v[6]);
+            d.outcome = Integer.parseInt(v[7]);
+            d.frontBefore = Integer.parseInt(v[8]);
+            d.frontAfter = Integer.parseInt(v[9]);
+            d.over = Integer.parseInt(v[10]);
+            d.scenario = f[1].length() == 0 ? null : f[1];
+            List[] lists = {d.salvage, d.lost, d.wrecked, d.enemyLost};
+            for (int k = 0; k < lists.length; k++) {
+                if (f.length > 2 + k && f[2 + k].length() > 0) for (String x : Text.split(f[2 + k], '|')) lists[k].add(x);
+            }
+            return d;
+        }
         public final List<String> rivalBought = new ArrayList<String>();
     }
 }

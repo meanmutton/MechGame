@@ -34,7 +34,7 @@ public final class WebMain implements Platform {
         Online.relayUrl = relay != null && relay.length() > 0 ? relay : Online.RELAY;
         Online.buildId = buildCommit();   // online play pairs only the same build
         autotest = autotestSetting();
-        if (autotest != null) Online.autoplay = true;
+        if (autotest != null) Online.autoplay = Online.autoplayCampaign = true;
         WebMain platform = new WebMain();
         platform.initAudio();
         Game game = new Game(platform, (long) (Math.random() * 1e15));
@@ -142,6 +142,7 @@ public final class WebMain implements Platform {
         if (!autotestStarted) {
             autotestStarted = true;
             if (autotest.startsWith("join:")) game.joinOnline(autotest.substring(5));
+            else if (autotest.equals("campaign")) game.newOnlineCampaign(10000, 0);
             else game.hostOnline(9000);
         }
         Online o = game.online;

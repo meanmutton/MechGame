@@ -22,11 +22,16 @@ public final class PvpDebriefScreen extends Screen {
         buttons.clear();
         Btn go = add(new Btn(CONTINUE, over() ? "Campaign Results" : "Continue").set(w - u * 43, h - u * 12, u * 40, u * 9));
         go.color = 0xFF2E7D4F;
-        if (!over()) go.sub = "Player 1's turn at the HQ";
+        if (!over()) go.sub = online() ? "both HQs open next" : "Player 1's turn at the HQ";
+    }
+
+    private boolean online() {
+        return game.online != null && game.online.campaign;
     }
 
     protected void onClick(Btn btn) {
-        if (over()) game.setScreen(new CampaignEndScreen(game));
+        if (online()) game.online.afterDebrief();
+        else if (over()) game.setScreen(new CampaignEndScreen(game));
         else game.pvpNextTurn();
     }
 

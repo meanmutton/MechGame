@@ -7,13 +7,20 @@ package com.meanmutton.mechgame.core;
 public final class OnlineScreen extends Screen {
     private static final int BACK = 1, HOST = 2, JOIN = 3;
     private final int budget;
+    /** Opened from the main menu (Back returns there) rather than from New Game. */
+    private final boolean fromMenu;
     private int laidOutPhase = -2;
     private String note;
 
     /** The start: host or join, the host's games using this budget. */
     public OnlineScreen(Game game, int budget) {
+        this(game, budget, false);
+    }
+
+    public OnlineScreen(Game game, int budget, boolean fromMenu) {
         super(game);
         this.budget = budget;
+        this.fromMenu = fromMenu;
     }
 
     /** Waiting on the online game in progress. */
@@ -54,7 +61,8 @@ public final class OnlineScreen extends Screen {
     protected void onClick(Btn b) {
         if (b.id == BACK) {
             game.leaveOnline();
-            game.setScreen(new NewGameScreen(game));
+            if (fromMenu) game.toMenu();
+            else game.setScreen(new NewGameScreen(game));
             return;
         }
         if (b.id == HOST) {
@@ -114,7 +122,9 @@ public final class OnlineScreen extends Screen {
                 break;
             case Online.HOSTING:
                 head = "Your game code";
-                text = "Tell your friend to choose New Game, Quick Battle, Online, then Join, and type in this code. "
+                text = o.campaign ? "Tell your friend to choose Play Online on the main menu, then Join, and type in this code. "
+                        + "You keep the campaign; your friend plays Player 2's company on their own device."
+                        : "Tell your friend to choose Play Online on the main menu, then Join, and type in this code. "
                         + "The battle uses your budget: $" + Ui.money(o.budget) + " each.";
                 break;
             case Online.JOINING:
@@ -125,7 +135,7 @@ public final class OnlineScreen extends Screen {
                 break;
             case Online.READY:
                 head = "Your force is ready";
-                text = "Waiting for Player " + (2 - o.team) + " to finish building theirs" + dots;
+                text = "Waiting for Player " + (2 - o.team) + (o.campaign ? " to finish at their HQ" : " to finish building theirs") + dots;
                 break;
             case Online.FAILED:
                 head = "Can't play online right now";
