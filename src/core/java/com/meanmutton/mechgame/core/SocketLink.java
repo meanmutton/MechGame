@@ -110,7 +110,24 @@ public final class SocketLink implements Link, Runnable {
             if (u.getRawQuery() != null) path += "?" + u.getRawQuery();
             Socket plain = new Socket();
             sock = plain;
-            plain.connect(new InetSocketAddress(host, port), 15000);
+            String proxy = tls ? proxyFor(host) : null;
+            if (proxy != null) {
+                // a computer that reaches the internet through an HTTP proxy (phones don't): tunnel through it
+                URI pu = new URI(proxy.contains("://") ? proxy : "http://" + proxy);
+                plain.connect(new InetSocketAddress(pu.getHost(), pu.getPort() > 0 ? pu.getPort() : 80), 15000);
+                plain.setSoTimeout(15000);
+                OutputStream po = plain.getOutputStream();
+                po.write(("CONNECT " + host + ":" + port + " HTTP/1.1\r\nHost: " + host + ":" + port + "\r\n\r\n").getBytes("ISO-8859-1"));
+                po.flush();
+                InputStream pi = plain.getInputStream();
+                String st = line(pi);
+                if (st == null || !(st.startsWith("HTTP/1.1 200") || st.startsWith("HTTP/1.0 200"))) throw new IOException("proxy refused: " + st);
+                for (String h = line(pi); h != null && h.length() > 0; h = line(pi)) {
+                    // skip the proxy's headers
+                }
+            } else {
+                plain.connect(new InetSocketAddress(host, port), 15000);
+            }
             Socket s = plain;
             if (tls) {
                 SSLSocket ss = (SSLSocket) ((SSLSocketFactory) SSLSocketFactory.getDefault()).createSocket(plain, host, port, true);
@@ -191,6 +208,27 @@ public final class SocketLink implements Link, Runnable {
             // the game sees the link closed and decides what to do
         }
         shut();
+    }
+
+    /** The HTTPS proxy to use for this host, from HTTPS_PROXY and NO_PROXY, or null (always null on a phone). */
+    private static String proxyFor(String host) {
+        try {
+            String p = System.getenv("HTTPS_PROXY");
+            if (p == null) p = System.getenv("https_proxy");
+            if (p == null || p.length() == 0) return null;
+            String no = System.getenv("NO_PROXY");
+            if (no == null) no = System.getenv("no_proxy");
+            if (no != null) {
+                for (String n : Text.split(no, ',')) {
+                    n = n.trim();
+                    if (n.startsWith("*.")) n = n.substring(1);
+                    if (n.length() > 0 && (host.equals(n) || (n.startsWith(".") && host.endsWith(n)))) return null;
+                }
+            }
+            return p;
+        } catch (Throwable e) {
+            return null;
+        }
     }
 
     private static long byteOf(InputStream in) throws IOException {

@@ -1144,7 +1144,7 @@ public final class DesktopTest {
         Online.relayUrl = url != null ? url : "mem:relay";
         float dt = 1 / 20f;
         int frames = url != null ? 1000 : 60;
-        pumpSleep = url != null ? 2 : 0;
+        pumpSleep = url != null ? 20 : 0;   // a real relay: about real-time pace, as people play (it limits messages a second)
         try {
             int totalResync = 0;
             for (int n = 0; n < battles; n++) {
@@ -1179,7 +1179,7 @@ public final class DesktopTest {
                     Online.buildId = "aaa1111";
                     Game old = new Game(op, 97);
                     old.hostOnline(9000);
-                    for (int i = 0; i < frames && old.online.phase != Online.HOSTING; i++) old.tick(dt, W, H);
+                    for (int i = 0; i < frames && old.online.phase != Online.HOSTING; i++) pump(old, old, 1, dt);
                     Online.buildId = "bbb2222";
                     Game nw = new Game(np, 96);
                     nw.joinOnline(old.online.code);
@@ -1241,6 +1241,7 @@ public final class DesktopTest {
                 if (bh.deploying || bg.deploying) throw new RuntimeException("the battle did not start");
                 bh.autoPlayer = bg.autoPlayer = true;
                 gh.headless = gg.headless = true;
+                relay.lossy = url == null && n % 2 == 1;   // every other battle: messages lost and overtaken, as AWS may
                 if (Boolean.getBoolean("online.offline")) {
                     // the same battle on one device, the computer playing both sides: is any lean the game's or online's?
                     FakePlatform op = new FakePlatform();
@@ -1262,6 +1263,8 @@ public final class DesktopTest {
                         for (Unit u : bg.units) if (!u.destroyed) { u.heat += 3; break; }
                     }
                     pump(gh, gg, 1, dt);
+                    if (url != null && f % 2000 == 0) System.out.println("  frame " + f + ": host round " + bh.round + " side " + bh.side + ", guest round " + bg.round
+                            + " side " + bg.side + ", wait '" + gh.online.waitingText() + "' / '" + gg.online.waitingText() + "'");
                     if (gg.screen() instanceof BattleScreen) bg = battleOf(gg);   // a re-sync replaces the guest's battle
                     if (bg != null && bg.localTeam == 1) bg.autoPlayer = true;
                     if (shots && n == 0 && !shotTaken && f > 200 && bg.side == 0 && bg.active != null) {
@@ -1269,7 +1272,13 @@ public final class DesktopTest {
                         shotTaken = true;
                     }
                 }
-                if (bh.result == Battle.RESULT_NONE || bg.result == Battle.RESULT_NONE) throw new RuntimeException("the online battle did not finish (frame " + f + ")");
+                if (bh.result == Battle.RESULT_NONE || bg.result == Battle.RESULT_NONE) {
+                    throw new RuntimeException("the online battle did not finish (frame " + f + "): host round " + bh.round + " side " + bh.side
+                            + " result " + bh.result + " wait '" + gh.online.waitingText() + "' phase " + gh.online.phase + "; guest round " + bg.round
+                            + " side " + bg.side + " result " + bg.result + " wait '" + gg.online.waitingText() + "' phase " + gg.online.phase
+                            + "; hashes " + (bh.stateHash() == bg.stateHash() ? "equal" : "differ") + "; guest screen " + gg.screen().getClass().getSimpleName()
+                            + "; odd messages " + gh.online.oddMessages + "/" + gg.online.oddMessages + " " + gh.online.lastOdd + " " + gg.online.lastOdd);
+                }
                 for (int i = 0; i < 200 && (bh.busy() || bg.busy()); i++) pump(gh, gg, 1, dt);
                 if (bh.result != bg.result) throw new RuntimeException("the two devices disagree on the result: " + bh.result + " vs " + bg.result);
                 if (bh.stateHash() != bg.stateHash()) throw new RuntimeException("the battles ended out of step");
@@ -1282,6 +1291,10 @@ public final class DesktopTest {
                 if (!(gh.screen() instanceof HotseatEndScreen) || !(gg.screen() instanceof HotseatEndScreen)) throw new RuntimeException("both should show the result");
                 if (has(gg, 2)) throw new RuntimeException("no rematch online");
                 if (shots && n == 0) shot(gg, "89_online_end");
+                if (relay.lossy) System.out.println("  lossy relay: " + relay.dropped + " messages lost, " + relay.swapped + " overtaken");
+                relay.lossy = false;
+                if (gh.online.oddMessages + gg.online.oddMessages > 0) System.out.println("  relay messages not understood: "
+                        + gh.online.oddMessages + "/" + gg.online.oddMessages + ", last: " + gh.online.lastOdd + " / " + gg.online.lastOdd);
                 click(gh, 1);   // the host goes to the menu: the guest hears it left
                 for (int i = 0; i < frames && !gg.online.partnerLeft; i++) pump(gh, gg, 1, dt);
                 if (gh.online != null || !gg.online.partnerLeft) throw new RuntimeException("leaving should tell the other player");

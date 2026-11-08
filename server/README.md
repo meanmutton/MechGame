@@ -87,8 +87,8 @@ The relay may also send `GONE` (the other player disconnected), `NOROOM`, `FULL`
 ## Pointing the game at the relay
 
 The game's address for the relay is `Online.RELAY` in `src/core/java/com/meanmutton/mechgame/core/Online.java`.
-Put the `WebSocketUrl` output there and rebuild; the Online button then shows in the Android app and the browser
-page. While it is empty, the button stays hidden.
+It holds the `WebSocketUrl` output of the deployed stack (in us-east-2). If the stack is ever replaced, put the
+new address there and rebuild. While it is empty, the Online button stays hidden.
 
 ## Test
 

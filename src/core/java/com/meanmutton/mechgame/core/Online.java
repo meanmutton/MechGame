@@ -22,8 +22,8 @@ import java.util.List;
 public final class Online implements Battle.Net {
     /** Change this when a build can no longer play against older ones (the battle rules or the messages change). */
     public static final String PROTOCOL = "1";
-    /** The relay this build connects to: wss://... (empty where online play isn't set up). Platforms may override. */
-    public static final String RELAY = "";
+    /** The relay this build connects to (the hexfront-relay stack's WebSocketUrl, see server/README.md). */
+    public static final String RELAY = "wss://e40wpz4be4.execute-api.us-east-2.amazonaws.com/live";
     /** The relay in use: set by builds that support online play; empty hides the Online button. */
     public static String relayUrl = "";
     /**
@@ -73,6 +73,20 @@ public final class Online implements Battle.Net {
     // numbered messages: what was sent (kept for resending), the last number received, and what waits to be applied
     private final List<String> sent = new ArrayList<String>();
     private int got;
+    /**
+     * Messages that arrived ahead of one still missing. The relay may deliver two quick messages out of order (it runs
+     * several copies of itself at once), and may drop one when messages come too fast, so nothing is assumed in order.
+     */
+    private final java.util.TreeMap<Integer, String> early = new java.util.TreeMap<Integer, String>();
+    /** The other player has confirmed getting our messages up to this number. */
+    private int peerHas;
+    /** Time without progress while some of our messages are unconfirmed; resent after a few seconds. */
+    private float stalled;
+    private boolean ackDue;
+    private float ackIn;
+    /** Tests: messages from the relay the game didn't recognize (AWS sends its own when it turns one away). */
+    int oddMessages;
+    String lastOdd;
     private final LinkedList<String> inbox = new LinkedList<String>();
     private final LinkedList<Integer> inboxSeq = new LinkedList<Integer>();
     /** The number of the other player's last message dealt with (applied, for battle orders). */
@@ -176,7 +190,8 @@ public final class Online implements Battle.Net {
     public void leave() {
         if (link != null && link.state() == Link.OPEN && phase != FAILED) {
             flush();
-            sendNow("D 0 LEAVE");
+            // the connection closes right after, so nothing can be resent: say it three times in case one is lost
+            for (int i = 0; i < 3; i++) sendNow("D 0 LEAVE");
         }
         if (link != null) link.close();
         link = null;
@@ -228,6 +243,21 @@ public final class Online implements Battle.Net {
             relay(m);
             if (phase == FAILED) return;
         }
+        if (ackDue) {
+            ackIn -= dt;
+            if (ackIn <= 0) {
+                ackDue = false;
+                sendNow("D 0 ACK " + got);
+            }
+        }
+        // anything the other player hasn't confirmed after a few seconds is sent again (the relay can drop one)
+        if (peerHas < sent.size() && partnerHere) {
+            stalled += dt;
+            if (stalled > 3) {
+                stalled = 0;
+                for (int i = peerHas; i < sent.size(); i++) sendNow(sent.get(i));
+            }
+        } else stalled = 0;
         sinceSent += dt;
         sinceHeard += dt;
         // the relay drops a connection after ten quiet minutes, and the pings show when it has died unnoticed
@@ -351,6 +381,9 @@ public final class Online implements Battle.Net {
             partnerHere = false;
         } else if (cmd.equals("ERR")) {
             if (token == null) fail("The server refused: " + m.substring(Math.min(m.length(), 4)));
+        } else if (!cmd.equals("PONG")) {
+            oddMessages++;
+            lastOdd = m.length() > 200 ? m.substring(0, 200) : m;
         }
     }
 
@@ -368,15 +401,40 @@ public final class Online implements Battle.Net {
         if (n == 0) {
             if (body.startsWith("HAVE ")) {
                 int have = Integer.parseInt(body.substring(5).trim());
+                confirmed(have);
                 for (int i = have; i < sent.size(); i++) sendNow(sent.get(i));
+            } else if (body.startsWith("ACK ")) {
+                confirmed(Integer.parseInt(body.substring(4).trim()));
             } else if (body.startsWith("LEAVE")) {
                 partnerLeft = true;
                 partnerHere = false;
             }
             return;
         }
-        if (n <= got) return;   // seen it already (sent again after a reconnect)
-        if (n != got + 1) return;   // a gap: the rest comes again after HAVE
+        if (!ackDue) {
+            ackDue = true;
+            ackIn = 0.3f;   // one confirmation covers everything that arrives meanwhile
+        }
+        if (n <= got) return;   // seen it already (sent again)
+        if (n != got + 1) {     // one before it is missing: keep this until the gap fills
+            early.put(n, body);
+            return;
+        }
+        deliver(n, body);
+        while (early.containsKey(got + 1)) deliver(got + 1, early.remove(got + 1));
+        early.headMap(got + 1).clear();
+    }
+
+    /** The other player has everything up to this number. */
+    private void confirmed(int n) {
+        if (n > peerHas) {
+            peerHas = Math.min(n, sent.size());
+            stalled = 0;
+        }
+    }
+
+    /** The next message in order: battle orders and the rest wait in the inbox; parts of long ones are put together. */
+    private void deliver(int n, String body) {
         got = n;
         if (body.startsWith("K ")) {
             // one part of a long message: "K <last 0/1> <text>"

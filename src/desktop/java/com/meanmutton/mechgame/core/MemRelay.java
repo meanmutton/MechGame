@@ -16,6 +16,12 @@ final class MemRelay {
     int messages;
     /** Drop links when they open, as a server that can't be reached. */
     boolean unreachable;
+    /** Like AWS: now and then a message between players is lost, or overtaken by the next one. */
+    boolean lossy;
+    int dropped, swapped;
+    private final Random chaos = new Random(11);
+    private MemLink heldFor;
+    private String held;
 
     synchronized MemLink connect() {
         MemLink l = new MemLink(this);
@@ -44,8 +50,27 @@ final class MemRelay {
                 return;
             }
             MemLink o = linkOf(me[1].equals("h") ? r[2] : r[0]);
-            if (o == null || o.state != Link.OPEN) to(from, "AWAY");
-            else to(o, body);
+            if (o == null || o.state != Link.OPEN) {
+                to(from, "AWAY");
+                return;
+            }
+            if (lossy) {
+                if (chaos.nextFloat() < 0.04f) {
+                    dropped++;
+                    return;
+                }
+                if (held == null && chaos.nextFloat() < 0.08f) {
+                    held = body;   // delivered after the next message to the same player
+                    heldFor = o;
+                    swapped++;
+                    return;
+                }
+            }
+            to(o, body);
+            if (held != null && heldFor == o) {
+                to(o, held);
+                held = null;
+            }
         } else if (cmd.equals("PING")) {
             to(from, "PONG");
         } else if (cmd.equals("HOST")) {
