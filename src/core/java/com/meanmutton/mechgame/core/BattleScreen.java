@@ -71,11 +71,12 @@ public final class BattleScreen extends Screen {
     public BattleScreen(Game game, Battle b) {
         super(game);
         this.b = b;
-        if (b.hotseat && b.deploying) handoffDeploy();
+        if (b.hotseat && b.deploying && !b.online()) handoffDeploy();
     }
 
     /** The side the controls act for: the player placing units, or the player whose turn it is. */
     private int ctl() {
+        if (b.online()) return b.localTeam;   // each device plays its own side
         if (b.deploying) return b.placingTeam();
         return b.hotseat ? b.side : Battle.PLAYER;
     }
@@ -93,6 +94,21 @@ public final class BattleScreen extends Screen {
 
     public Battle battle() {
         return b;
+    }
+
+    /** Online: the game is waiting on the network (connection, the other player, or a re-sync). */
+    private boolean netWait() {
+        return b.online() && (game.online == null || game.online.blocked() || game.online.phase == Online.FAILED);
+    }
+
+    /** A person here may act now: it's their side's turn (online: this device's side) and nothing is waiting. */
+    private boolean myTurn() {
+        return b.playerTurn() && (!b.online() || (b.side == b.localTeam && !netWait()));
+    }
+
+    /** Online: this device's side places its units now. */
+    private boolean myDeploy() {
+        return b.deploying && (!b.online() || (b.deployTeam == b.localTeam && !netWait()));
     }
 
     // =====================================================================
@@ -120,7 +136,7 @@ public final class BattleScreen extends Screen {
                 // start zoomed in a little, showing your own deployment zone (Player 2's is on the right)
                 cs = fitFull * 1.3f;
                 camX = u * 2 + cs;
-                if (b.hotseat && b.deploying && b.deployTeam == Battle.ENEMY) camX = mapW - u * 2 - (width - 1) * cs;
+                if (b.hotseat && b.deploying && (b.online() ? b.localTeam : b.deployTeam) == Battle.ENEMY) camX = mapW - u * 2 - (width - 1) * cs;
                 camY = topBar + (h - topBar - height * cs) / 2 + cs * 0.866f;
                 clampCam();
             }
@@ -188,7 +204,8 @@ public final class BattleScreen extends Screen {
         bEnd.color = 0xFF2E5D8F;
         bNext = add(new Btn(NEXT, "Next Unit").set(x0, by2, bw2, u * 9.5f));
         bCancel = add(new Btn(CANCEL, "Cancel").set(x0, by2, bw2, u * 9.5f));
-        bStart = add(new Btn(START, b.hotseat && b.deployTeam == Battle.PLAYER ? "DONE: PASS TO PLAYER 2" : "START BATTLE").set(x0, by2, pw, u * 9.5f));
+        bStart = add(new Btn(START, b.online() ? (b.deployTeam == Battle.PLAYER ? "DONE: PLAYER 2 DEPLOYS NEXT" : "START BATTLE")
+                : b.hotseat && b.deployTeam == Battle.PLAYER ? "DONE: PASS TO PLAYER 2" : "START BATTLE").set(x0, by2, pw, u * 9.5f));
         bStart.color = 0xFF2E7D4F;
         bDetails = add(new Btn(DETAILS, "Details").set(x0 + pw - u * 16, u * 1.5f, u * 16, u * 7));
         for (Btn bb : buttons) if (bb.id < WROW) bb.textSize = u * 3f;
@@ -214,11 +231,12 @@ public final class BattleScreen extends Screen {
             overlay.add(new Btn(P_SPEED, "Enemy turns: " + Settings.SPEED_NAMES[game.settings.aiSpeed]).set(x, y + bh * 2.4f, bw, bh));
             Btn wd = overlay.get(overlay.size() - 1);
             if (b.hotseat) wd.enabled = false;   // no computer turns to speed up
-            String concede = b.hotseat ? (b.deploying ? "Concede the battle" : "Player " + (b.side + 1) + " concedes") : "Withdraw from battle";
+            String concede = b.online() || (b.hotseat && b.deploying) ? "Concede the battle"
+                    : b.hotseat ? "Player " + (b.side + 1) + " concedes" : "Withdraw from battle";
             Btn cw = new Btn(P_WITHDRAW, concede).set(x, y + bh * 3.6f, bw, bh).tint(0xFF8F5A2E);
-            cw.enabled = !(b.hotseat && b.deploying);
+            cw.enabled = b.online() ? b.result == Battle.RESULT_NONE : !(b.hotseat && b.deploying);
             overlay.add(cw);
-            overlay.add(new Btn(P_QUIT, "Save and quit to menu").set(x, y + bh * 4.8f, bw, bh).tint(0xFF2E6D8F));
+            overlay.add(new Btn(P_QUIT, b.online() ? "Concede and leave" : "Save and quit to menu").set(x, y + bh * 4.8f, bw, bh).tint(0xFF2E6D8F));
         } else {
             overlay.add(new Btn(P_CONFIRM, b.hotseat ? "Yes, concede" : "Yes, withdraw").set(w / 2f - u * 32, h * 0.55f, u * 30, bh).tint(0xFF8F3A2E));
             overlay.add(new Btn(P_RESUME, "Keep fighting").set(w / 2f + u * 2, h * 0.55f, u * 30, bh).tint(0xFF2E7D4F));
@@ -235,7 +253,7 @@ public final class BattleScreen extends Screen {
     }
 
     private boolean myActivation() {
-        return b.playerTurn() && b.active != null && b.active.team == b.side && !b.busy();
+        return myTurn() && b.active != null && b.active.team == b.side && !b.busy();
     }
 
     private void refreshButtons() {
@@ -266,9 +284,10 @@ public final class BattleScreen extends Screen {
         bEnd.visible = mine;
         bEnd.label = a != null && !a.moved && !a.fired ? "Hold / Skip" : "End Turn";
         bCancel.visible = false;
-        bNext.visible = b.playerTurn() && b.active == null && !b.busy();
+        bNext.visible = myTurn() && b.active == null && !b.busy();
         bEnd.enabled = mine;
-        bStart.visible = b.deploying;
+        bStart.visible = b.deploying && (!b.online() || b.deployTeam == b.localTeam);
+        bStart.enabled = myDeploy();
         bDetails.visible = panelUnit() != null;
     }
 
@@ -283,7 +302,7 @@ public final class BattleScreen extends Screen {
         if (pauseMode != 0) return;
         b.update(dt);
         // keep the battle saved, so leaving the app and coming back resumes it here
-        if (b.version != savedVersion && BattleSave.quiet(b)) {
+        if (!b.online() && b.version != savedVersion && BattleSave.quiet(b)) {
             game.saveBattle(b);
             savedVersion = b.version;
         }
@@ -306,6 +325,7 @@ public final class BattleScreen extends Screen {
             }
         }
         if (b.active != null && !b.human(b.active.team)) view = b.active;
+        if (b.online() && b.active != null && b.active.team != b.localTeam) view = b.active;   // follow the other player's unit
         if (target != null && (target.destroyed || b.active == null || b.active.team != b.side || !b.human(b.side))) target = null;
         // hotseat: a banner when the turn passes from one player to the other
         if (b.hotseat && !b.deploying && b.result == Battle.RESULT_NONE) {
@@ -439,6 +459,12 @@ public final class BattleScreen extends Screen {
             case P_WITHDRAW: pauseMode = 2; layoutOverlay(); return;
             case P_CONFIRM: pauseMode = 0; b.withdraw(); endTimer = 1.5f; return;
             case P_QUIT:
+                if (b.online()) {
+                    // leaving an online battle gives it up; the other player sees that, then the game closes
+                    if (b.result == Battle.RESULT_NONE) b.withdraw();
+                    game.toMenu();
+                    return;
+                }
                 if (BattleSave.quiet(b)) game.saveBattle(b);   // otherwise the last quiet moment is already saved
                 game.toMenu();
                 return;
@@ -447,10 +473,11 @@ public final class BattleScreen extends Screen {
                 if (panelUnit() != null) showDetail(panelUnit(), panelUnit().team, b);
                 return;
             case START:
+                if (!myDeploy()) return;
                 b.finishDeployment();
                 deploySel = null;
                 view = null;
-                if (b.hotseat && b.deploying) handoffDeploy();   // Player 2's turn to deploy
+                if (b.hotseat && b.deploying && !b.online()) handoffDeploy();   // Player 2's turn to deploy
                 else layoutKeepCamera();
                 return;
             default: break;
@@ -504,7 +531,7 @@ public final class BattleScreen extends Screen {
     }
 
     private void selectNextReady() {
-        if (!b.playerTurn() || b.active != null) return;
+        if (!myTurn() || b.active != null) return;
         for (Unit un : b.units) {
             if (un.team == ctl() && !un.destroyed && !un.activated) {
                 activate(un);
@@ -577,7 +604,7 @@ public final class BattleScreen extends Screen {
             if (at != null && at.team == b.placingTeam()) {
                 deploySel = at;
                 view = at;
-            } else if (deploySel != null && b.canPlace(deploySel, c, r)) {
+            } else if (deploySel != null && myDeploy() && b.canPlace(deploySel, c, r)) {
                 b.place(deploySel, c, r);
             } else if (at != null) {
                 view = at;
@@ -590,7 +617,7 @@ public final class BattleScreen extends Screen {
             if (at != null) view = at;
             return;
         }
-        if (b.playerTurn()) {
+        if (myTurn()) {
             Unit a = b.active;
             if (at != null && at.team == ctl()) {
                 if (a == null && !at.activated) {
@@ -599,8 +626,13 @@ public final class BattleScreen extends Screen {
                 }
                 if (a != null && a != at && !at.activated && !a.moved && !a.fired && !a.turboOn) {
                     // switch to a different unit before doing anything
-                    b.active = null;
-                    activate(at);
+                    b.switchTo(at);
+                    view = at;
+                    target = null;
+                    pendingDest = -1;
+                    reach = null;
+                    wsel = new boolean[at.weapon.length];
+                    layoutKeepCamera();
                     return;
                 }
                 view = at;
@@ -798,15 +830,26 @@ public final class BattleScreen extends Screen {
             g.fillRect(0, h * 0.38f, mapW, h * 0.16f, Col.alpha(0xCC000000, k));
             int tc = b.hotseat ? (b.result == Battle.RESULT_WIN ? UnitArt.PLAYER_COLOR : (b.result == Battle.RESULT_LOSS ? UnitArt.ENEMY_COLOR : Col.ACCENT))
                     : (b.result == Battle.RESULT_WIN ? Col.GOOD : Col.ACCENT);
-            g.text(titles[b.result], mapW / 2, h * 0.46f, u * 9, Col.alpha(tc, k), Gfx.ALIGN_CENTER, true);
+            String title = titles[b.result];
+            if (b.online() && (b.result == Battle.RESULT_WIN || b.result == Battle.RESULT_LOSS)) {
+                title = (b.result == Battle.RESULT_WIN) == (b.localTeam == Battle.PLAYER) ? "VICTORY" : "DEFEAT";
+            }
+            g.text(title, mapW / 2, h * 0.46f, u * 9, Col.alpha(tc, k), Gfx.ALIGN_CENTER, true);
         }
         if (turnBanner > 0 && b.result == Battle.RESULT_NONE) {
             float k = Math.min(1f, turnBanner * 2.5f);
             int tc = UnitArt.teamColor(b.side);
             g.fillRect(0, h * 0.4f, mapW, h * 0.12f, Col.alpha(0xCC000000, k));
-            g.text("PLAYER " + (b.side + 1) + "'S TURN", mapW / 2, h * 0.46f, u * 7, Col.alpha(tc, k), Gfx.ALIGN_CENTER, true);
+            String banner = b.online() && b.side == b.localTeam ? "YOUR TURN" : "PLAYER " + (b.side + 1) + "'S TURN";
+            g.text(banner, mapW / 2, h * 0.46f, u * 7, Col.alpha(tc, k), Gfx.ALIGN_CENTER, true);
         }
         if (flash > 0) g.fillRect(0, 0, mapW, h, Col.alpha(0xFFFFFFFF, flash));
+        String wait = b.online() && game.online != null ? game.online.waitingText() : null;
+        if (wait != null && pauseMode == 0) {
+            float ww = Math.min(mapW - u * 4, g.textWidth(wait, u * 3, true) + u * 8);
+            Ui.panel(g, (mapW - ww) / 2, topBar + u * 2, ww, u * 8, u * 1.5f);
+            g.text(wait, mapW / 2, topBar + u * 6, u * 3, Col.ACCENT, Gfx.ALIGN_CENTER, true);
+        }
         if (pauseMode == OV_HANDOFF) {
             // opaque: the next player must not see the map before taking the device
             background(g);
@@ -1141,7 +1184,11 @@ public final class BattleScreen extends Screen {
     private void renderTop(Gfx g) {
         g.fillRectVGradient(0, 0, mapW, topBar, 0xDD0A0F18, 0x880A0F18);
         String turn;
-        if (b.deploying) turn = b.hotseat ? "Player " + (b.deployTeam + 1) + ": place your units, then " + (b.deployTeam == Battle.PLAYER ? "Done" : "Start Battle")
+        if (b.online() && b.deploying) turn = b.deployTeam == b.localTeam ? "You are Player " + (b.localTeam + 1) + ": place your units, then "
+                + (b.deployTeam == Battle.PLAYER ? "Done" : "Start Battle") : "Player " + (b.deployTeam + 1) + " is placing their units...";
+        else if (b.online() && b.result == Battle.RESULT_NONE && b.side != b.localTeam) {
+            turn = "Player " + (b.side + 1) + "'s turn" + (b.active != null ? ": " + b.active.name : "...");
+        } else if (b.deploying) turn = b.hotseat ? "Player " + (b.deployTeam + 1) + ": place your units, then " + (b.deployTeam == Battle.PLAYER ? "Done" : "Start Battle")
                 : "Deployment: place your units, then Start Battle";
         else if (b.result != Battle.RESULT_NONE) turn = "Battle over";
         else if (b.human(b.side)) {
@@ -1335,7 +1382,11 @@ public final class BattleScreen extends Screen {
         Unit su = panelUnit();
         float x0 = panelX + u * 2, pw = panelW - u * 4;
         if (su == null) {
-            String msg = b.deploying ? "Tap one of your units to reposition it" : (b.playerTurn() ? "Tap one of your units (pulsing blue)" : "Enemy is moving...");
+            String msg = b.deploying && b.online() && b.deployTeam != b.localTeam
+                    ? "Player " + (b.deployTeam + 1) + " is deploying; " + (b.deployTeam == Battle.PLAYER ? "you place your units next" : "then the battle starts")
+                    : b.deploying ? "Tap one of your units to reposition it"
+                    : b.online() && b.side != b.localTeam ? "Player " + (b.side + 1) + " is moving..."
+                    : (b.playerTurn() ? "Tap one of your units (pulsing blue)" : "Enemy is moving...");
             g.text(msg, panelX + panelW / 2, h * 0.3f, u * 2.8f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);
             if (b.deploying) g.text("Infantry can go anywhere on the map", panelX + panelW / 2, h * 0.42f, u * 2.4f, Col.ACCENT, Gfx.ALIGN_CENTER, false);
             g.text("Drag to pan, pinch to zoom", panelX + panelW / 2, h * 0.36f, u * 2.4f, Col.TEXT_DIM, Gfx.ALIGN_CENTER, false);

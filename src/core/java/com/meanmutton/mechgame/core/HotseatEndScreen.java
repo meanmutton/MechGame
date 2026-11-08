@@ -18,6 +18,7 @@ public final class HotseatEndScreen extends Screen {
     protected void layout() {
         buttons.clear();
         add(new Btn(MENU, "Main Menu").set(u * 3, h - u * 12, u * 30, u * 9));
+        if (b.online()) return;   // online: a new game starts from the menu
         Btn r = add(new Btn(REMATCH, "Rematch").set(w - u * 43, h - u * 12, u * 40, u * 9));
         r.color = 0xFF2E7D4F;
         r.sub = "same forces, repaired, new map";
@@ -42,6 +43,7 @@ public final class HotseatEndScreen extends Screen {
         background(g);
         String title = b.result == Battle.RESULT_WIN ? "PLAYER 1 WINS" : (b.result == Battle.RESULT_LOSS ? "PLAYER 2 WINS" : "DRAW");
         int tc = b.result == Battle.RESULT_WIN ? UnitArt.PLAYER_COLOR : (b.result == Battle.RESULT_LOSS ? UnitArt.ENEMY_COLOR : Col.ACCENT);
+        if (b.online() && b.result != Battle.RESULT_DRAW) title += (b.result == Battle.RESULT_WIN) == (b.localTeam == Battle.PLAYER) ? ": YOU WIN" : ": YOU LOSE";
         g.text(title, w / 2f, h * 0.09f, u * 9, tc, Gfx.ALIGN_CENTER, true);
         String how;
         if (b.conceded >= 0) how = "Player " + (b.conceded + 1) + " conceded";
@@ -61,7 +63,7 @@ public final class HotseatEndScreen extends Screen {
                 if (un.destroyed) lost++;
                 else kept++;
             }
-            g.text("Player " + (team + 1), x + u, y0 + u * 4.5f, u * 3.4f, col, Gfx.ALIGN_LEFT, true);
+            g.text("Player " + (team + 1) + (b.online() && team == b.localTeam ? " (you)" : ""), x + u, y0 + u * 4.5f, u * 3.4f, col, Gfx.ALIGN_LEFT, true);
             g.text(kept + " standing, " + lost + " lost", x + cw - u, y0 + u * 4.5f, u * 2.3f, Col.TEXT_DIM, Gfx.ALIGN_RIGHT, false);
             float step = Math.min(u * 5, (ph - u * 10) / Math.max(1, mine.size()));
             float y = y0 + u * 10;

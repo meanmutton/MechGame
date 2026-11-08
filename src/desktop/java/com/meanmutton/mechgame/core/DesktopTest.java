@@ -37,6 +37,12 @@ public final class DesktopTest {
         String shared;
         public void share(String subject, String text) { shared = text; }
         public String buildInfo() { return "desktop harness"; }
+        /** Online tests: the in-memory relay, or a real one (ws:// or wss://). */
+        MemRelay relay;
+        public Link openLink(String url) {
+            if (url.startsWith("mem:")) return relay == null ? null : relay.connect();
+            return new SocketLink(url);
+        }
     }
 
     static int W = 2400, H = 1080;
@@ -56,6 +62,8 @@ public final class DesktopTest {
         else if (mode.equals("campaign")) campaign(Integer.parseInt(args[1]));
         else if (mode.equals("merc")) merc(Integer.parseInt(args[1]));
         else if (mode.equals("pvp")) pvpCampaign(Integer.parseInt(args[1]), false);
+        else if (mode.equals("onlineself")) onlineSelf(args[1], args[2]);
+        else if (mode.equals("online")) online(Integer.parseInt(args[1]), false, args.length > 2 ? args[2] : null);
         else if (mode.equals("resume")) resume();
         else if (mode.equals("monkey")) monkey(Integer.parseInt(args[1]), args.length > 2 ? Integer.parseInt(args[2]) : 30000, false);
         else if (mode.equals("monkey-threads")) monkey(Integer.parseInt(args[1]), args.length > 2 ? Integer.parseInt(args[2]) : 30000, true);
@@ -262,6 +270,11 @@ public final class DesktopTest {
     }
 
     @SuppressWarnings("unchecked")
+    static boolean has(Game g, int id) throws Exception {
+        for (Btn b : buttonsOf(g)) if (b.id == id) return true;
+        return false;
+    }
+
     static List<Btn> buttonsOf(Game g) throws Exception {
         Method m = Screen.class.getDeclaredMethod("activeButtons");
         m.setAccessible(true);
@@ -919,6 +932,7 @@ public final class DesktopTest {
         hotseat(new FakePlatform());
         // a two-player campaign: both HQs, the shared briefing, a battle, both settled
         pvpCampaign(3, true);
+        online(1, true, null);
         // weather variety on a smaller screen
         W = 1600;
         H = 900;
@@ -1045,6 +1059,263 @@ public final class DesktopTest {
             throw new RuntimeException("the rematch should bring both forces back");
         for (Unit u : g.seats[1].deployed) if (u.isDamaged()) throw new RuntimeException("rematch forces should be repaired");
         System.out.println("hotseat OK (result " + b.result + " after " + b.round + " rounds, rematch ready)");
+    }
+
+    /** Online tests over a real relay: give the network real time between frames. */
+    static int pumpSleep;
+
+    /**
+     * Cross-play tests: one game that hosts ("host") or joins ("join:CODE") at url and plays by itself (Online.autoplay),
+     * printing the code and, at the end, the result and the battle's fingerprint to compare with the other device.
+     */
+    static void onlineSelf(String url, String how) throws Exception {
+        FakePlatform p = new FakePlatform();
+        Online.relayUrl = url;
+        Online.autoplay = true;
+        Online.buildId = System.getProperty("hexfront.build", Online.buildId);   // to pair with a browser page's build
+        Game g = new Game(p, 123);
+        g.tick(0, W, H);
+        if (how.startsWith("join:")) g.joinOnline(how.substring(5));
+        else g.hostOnline(9000);
+        boolean told = false;
+        long until = System.currentTimeMillis() + 15 * 60 * 1000L;
+        while (System.currentTimeMillis() < until) {
+            g.tick(1 / 20f, W, H);
+            Thread.sleep(3);
+            Online o = g.online;
+            if (o == null) throw new RuntimeException("left the game");
+            if (!told && o.code != null && o.phase == Online.HOSTING) {
+                System.out.println("CODE " + o.code);
+                told = true;
+            }
+            if (o.phase == Online.FAILED) throw new RuntimeException("failed: " + o.problem);
+            if (o.battle != null && o.battle.result != Battle.RESULT_NONE && !o.battle.busy() && g.screen() instanceof HotseatEndScreen) {
+                for (int i = 0; i < 100; i++) {
+                    g.tick(1 / 20f, W, H);
+                    Thread.sleep(5);
+                }
+                System.out.println("DONE " + o.testState() + " rounds " + o.battle.round);
+                return;
+            }
+        }
+        throw new RuntimeException("timed out: " + g.online.phase + " " + g.online.testState());
+    }
+
+    static void pump(Game a, Game b, int frames, float dt) {
+        for (int i = 0; i < frames; i++) {
+            a.tick(dt, W, H);
+            b.tick(dt, W, H);
+            if (pumpSleep > 0) {
+                try {
+                    Thread.sleep(pumpSleep);
+                } catch (InterruptedException ignored) {
+                }
+            }
+        }
+    }
+
+    static int dmg(Battle b, int team) {
+        float d = 0;
+        for (Unit u : b.units) if (u.team == team) d += u.damageDealt;
+        return Math.round(d);
+    }
+
+    static Battle battleOf(Game g) {
+        return g.screen() instanceof BattleScreen ? ((BattleScreen) g.screen()).battle() : null;
+    }
+
+    static void cutLink(Game g) throws Exception {
+        java.lang.reflect.Field f = Online.class.getDeclaredField("link");
+        f.setAccessible(true);
+        Link l = (Link) f.get(g.online);
+        if (l != null) l.close();
+    }
+
+    /**
+     * Two games play an online quick battle through a relay: the in-memory one, or a real one at url (ws:// or wss://).
+     * Hosting and joining, building at the same time, deployment, the whole battle on both devices in step, a dropped
+     * connection mid-battle, a forced disagreement that the host's copy fixes, leaving, and the failures a player sees.
+     */
+    static void online(int battles, boolean shots, String url) throws Exception {
+        MemRelay relay = new MemRelay();
+        FakePlatform hp = new FakePlatform(), gp = new FakePlatform();
+        hp.relay = gp.relay = relay;
+        String saved = Online.relayUrl;
+        Online.relayUrl = url != null ? url : "mem:relay";
+        float dt = 1 / 20f;
+        int frames = url != null ? 1000 : 60;
+        pumpSleep = url != null ? 20 : 0;   // a real relay: about real-time pace, as people play (it limits messages a second)
+        try {
+            int totalResync = 0;
+            for (int n = 0; n < battles; n++) {
+                Game gh = new Game(hp, 71 + n * 2), gg = new Game(gp, 72 + n * 2);
+                pump(gh, gg, 2, dt);
+                gh.setScreen(new NewGameScreen(gh));
+                pump(gh, gg, 2, dt);
+                if (!has(gh, 7)) throw new RuntimeException("no Online button on the New Game screen");
+                if (shots && n == 0) shot(gh, "80_online_newgame");
+                click(gh, 7);
+                pump(gh, gg, 2, dt);
+                if (!(gh.screen() instanceof OnlineScreen)) throw new RuntimeException("Online should open the online screen");
+                if (shots && n == 0) shot(gh, "81_online_start");
+                click(gh, 2);   // Host
+                for (int i = 0; i < frames && gh.online.phase != Online.HOSTING; i++) pump(gh, gg, 1, dt);
+                if (gh.online.phase != Online.HOSTING || gh.online.code == null) throw new RuntimeException("hosting failed: " + gh.online.problem);
+                if (shots && n == 0) shot(gh, "82_online_code");
+                String code = gh.online.code;
+                if (n == 0) {
+                    // a wrong code and a full room say so
+                    gg.joinOnline(code.equals("AAAAAA") ? "BBBBBB" : "AAAAAA");
+                    for (int i = 0; i < frames && gg.online.phase != Online.FAILED; i++) pump(gh, gg, 1, dt);
+                    if (gg.online.phase != Online.FAILED || !gg.online.problem.contains("no game")) throw new RuntimeException("a wrong code: " + gg.online.problem);
+                    if (shots) shot(gg, "83_online_wrong_code");
+                    gg.leaveOnline();
+                }
+                if (n == 0) {
+                    // different builds don't play each other, and both players are told why
+                    FakePlatform op = new FakePlatform(), np = new FakePlatform();
+                    op.relay = np.relay = relay;
+                    String keep = Online.buildId;
+                    Online.buildId = "aaa1111";
+                    Game old = new Game(op, 97);
+                    old.hostOnline(9000);
+                    for (int i = 0; i < frames && old.online.phase != Online.HOSTING; i++) pump(old, old, 1, dt);
+                    Online.buildId = "bbb2222";
+                    Game nw = new Game(np, 96);
+                    nw.joinOnline(old.online.code);
+                    for (int i = 0; i < frames && (old.online.phase != Online.FAILED || nw.online.phase != Online.FAILED); i++) pump(old, nw, 1, dt);
+                    Online.buildId = keep;
+                    if (nw.online.phase != Online.FAILED || !nw.online.problem.contains("you: bbb2222, your friend: aaa1111"))
+                        throw new RuntimeException("the joining player should hear the versions differ: " + nw.online.problem);
+                    if (old.online.phase != Online.FAILED || !old.online.problem.contains("you: aaa1111, your friend: bbb2222"))
+                        throw new RuntimeException("the host should hear the versions differ: " + old.online.problem);
+                    if (shots) shot(nw, "83b_online_version");
+                }
+                gg.joinOnline(Text.lower(code));
+                for (int i = 0; i < frames && !(gh.screen() instanceof HqScreen && gg.screen() instanceof HqScreen); i++) pump(gh, gg, 1, dt);
+                if (!(gh.screen() instanceof HqScreen) || !(gg.screen() instanceof HqScreen)) throw new RuntimeException("both players should be building");
+                if (gg.company.cash != gh.company.cash || gg.company.seatNo != 1 || gh.company.seatNo != 0) throw new RuntimeException("budgets or seats differ");
+                if (n == 0) {
+                    FakePlatform xp = new FakePlatform();
+                    xp.relay = relay;
+                    Game gx = new Game(xp, 99);
+                    gx.joinOnline(code);
+                    for (int i = 0; i < frames && gx.online.phase != Online.FAILED; i++) {
+                        gx.tick(dt, W, H);
+                        pump(gh, gg, 1, dt);
+                    }
+                    if (gx.online.phase != Online.FAILED || !gx.online.problem.contains("already joined")) throw new RuntimeException("a full game: " + gx.online.problem);
+                }
+                Random r = new Random(500 + n);
+                boolean mirror = Boolean.getBoolean("online.mirror");
+                for (Game g : new Game[]{gh, gg}) {
+                    Company c = g.company;
+                    if (mirror) r = new Random(500 + n);
+                    for (Unit u : force(r, 9000, n % 3)) {
+                        c.roster.add(u);
+                        if (c.deployed.size() < 5) c.deployed.add(u);
+                    }
+                    g.setScreen(new HqScreen(g));
+                }
+                pump(gh, gg, 2, dt);
+                if (shots && n == 0) shot(gg, "84_online_hq_p2");
+                click(gg, 4);   // Ready (the guest first: the host's battle starts on the host's Ready)
+                pump(gh, gg, 3, dt);
+                if (!(gg.screen() instanceof OnlineScreen) || gg.online.phase != Online.READY) throw new RuntimeException("the guest should wait");
+                if (shots && n == 0) shot(gg, "85_online_waiting");
+                click(gh, 4);
+                for (int i = 0; i < frames && (battleOf(gh) == null || battleOf(gg) == null); i++) pump(gh, gg, 1, dt);
+                Battle bh = battleOf(gh), bg = battleOf(gg);
+                if (bh == null || bg == null) throw new RuntimeException("the battle did not start on both devices");
+                if (bh.stateHash() != bg.stateHash()) throw new RuntimeException("the battles start out different");
+                if (bh.localTeam != 0 || bg.localTeam != 1) throw new RuntimeException("sides");
+                for (Unit u : bg.units) if (u.team == 0 && !bg.hidden(u)) throw new RuntimeException("the guest sees the host's deployment");
+                if (shots && n == 0) shot(gg, "86_online_guest_waits_deploy");
+                if (has(gg, 13) && find(gg, 13).visible) throw new RuntimeException("the guest may not end the host's deployment");
+                click(gh, 13);   // Done
+                for (int i = 0; i < frames && bg.deployTeam != 1; i++) pump(gh, gg, 1, dt);
+                if (bg.deployTeam != 1 || bh.deployTeam != 1) throw new RuntimeException("Player 2 should deploy next on both");
+                if (shots && n == 0) shot(gg, "87_online_guest_deploys");
+                click(gg, 13);   // Start battle
+                for (int i = 0; i < frames && (bh.deploying || bg.deploying); i++) pump(gh, gg, 1, dt);
+                if (bh.deploying || bg.deploying) throw new RuntimeException("the battle did not start");
+                bh.autoPlayer = bg.autoPlayer = true;
+                gh.headless = gg.headless = true;
+                relay.lossy = url == null && n % 2 == 1;   // every other battle: messages lost and overtaken, as AWS may
+                if (Boolean.getBoolean("online.offline")) {
+                    // the same battle on one device, the computer playing both sides: is any lean the game's or online's?
+                    FakePlatform op = new FakePlatform();
+                    Game go = new Game(op, 5);
+                    go.headless = true;
+                    Battle ob = BattleSave.read(go, BattleSave.write(gh.company, bh));
+                    ob.autoPlayer = true;
+                    int k = 0;
+                    while (ob.result == Battle.RESULT_NONE && ++k < 20 * 60 * 200) ob.update(1 / 20f);
+                    System.out.println("  offline copy: result " + ob.result + "; initiative " + bh.playerInitiative + ", first " + bh.firstInitiative + ", time edge " + bh.timeEdge);
+                }
+                boolean clean = Boolean.getBoolean("online.clean");
+                int f = 0, cutAt = clean ? -1 : 400 + n * 37, skewAt = clean ? -1 : 900 + n * 53;
+                boolean shotTaken = false;
+                while ((bh.result == Battle.RESULT_NONE || bg.result == Battle.RESULT_NONE || bh.busy() || bg.busy()) && ++f < 20 * 60 * 200) {
+                    if (f == cutAt) cutLink(n % 2 == 0 ? gg : gh);   // a dropped connection: it reconnects and carries on
+                    if (f == skewAt && bg.result == Battle.RESULT_NONE) {
+                        // a disagreement: the guest's copy goes wrong; the host's copy puts it right
+                        for (Unit u : bg.units) if (!u.destroyed) { u.heat += 3; break; }
+                    }
+                    pump(gh, gg, 1, dt);
+                    if (url != null && f % 2000 == 0) System.out.println("  frame " + f + ": host round " + bh.round + " side " + bh.side + ", guest round " + bg.round
+                            + " side " + bg.side + ", wait '" + gh.online.waitingText() + "' / '" + gg.online.waitingText() + "'");
+                    if (gg.screen() instanceof BattleScreen) bg = battleOf(gg);   // a re-sync replaces the guest's battle
+                    if (bg != null && bg.localTeam == 1) bg.autoPlayer = true;
+                    if (shots && n == 0 && !shotTaken && f > 200 && bg.side == 0 && bg.active != null) {
+                        shot(gg, "88_online_their_turn");
+                        shotTaken = true;
+                    }
+                }
+                if (bh.result == Battle.RESULT_NONE || bg.result == Battle.RESULT_NONE) {
+                    throw new RuntimeException("the online battle did not finish (frame " + f + "): host round " + bh.round + " side " + bh.side
+                            + " result " + bh.result + " wait '" + gh.online.waitingText() + "' phase " + gh.online.phase + "; guest round " + bg.round
+                            + " side " + bg.side + " result " + bg.result + " wait '" + gg.online.waitingText() + "' phase " + gg.online.phase
+                            + "; hashes " + (bh.stateHash() == bg.stateHash() ? "equal" : "differ") + "; guest screen " + gg.screen().getClass().getSimpleName()
+                            + "; odd messages " + gh.online.oddMessages + "/" + gg.online.oddMessages + " " + gh.online.lastOdd + " " + gg.online.lastOdd);
+                }
+                for (int i = 0; i < 200 && (bh.busy() || bg.busy()); i++) pump(gh, gg, 1, dt);
+                if (bh.result != bg.result) throw new RuntimeException("the two devices disagree on the result: " + bh.result + " vs " + bg.result);
+                if (bh.stateHash() != bg.stateHash()) throw new RuntimeException("the battles ended out of step");
+                java.lang.reflect.Field rs = Online.class.getDeclaredField("resyncs");
+                rs.setAccessible(true);
+                int resyncs = rs.getInt(gg.online);
+                if (resyncs < 1 && !clean) throw new RuntimeException("the forced disagreement was not fixed by a copy from the host");
+                totalResync += resyncs;
+                pump(gh, gg, 80, dt);
+                if (!(gh.screen() instanceof HotseatEndScreen) || !(gg.screen() instanceof HotseatEndScreen)) throw new RuntimeException("both should show the result");
+                if (has(gg, 2)) throw new RuntimeException("no rematch online");
+                if (shots && n == 0) shot(gg, "89_online_end");
+                if (relay.lossy) System.out.println("  lossy relay: " + relay.dropped + " messages lost, " + relay.swapped + " overtaken");
+                relay.lossy = false;
+                if (gh.online.oddMessages + gg.online.oddMessages > 0) System.out.println("  relay messages not understood: "
+                        + gh.online.oddMessages + "/" + gg.online.oddMessages + ", last: " + gh.online.lastOdd + " / " + gg.online.lastOdd);
+                click(gh, 1);   // the host goes to the menu: the guest hears it left
+                for (int i = 0; i < frames && !gg.online.partnerLeft; i++) pump(gh, gg, 1, dt);
+                if (gh.online != null || !gg.online.partnerLeft) throw new RuntimeException("leaving should tell the other player");
+                click(gg, 1);
+                pump(gh, gg, 2, dt);
+                if (gg.online != null || !(gg.screen() instanceof MenuScreen)) throw new RuntimeException("the guest should be back at the menu");
+                System.out.println("online battle " + (n + 1) + ": result " + bh.result + " in " + bh.round + " rounds, " + resyncs + " re-sync(s), in step; standing "
+                        + bh.alive(0) + " vs " + bh.alive(1) + ", damage " + dmg(bh, 0) + " vs " + dmg(bh, 1) + ", value " + Math.round(bh.startValue[0]) + " vs " + Math.round(bh.startValue[1]));
+            }
+            // a server that can't be reached
+            relay.unreachable = true;
+            Game gz = new Game(hp, 98);
+            gz.hostOnline(9000);
+            pump(gz, gz, 3, dt);
+            if (url == null && (gz.online.phase != Online.FAILED || !gz.online.problem.contains("reach"))) throw new RuntimeException("an unreachable server: " + gz.online.problem);
+            System.out.println("online OK (" + battles + " battles over " + (url == null ? "the in-memory relay, " + relay.messages + " messages" : url)
+                    + ", " + totalResync + " re-syncs)");
+        } finally {
+            Online.relayUrl = saved;
+            pumpSleep = 0;
+        }
     }
 
     static float[] hexToScreen(BattleScreen bs, int c, int r) throws Exception {
@@ -1797,6 +2068,9 @@ public final class DesktopTest {
         for (int seed = 1; seed <= seeds; seed++) {
             Random r = new Random(seed);
             FakePlatform fp = new FakePlatform();
+            // online screens too: hosting works (nobody joins); joining finds no game
+            fp.relay = new MemRelay();
+            Online.relayUrl = "mem:relay";
             Game g = new Game(fp, seed);
             g.headless = !threads;   // with threads, the computer plans on its own thread as on the phone
             int battles = 0, restarts = 0;

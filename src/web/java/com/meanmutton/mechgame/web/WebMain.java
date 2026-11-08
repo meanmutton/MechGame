@@ -1,6 +1,8 @@
 package com.meanmutton.mechgame.web;
 
 import com.meanmutton.mechgame.core.Game;
+import com.meanmutton.mechgame.core.Link;
+import com.meanmutton.mechgame.core.Online;
 import com.meanmutton.mechgame.core.Platform;
 import com.meanmutton.mechgame.core.SoundSynth;
 
@@ -17,13 +19,22 @@ import java.util.Map;
  * The browser version of Hexfront. The page (web/index.html) owns the canvas, sizes it to the window, and queues
  * pointer, wheel and key events in a plain array; this loop drains that queue into the game once per animation
  * frame, then updates and draws. Saves go to the browser's local storage, sounds are the game's own synthesized
- * effects played through Web Audio.
+ * effects played through Web Audio. Online play connects to the relay with the browser's WebSocket (WebLink); a
+ * page may name another relay in window.HEXFRONT_RELAY (for testing).
  */
 public final class WebMain implements Platform {
     private final Map<String, String> memory = new HashMap<String, String>();   // if local storage is unavailable
     private boolean audio;
+    /** Tests: window.HEXFRONT_AUTOTEST ("host" or "join:CODE") makes the page play online by itself. */
+    private static String autotest;
+    private static boolean autotestStarted;
 
     public static void main(String[] args) {
+        String relay = relayOverride();
+        Online.relayUrl = relay != null && relay.length() > 0 ? relay : Online.RELAY;
+        Online.buildId = buildCommit();   // online play pairs only the same build
+        autotest = autotestSetting();
+        if (autotest != null) Online.autoplay = true;
         WebMain platform = new WebMain();
         platform.initAudio();
         Game game = new Game(platform, (long) (Math.random() * 1e15));
@@ -38,6 +49,7 @@ public final class WebMain implements Platform {
                 int w = canvasWidth(), h = canvasHeight();
                 if (w > 0 && h > 0) {
                     game.tick(dt, w, h);
+                    if (autotest != null) autotestFrame(game);
                     gfx.begin();
                     game.render(gfx);
                 }
@@ -120,6 +132,34 @@ public final class WebMain implements Platform {
     public void share(String subject, String text) {
         copyText(subject, text);
     }
+
+    public Link openLink(String url) {
+        return new WebLink(url);
+    }
+
+    /** Tests: host or join by itself, then report how the online game stands in window.hexfrontState. */
+    private static void autotestFrame(Game game) {
+        if (!autotestStarted) {
+            autotestStarted = true;
+            if (autotest.startsWith("join:")) game.joinOnline(autotest.substring(5));
+            else game.hostOnline(9000);
+        }
+        Online o = game.online;
+        report(o == null ? "none" : o.phase + " " + (o.code == null ? "-" : o.code) + " " + o.testState());
+    }
+
+    /** The commit in the page's build stamp ("6bd22ff (2026-11-08)" gives "6bd22ff"). */
+    @JSBody(script = "var hfB = String(window.HEXFRONT_BUILD || 'dev'); return hfB.split(' ')[0];")
+    private static native String buildCommit();
+
+    @JSBody(script = "return window.HEXFRONT_AUTOTEST || null;")
+    private static native String autotestSetting();
+
+    @JSBody(params = "s", script = "window.hexfrontState = s;")
+    private static native void report(String s);
+
+    @JSBody(script = "return window.HEXFRONT_RELAY || null;")
+    private static native String relayOverride();
 
     public String buildInfo() {
         return "Hexfront " + buildStamp() + ", browser: " + userAgent();

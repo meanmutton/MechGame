@@ -21,6 +21,9 @@ import android.view.WindowManager;
 import android.widget.EditText;
 
 import com.meanmutton.mechgame.core.Game;
+import com.meanmutton.mechgame.core.Link;
+import com.meanmutton.mechgame.core.Online;
+import com.meanmutton.mechgame.core.SocketLink;
 import com.meanmutton.mechgame.core.Platform;
 import com.meanmutton.mechgame.core.SoundSynth;
 
@@ -39,6 +42,8 @@ public class MainActivity extends Activity implements Platform {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        Online.relayUrl = Online.RELAY;   // the phone can play online once the relay is set up
+        Online.buildId = BuildInfo.COMMIT;   // online play pairs only the same build
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         if (Build.VERSION.SDK_INT >= 28) {
@@ -203,6 +208,10 @@ public class MainActivity extends Activity implements Platform {
 
     public void saveNow(String key, String value) {
         prefs.edit().putString(key, value).commit();
+    }
+
+    public Link openLink(String url) {
+        return new SocketLink(url);
     }
 
     public void share(final String subject, final String text) {

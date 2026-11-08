@@ -2,7 +2,7 @@ package com.meanmutton.mechgame.core;
 
 /** Choose a campaign, a mercenary career or a one-off quick battle. */
 public final class NewGameScreen extends Screen {
-    private static final int BACK = 1, QUICK = 3, MERC = 4, HOTSEAT = 5, C_VS = 6, C_DIFF = 10, C_FUNDS = 20, Q_DIFF = 30, Q_BUDGET = 40, C_SIDE = 50,
+    private static final int BACK = 1, QUICK = 3, MERC = 4, HOTSEAT = 5, C_VS = 6, ONLINE = 7, C_DIFF = 10, C_FUNDS = 20, Q_DIFF = 30, Q_BUDGET = 40, C_SIDE = 50,
             M_DIFF = 60, M_FUNDS = 70;
     private static final String[] DIFF_TEXT = {"Smaller enemy forces; the computer takes more risks.",
             "Even fights; the computer plays carefully.",
@@ -69,14 +69,23 @@ public final class NewGameScreen extends Screen {
         Btn m = add(new Btn(MERC, confirmMerc ? "Overwrite save?" : "Start as Mercenary").set(px(1) + bx, h - u * 25.5f, bwid, bh));
         m.sub = confirmMerc ? "tap again to replace it" : "find work on a contested planet";
         m.color = confirmMerc ? 0xFF8F3A2E : 0xFF5A4A2A;
-        float half = (bwid - u) / 2;
-        Btn qb = add(new Btn(QUICK, confirmQuick ? "Abandon battle?" : "vs Computer").set(px(2) + bx, h - u * 25.5f, half, bh));
+        // three choices when this build can play online, two otherwise
+        boolean online = Online.available();
+        int n = online ? 3 : 2;
+        float part = (bwid - u * (n - 1)) / n;
+        Btn qb = add(new Btn(QUICK, confirmQuick ? "Abandon battle?" : "vs Computer").set(px(2) + bx, h - u * 25.5f, part, bh));
         qb.color = confirmQuick ? 0xFF8F3A2E : 0xFF2E6D8F;
         qb.sub = confirmQuick ? "tap again to start" : "build your force";
-        Btn hb = add(new Btn(HOTSEAT, confirmHotseat ? "Abandon battle?" : "Two Players").set(px(2) + bx + half + u, h - u * 25.5f, half, bh));
+        Btn hb = add(new Btn(HOTSEAT, confirmHotseat ? "Abandon battle?" : "Two Players").set(px(2) + bx + part + u, h - u * 25.5f, part, bh));
         hb.color = confirmHotseat ? 0xFF8F3A2E : 0xFF6A3A8F;
-        hb.sub = confirmHotseat ? "tap again to start" : "one device, take turns";
-        qb.textSize = hb.textSize = u * 3f;
+        hb.sub = confirmHotseat ? "tap again to start" : online ? "one device" : "one device, take turns";
+        qb.textSize = hb.textSize = u * (online ? 2.6f : 3f);
+        if (online) {
+            Btn ob = add(new Btn(ONLINE, "Online").set(px(2) + bx + (part + u) * 2, h - u * 25.5f, part, bh));
+            ob.color = 0xFF2E7D6F;
+            ob.sub = "play a friend";
+            ob.textSize = u * 2.6f;
+        }
         add(new Btn(BACK, "Back").set(u * 4, h - u * 12, u * 24, u * 9));
     }
 
@@ -128,6 +137,10 @@ public final class NewGameScreen extends Screen {
                 return;
             }
             game.newHotseat(Game.QUICK_BUDGETS[qBudget]);
+            return;
+        }
+        if (id == ONLINE) {
+            game.setScreen(new OnlineScreen(game, Game.QUICK_BUDGETS[qBudget]));
             return;
         }
         if (id == C_VS) cPvp = !cPvp;

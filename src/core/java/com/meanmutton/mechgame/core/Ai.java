@@ -126,14 +126,12 @@ final class Ai {
             }
             case 1: { // face and fire
                 t.stage = 2;
-                u.facing = t.facing;
-                u.drawFacing = HexMap.DIR_ANGLE[u.facing];
+                b.face(u, t.facing);
                 Unit target = t.target;
                 if (target == null || target.destroyed) target = bestTargetNow(b, u);
                 if (target != null) {
                     // re-face to the actual target so weapons are in arc
-                    u.facing = HexMap.dirFromAngle(HexMap.angleBetween(u.q, u.r, target.q, target.r));
-                    u.drawFacing = HexMap.DIR_ANGLE[u.facing];
+                    b.face(u, HexMap.dirFromAngle(HexMap.angleBetween(u.q, u.r, target.q, target.r)));
                     boolean[] use = chooseWeapons(b, u, target);
                     boolean any = false;
                     for (boolean x : use) any |= x;
@@ -227,7 +225,7 @@ final class Ai {
                 score += u.heat * 0.35f;
             }
             if (turbo) score -= 2;
-            score *= 1f + (float) (b.rnd.nextGaussian() * noise);
+            score *= 1f + (float) (b.aiDice().nextGaussian() * noise);
             if (score > best.score) {
                 best.score = score;
                 best.dest = k;

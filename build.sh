@@ -16,7 +16,7 @@ cd "$(dirname "$0")"
 if [ "${1:-}" = "web" ]; then
     command -v mvn > /dev/null || { echo "The browser build needs Maven (brew install maven, or apt-get install maven)."; exit 1; }
     STAMP=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
-    if [ -n "$(git status --porcelain -- src web 2>/dev/null)" ]; then STAMP="$STAMP+changes"; fi
+    if [ -n "$(git status --porcelain -- src web android 2>/dev/null)" ]; then STAMP="$STAMP+changes"; fi
     STAMP="$STAMP ($(date -u +%Y-%m-%d))"
     echo "== compiling to JavaScript with TeaVM"
     rm -rf build/web-maven
@@ -43,7 +43,9 @@ aapt package -f -m -J "$OUT/gen" -M android/AndroidManifest.xml -S android/res -
 
 # which commit this APK was built from, for crash reports
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
-if [ -n "$(git status --porcelain 2>/dev/null)" ]; then COMMIT="$COMMIT+changes"; fi
+# the same rule as the browser build's stamp, so an APK and a page built from one commit carry the same stamp
+# (online play only pairs devices running the same build)
+if [ -n "$(git status --porcelain -- src web android 2>/dev/null)" ]; then COMMIT="$COMMIT+changes"; fi
 mkdir -p "$OUT/gen/com/meanmutton/mechgame"
 cat > "$OUT/gen/com/meanmutton/mechgame/BuildInfo.java" <<JAVA
 package com.meanmutton.mechgame;
@@ -83,6 +85,7 @@ if [ "${1:-}" = "test" ]; then
     $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest campaign 6
     $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest merc 8
     $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest resume
+    $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest online 2
     $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest monkey 1 3000
     $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest shots "$OUT/shots"
     echo "== screenshots in $OUT/shots"

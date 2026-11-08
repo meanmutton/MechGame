@@ -101,7 +101,9 @@ public final class Game {
             }
         }
         time += dt;
+        if (online != null) online.tick(dt);   // the other player's messages and orders, before this frame's own
         screen.update(dt);
+        if (online != null) online.flush();    // this frame's orders go to the other player
     }
 
     public synchronized void render(Gfx g) {
@@ -109,6 +111,10 @@ public final class Game {
         Scheme.player = c != null && c.scheme != null ? c.scheme : Scheme.PLAYER_DEFAULT;
         Scheme.enemy = c != null && c.rival != null && c.rival.scheme != null ? c.rival.scheme : Scheme.ENEMY_DEFAULT;
         if (c != null && c.hotseat && c.seatNo == 0 && hotseatEnemy != null) Scheme.enemy = hotseatEnemy;
+        if (online != null && online.schemes != null) {   // an online battle: each side in its own player's colors
+            Scheme.player = online.schemes[0];
+            Scheme.enemy = online.schemes[1];
+        }
         screen.resize(w, h);
         screen.render(g);
     }
@@ -538,7 +544,7 @@ public final class Game {
 
     /** Hotseat: the battle is over. */
     public void finishHotseat(Battle b) {
-        clearBattle();
+        if (!b.online()) clearBattle();   // an online battle is never saved, so any saved battle stays
         setScreen(new HotseatEndScreen(this, b));
     }
 
@@ -707,9 +713,13 @@ public final class Game {
 
     public void startBattle(HexMap map, List<Unit> enemy, List<Unit> allies) {
         Company c = company;
+        setScreen(new BattleScreen(this, newBattle(c, map, enemy, allies, new Random(c.seed ^ 0x5DEECE66DL), c.twoPlayer())));
+    }
+
+    private Battle newBattle(Company c, HexMap map, List<Unit> enemy, List<Unit> allies, Random dice, boolean twoPlayer) {
         List<Unit> mine = new ArrayList<Unit>(c.deployed);
         mine.addAll(allies);
-        Battle b = new Battle(this, mine, enemy, map, new Random(c.seed ^ 0x5DEECE66DL), c.difficulty, c.twoPlayer());
+        Battle b = new Battle(this, mine, enemy, map, dice, c.difficulty, twoPlayer);
         Scenario sc = c.next();
         if (sc != null) {
             boolean attacking = c.side == Scenario.ATTACKER;
@@ -718,7 +728,59 @@ public final class Game {
             b.timeEdge = attacking ? -sc.timeLean : sc.timeLean;
             if (c.edge >= 0) b.firstInitiative = c.edge == c.side ? Battle.PLAYER : Battle.ENEMY;
         }
-        setScreen(new BattleScreen(this, b));
+        return b;
+    }
+
+    // ---------------- online: two players on their own devices ----------------
+
+    /** The online game in progress, or null. */
+    public Online online;
+
+    /** Opens an online room for a quick battle with this budget each. */
+    public void hostOnline(int budget) {
+        leaveOnline();
+        online = Online.hostGame(this, budget);
+        setScreen(new OnlineScreen(this));
+    }
+
+    public void joinOnline(String code) {
+        leaveOnline();
+        online = Online.joinGame(this, code);
+        setScreen(new OnlineScreen(this));
+    }
+
+    /** Leaves any online game (the other player is told). */
+    public void leaveOnline() {
+        if (online != null) {
+            online.leave();
+            online = null;
+        }
+    }
+
+    /** Online: both players are in the room. Build a force with the host's budget, as in a quick battle. */
+    void onlineBuild() {
+        Company c = new Company();
+        c.quick = true;
+        c.hotseat = true;
+        c.online = true;
+        c.seatNo = online.team;
+        c.difficulty = 1;
+        c.cash = online.budget;
+        c.rollContract(rng);
+        if (online.team == Battle.ENEMY) c.scheme = Scheme.ENEMY_DEFAULT;   // Player 2 starts in red, as in hotseat
+        company = c;
+        online.mine = c;
+        setScreen(new HqScreen(this));
+    }
+
+    /** Online host: a map for the two forces and the battle on it, with dice both devices can roll alike. */
+    Battle onlineBattle(Company p1, List<Unit> theirs) {
+        Random r = new Random(rng.nextLong());
+        int biome = r.nextInt(HexMap.BIOME_NAMES.length);
+        HexMap map = new HexMap(20, 13, biome, Weather.random(biome, r));
+        map.generate(r);
+        p1.biome = biome;
+        return newBattle(p1, map, theirs, new ArrayList<Unit>(), new Rng(r.nextLong()), true);
     }
 
     /** No unit on the roster may fight in the next scenario: the mission counts as a loss without a battle. */
@@ -908,6 +970,7 @@ public final class Game {
     }
 
     public void toMenu() {
+        leaveOnline();
         setScreen(new MenuScreen(this));
     }
 
