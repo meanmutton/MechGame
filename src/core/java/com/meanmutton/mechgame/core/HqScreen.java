@@ -117,18 +117,24 @@ public final class HqScreen extends Screen {
             return;
         }
         boolean forfeit = !c.quick && !c.merc && c.deployed.isEmpty() && c.mustForfeit();
-        String go = c.hotseat ? (c.seatNo == 0 ? "Done" : "Fight") : (c.quick ? "Fight" : "Launch Mission");
+        String go = c.hotseat ? (c.seatNo == 0 ? "Done" : "Fight") : (c.pvp ? (pvpSeat() == 0 ? "Done" : "Fight") : (c.quick ? "Fight" : "Launch Mission"));
         Btn launch = add(new Btn(LAUNCH, forfeit ? "Forfeit Mission" : go + " (" + c.deployed.size() + "/" + c.deployLimit() + ")")
                 .set(u * 12 + bbw * 3, h - u * 12, bbw, u * 9));
         launch.color = forfeit ? 0xFF8F3A2E : 0xFF2E7D4F;
         launch.enabled = !c.deployed.isEmpty() || forfeit;
         if (!c.quick && !forfeit && c.noneAllowed()) launch.sub = c.merc ? "this job allows none of your units" : "buy an allowed unit in the Market";
-        if (c.hotseat && c.seatNo == 0) launch.sub = "then pass to Player 2";
+        if ((c.hotseat && c.seatNo == 0) || (c.pvp && pvpSeat() == 0 && !forfeit)) launch.sub = "then pass to Player 2";
+        if (c.pvp && forfeit) launch.sub = "Player " + (2 - pvpSeat()) + " wins this one";
     }
 
     /** Top of the filter row; the roster list starts below it and its header. */
     private float ctrlTop() {
         return c.quick ? h * 0.15f : h * 0.18f;
+    }
+
+    /** Two-player campaign: 0 when Player 1 has the HQ, 1 when Player 2 has it. */
+    private int pvpSeat() {
+        return game.pvpMain != null ? 1 : 0;
     }
 
     private float listTop() {
@@ -289,6 +295,11 @@ public final class HqScreen extends Screen {
                 game.sfx(Platform.SND_BUY, 0.7f);
                 game.saveCompany();
             }
+        } else if (id == LAUNCH && c.pvp) {
+            if (c.deployed.isEmpty()) game.pvpForfeit(pvpSeat());
+            else if (pvpSeat() == 0) game.pvpHandToP2();
+            else game.pvpFight();
+            return;
         } else if (id == LAUNCH && c.hotseat) {
             if (c.seatNo == 0) game.hotseatNext();
             else game.prepareHotseat();
@@ -355,14 +366,17 @@ public final class HqScreen extends Screen {
     public void render(Gfx g) {
         background(g);
         String title = c.hotseat ? "PLAYER " + (c.seatNo + 1) + ": BUILD YOUR FORCE"
+                : c.pvp ? "PLAYER " + (pvpSeat() + 1) + " HQ"
                 : (c.quick ? "QUICK BATTLE: BUILD YOUR FORCE" : (c.merc ? "MERCENARY HQ" : "COMPANY HQ"));
-        g.text(title, u * 3, h * 0.055f, u * 5.2f, c.hotseat ? UnitArt.teamColor(c.seatNo) : Col.ACCENT, Gfx.ALIGN_LEFT, true);
+        int titleColor = c.hotseat ? UnitArt.teamColor(c.seatNo) : (c.pvp ? UnitArt.teamColor(pvpSeat()) : Col.ACCENT);
+        g.text(title, u * 3, h * 0.055f, u * 5.2f, titleColor, Gfx.ALIGN_LEFT, true);
         String sub = c.hotseat ? "Two players, one device.  Buy units in the Market, tick up to " + Limits.FULL.text() + " to deploy, then "
                 + (c.seatNo == 0 ? "Done." : "Fight.")
                 : c.quick ? "Difficulty " + Company.DIFFICULTY[c.difficulty] + ".  Buy units in the Market, tick up to " + Limits.FULL.text() + " to deploy, then Fight."
                 : "Contract " + c.mission + ": " + HexMap.BIOME_NAMES[c.biome] + " region, pays $" + Ui.money(c.reward)
                 + "   |   Record " + c.wins + "W " + c.losses + "L   |   " + Company.DIFFICULTY[c.difficulty]
-                + (c.rival != null ? "   |   Enemy: $" + Ui.money(c.rival.cash) + ", " + c.rival.roster.size() + " units" : "");
+                + (c.rival != null ? "   |   " + (c.pvp ? "Player " + (2 - pvpSeat()) : "Enemy") + ": $" + Ui.money(c.rival.cash) + ", "
+                + c.rival.roster.size() + " units" : "");
         if (c.merc) sub = c.planet.name + " (" + HexMap.BIOME_NAMES[c.planet.biome] + ")   |   Record " + c.wins + "W " + c.losses + "L   |   "
                 + Company.DIFFICULTY[c.difficulty];
         g.text(sub, u * 3, h * 0.105f, u * 2.6f, Col.TEXT_DIM, Gfx.ALIGN_LEFT, false);

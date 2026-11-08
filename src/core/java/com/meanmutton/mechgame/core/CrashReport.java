@@ -77,7 +77,7 @@ public final class CrashReport {
         try {
             Company c = game.company;
             if (c != null) {
-                s.append("Company: ").append(c.hotseat ? "two-player battle (seat " + (c.seatNo + 1) + ")" : c.quick ? "quick battle" : (c.merc ? "mercenary" : "campaign")).append(", ").append(Company.DIFFICULTY[c.difficulty])
+                s.append("Company: ").append(c.hotseat ? "two-player battle (seat " + (c.seatNo + 1) + ")" : c.pvp ? "two-player campaign" : c.quick ? "quick battle" : (c.merc ? "mercenary" : "campaign")).append(", ").append(Company.DIFFICULTY[c.difficulty])
                         .append(", contract ").append(c.mission).append(", $").append(c.cash).append(", ").append(c.roster.size())
                         .append(" units, ").append(c.deployed.size()).append(" deployed\n");
                 if (c.merc) {

@@ -55,6 +55,7 @@ public final class DesktopTest {
         else if (mode.equals("gallery")) gallery(new File(args[1]));
         else if (mode.equals("campaign")) campaign(Integer.parseInt(args[1]));
         else if (mode.equals("merc")) merc(Integer.parseInt(args[1]));
+        else if (mode.equals("pvp")) pvpCampaign(Integer.parseInt(args[1]), false);
         else if (mode.equals("resume")) resume();
         else if (mode.equals("monkey")) monkey(Integer.parseInt(args[1]), args.length > 2 ? Integer.parseInt(args[2]) : 30000, false);
         else if (mode.equals("monkey-threads")) monkey(Integer.parseInt(args[1]), args.length > 2 ? Integer.parseInt(args[2]) : 30000, true);
@@ -916,6 +917,8 @@ public final class DesktopTest {
         }
         // hotseat: two players on one device, building forces, deploying in secret, playing the battle
         hotseat(new FakePlatform());
+        // a two-player campaign: both HQs, the shared briefing, a battle, both settled
+        pvpCampaign(3, true);
         // weather variety on a smaller screen
         W = 1600;
         H = 900;
@@ -1328,6 +1331,166 @@ public final class DesktopTest {
         for (Chassis ch : Chassis.SHOP) if (ch.unique) throw new RuntimeException("unique in the shop");
         System.out.println("mercenary: " + jobs + " jobs, " + travels + " travels, " + protos + " prototypes fielded against you; standing "
                 + standing + "; checks passed");
+    }
+
+    /** Buys units for the next scenario the way a player reading the briefing would, then deploys what may fight. */
+    static void stockUp(Company c, Random r) {
+        Scenario sc = c.next();
+        for (Unit u : c.roster) if (u.isDamaged() && c.cash >= u.repairCost()) { c.cash -= u.repairCost(); u.repairFully(); }
+        Limits lim = c.limits();
+        for (int buys = 0; buys < 5; buys++) {
+            int[] have = new int[4];
+            for (Unit u : c.roster) if (!u.destroyed && c.allowed(u)) have[Limits.kind(u.type)]++;
+            int[] room = {lim.mechs - have[0], lim.heavy - Math.min(have[0], lim.mechs) - have[1], lim.infantry - have[2], 0};
+            Unit best = null;
+            for (Chassis ch : Chassis.SHOP) {
+                int k = Limits.kind(ch.type);
+                if (!sc.allows(ch) || room[k] <= 0 || (k == Limits.MECH && room[1] + room[0] <= 0)) continue;
+                Unit u = new Unit(ch);
+                if (u.value() <= c.cash * 0.5f && (best == null || u.value() > best.value()) && r.nextFloat() < 0.8f) best = u;
+            }
+            if (best == null || c.roster.size() >= Company.MAX_ROSTER - 1) break;
+            c.cash -= best.value();
+            c.roster.add(best);
+        }
+        if (c.noneAllowed() && !c.mustForfeit()) {   // the HQ won't offer a forfeit while one is affordable: buy the cheapest
+            Unit cheapest = null;
+            for (Chassis ch : Chassis.SHOP) {
+                Unit u = new Unit(ch);
+                if (sc.allows(ch) && u.value() <= c.cash && (cheapest == null || u.value() < cheapest.value())) cheapest = u;
+            }
+            if (cheapest != null) {
+                c.cash -= cheapest.value();
+                c.roster.add(cheapest);
+            }
+        }
+        c.deployed.clear();
+        for (Unit u : c.roster) if (c.canDeploy(u) && !c.deployed.contains(u)) c.deployed.add(u);
+    }
+
+    /**
+     * A two-player campaign played through the real screens, with the computer making both players' battle moves:
+     * Player 1's HQ, the hand-over, Player 2's HQ (mirrored campaign state), the shared briefing, a hotseat battle
+     * under the scenario's rules, both companies settled, and the next turn. Checks the save at every step.
+     */
+    static void pvpCampaign(int battles, boolean shots) throws Exception {
+        FakePlatform fp = new FakePlatform();
+        Game g = new Game(fp, 77);
+        tick(g, 2);
+        if (shots) {
+            g.setScreen(new NewGameScreen(g));
+            tick(g, 2);
+            click(g, 6);   // vs Player 2
+            shot(g, "70_pvp_new_game");
+            click(g, 50);  // Start as Attacker
+            tick(g, 2);
+        } else g.newPvpCampaign(10000, Scenario.ATTACKER);
+        Company c = g.campaignMain();
+        if (!c.pvp || c.rival == null || !c.rival.pvp || c.side != Scenario.ATTACKER || c.rival.side != Scenario.DEFENDER)
+            throw new RuntimeException("bad two-player campaign start");
+        if (c.cash <= c.rival.cash) throw new RuntimeException("the attacker should start with more money");
+        Random r = new Random(5);
+        String[] res = {"", "P1 WIN", "P2 WIN", "DRAW", "?"};
+        int planets = 0;
+        for (int m = 1; m <= battles; m++) {
+            if (!(g.screen() instanceof HandoffScreen)) throw new RuntimeException("each turn should start behind a hand-over screen");
+            click(g, 1);   // I'm Player 1
+            tick(g, 2);
+            if (g.company != c || g.pvpMain != null || !(g.screen() instanceof HqScreen)) throw new RuntimeException("Player 1 should have the HQ");
+            stockUp(c, r);
+            g.setScreen(new HqScreen(g));
+            tick(g, 2);
+            if (c.deployed.isEmpty()) {
+                click(g, 4);   // forfeit
+                tick(g, 2);
+                System.out.printf("battle %d: Player 1 forfeits%n", m);
+            } else {
+                click(g, 4);   // Done
+                tick(g, 2);
+                Company p2 = c.rival;
+                if (g.company != p2 || g.pvpMain != c) throw new RuntimeException("Player 2 should have the HQ next");
+                if (p2.side != 1 - c.side || p2.front != c.front || p2.scenario != c.scenario || p2.planetBattles != c.planetBattles)
+                    throw new RuntimeException("Player 2's campaign view doesn't match Player 1's");
+                // saved mid-turn: continuing lands on Player 2's hand-over
+                Company saved = Company.parse(fp.load("company"));
+                if (saved == null || !saved.pvp || saved.pvpTurn != 1) throw new RuntimeException("the turn isn't saved");
+                Game g2 = new Game(fp, 78);
+                tick(g2, 2);
+                g2.continueCampaign();
+                tick(g2, 2);
+                if (g2.pvpMain == null || g2.company != g2.pvpMain.rival || !(g2.screen() instanceof HandoffScreen))
+                    throw new RuntimeException("continuing should resume at Player 2's turn");
+                click(g, 1);   // I'm Player 2
+                tick(g, 2);
+                stockUp(p2, r);
+                g.setScreen(new HqScreen(g));
+                tick(g, 2);
+                if (shots && m == 1) shot(g, "71_pvp_hq_p2");
+                if (p2.deployed.isEmpty()) {
+                    click(g, 4);
+                    tick(g, 2);
+                    System.out.printf("battle %d: Player 2 forfeits%n", m);
+                } else {
+                    click(g, 4);   // Fight
+                    tick(g, 2);
+                    if (!(g.screen() instanceof BriefingScreen) || g.company != c) throw new RuntimeException("the briefing should follow Player 2's Fight");
+                    if (shots && m == 1) shot(g, "72_pvp_briefing");
+                    Scenario sc = c.next();
+                    click(g, 2);   // Begin battle
+                    tick(g, 3);
+                    Battle b = ((BattleScreen) g.screen()).battle();
+                    if (!b.hotseat || b.maxRounds != sc.rounds) throw new RuntimeException("the battle should be two-player under the scenario's rules");
+                    for (Unit e : b.units) if (e.tag == null && e.team == Battle.ENEMY && !p2.roster.contains(e)) throw new RuntimeException("a Player 2 unit isn't from their roster");
+                    if (!sc.limitsFor(p2.side, p2.planetBattles).holds(p2.deployed)) throw new RuntimeException("Player 2 is over the scenario's limits");
+                    int p1Cash = c.cash, p2Cash = p2.cash, front = c.front;
+                    g.saveBattle(b);
+                    // the battle resumes as a campaign battle, with Player 2's force linked to their roster
+                    Game g3 = new Game(fp, 79);
+                    tick(g3, 2);
+                    g3.resumeBattle();
+                    tick(g3, 2);
+                    Battle rb = ((BattleScreen) g3.screen()).battle();
+                    Company rc = g3.company;
+                    if (!rb.hotseat || !rc.pvp || rc.hotseat || rc.rival == null || rc.rival.deployed.size() != p2.deployed.size())
+                        throw new RuntimeException("a two-player campaign battle did not resume as one");
+                    for (Unit u : rc.rival.deployed) if (!rb.units.contains(u) || !rc.rival.roster.contains(u)) throw new RuntimeException("Player 2's resumed force isn't the battle's");
+                    b.autoPlayer = true;
+                    g.headless = true;
+                    b.finishDeployment();
+                    b.finishDeployment();
+                    int frames = 0;
+                    while (b.result == Battle.RESULT_NONE && ++frames < 20 * 60 * 120) b.update(1 / 20f);
+                    if (b.result == Battle.RESULT_NONE) throw new RuntimeException("stalled");
+                    g.finishBattle(b);
+                    g.headless = false;
+                    tick(g, 2);
+                    if (!(g.screen() instanceof PvpDebriefScreen)) throw new RuntimeException("expected the two-player debrief");
+                    if (p2.cash <= p2Cash || c.cash <= p1Cash) throw new RuntimeException("both players should be paid for a battle");
+                    for (Unit u : p2.roster) if (u.destroyed && b.result == Battle.RESULT_WIN) throw new RuntimeException("Player 2 kept a wreck after losing");
+                    if (shots && m == 1) shot(g, "73_pvp_debrief");
+                    System.out.printf("battle %d: %-21s %-6s front %d->%d  P1 $%6d %2d units  P2 $%6d %2d units%n", m, sc.name, res[b.result], front, c.front,
+                            c.cash, c.roster.size(), p2.cash, p2.roster.size());
+                }
+            }
+            Company back = Company.parse(fp.load("company")), rback = Company.parse(fp.load("rival"));
+            if (back == null || rback == null || !back.pvp || !rback.pvp || back.front != c.front || back.pvpTurn != 0
+                    || back.cash != c.cash || rback.cash != c.rival.cash || rback.roster.size() != c.rival.roster.size())
+                throw new RuntimeException("two-player save round trip failed: " + (back == null ? "no company" : "front " + back.front + "/" + c.front
+                        + " turn " + back.pvpTurn + " cash " + back.cash + "/" + c.cash) + (rback == null ? " no rival" : " rival cash " + rback.cash + "/"
+                        + c.rival.cash + " roster " + rback.roster.size() + "/" + c.rival.roster.size()));
+            click(g, 1);   // Continue / Campaign Results
+            tick(g, 2);
+            if (c.over != 0) {
+                if (!(g.screen() instanceof CampaignEndScreen)) throw new RuntimeException("expected the campaign end");
+                if (shots) shot(g, "74_pvp_campaign_end");
+                planets++;
+                click(g, 3);   // next planet, Player 1 defends
+                tick(g, 2);
+                if (c.side != Scenario.DEFENDER || c.rival.side != Scenario.ATTACKER || c.over != 0) throw new RuntimeException("next planet not set up");
+            }
+        }
+        System.out.println("two-player campaign OK (" + battles + " battles, " + planets + " planets decided; P1 " + c.wins + "W " + c.losses
+                + "L, P2 " + c.rival.wins + "W " + c.rival.losses + "L)");
     }
 
     static void campaign(int missions) throws Exception {

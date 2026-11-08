@@ -113,7 +113,7 @@ public final class BattleSave {
                 m.smoke[i] = Integer.parseInt(smoke[i]);
             }
             List<Unit> units = new ArrayList<Unit>();
-            List<Unit> mine = new ArrayList<Unit>();
+            List<Unit> mine = new ArrayList<Unit>(), theirs = new ArrayList<Unit>();
             for (String ul : unitLines) {
                 int tab = ul.indexOf('\t');
                 String[] f = Text.split(ul.substring(0, tab), ',');
@@ -124,7 +124,10 @@ public final class BattleSave {
                 if (own == OWN_PLAYER && idx >= 0 && idx < c.roster.size()) {
                     c.roster.set(idx, u);
                     mine.add(u);
-                } else if (own == OWN_RIVAL && rival != null && idx >= 0 && idx < rival.roster.size()) rival.roster.set(idx, u);
+                } else if (own == OWN_RIVAL && rival != null && idx >= 0 && idx < rival.roster.size()) {
+                    rival.roster.set(idx, u);
+                    theirs.add(u);
+                }
                 u.team = Integer.parseInt(f[3]);
                 u.q = Integer.parseInt(f[4]);
                 u.r = Integer.parseInt(f[5]);
@@ -151,14 +154,22 @@ public final class BattleSave {
             }
             c.deployed.clear();
             c.deployed.addAll(mine);
+            if (rival != null && c.pvp) {
+                // two-player campaign: Player 2's force is settled from its deployed list, so it must be the battle's units
+                rival.deployed.clear();
+                rival.deployed.addAll(theirs);
+                rival.rival = c;
+            }
             Battle b = new Battle(game, units, m, new Random(), Integer.parseInt(battle[10]), hot != null);
             if (hot != null) {
                 b.deployTeam = Integer.parseInt(hot[0]);
                 b.conceded = Integer.parseInt(hot[1]);
                 game.hotseatEnemy = hot.length > 2 && !hot[2].equals("-") ? Scheme.parse(hot[2], null) : Scheme.ENEMY_DEFAULT;
-                c.hotseat = true;
-                c.seatNo = 0;
-                game.seats = null;   // a resumed battle: a rematch rebuilds the two forces from the battle
+                if (!c.pvp) {   // a hotseat quick battle (a two-player campaign's battle stays a campaign battle)
+                    c.hotseat = true;
+                    c.seatNo = 0;
+                    game.seats = null;   // a resumed battle: a rematch rebuilds the two forces from the battle
+                }
             }
             b.round = Integer.parseInt(battle[0]);
             b.initiative = Integer.parseInt(battle[1]);
@@ -175,6 +186,7 @@ public final class BattleSave {
             b.log.addAll(log);
             b.log("Battle resumed.");
             game.company = c;
+            game.pvpMain = null;
             return b;
         } catch (RuntimeException e) {
             return null;

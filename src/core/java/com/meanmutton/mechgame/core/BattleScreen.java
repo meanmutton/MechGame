@@ -326,8 +326,8 @@ public final class BattleScreen extends Screen {
             endTimer += dt;
             if (endTimer > 2f && !finished) {
                 finished = true;
-                if (b.hotseat) game.finishHotseat(b);
-                else game.finishBattle(b);
+                if (b.hotseat && !game.company.pvp) game.finishHotseat(b);
+                else game.finishBattle(b);   // a two-player campaign settles both companies there
                 return;
             }
         }
