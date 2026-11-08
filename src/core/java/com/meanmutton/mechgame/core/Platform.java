@@ -29,6 +29,9 @@ public interface Platform {
     /** Which build this is and what it runs on, for crash reports. */
     String buildInfo();
 
+    /** Opens a WebSocket to the online relay, or returns null where this build has no online play. */
+    Link openLink(String url);
+
     interface TextCallback {
         void done(String text);
     }

@@ -6,6 +6,9 @@
 
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="34" />
 
+    <!-- online battles connect to the relay server -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:label="Hexfront"
         android:icon="@mipmap/ic_launcher"

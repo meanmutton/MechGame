@@ -59,7 +59,9 @@
                 <artifactId>teavm-maven-plugin</artifactId>
                 <version>${teavm.version}</version>
                 <executions>
+                    <!-- the offline page: no network code at all (release/Hexfront.html) -->
                     <execution>
+                        <id>offline</id>
                         <goals>
                             <goal>compile</goal>
                         </goals>
@@ -68,6 +70,23 @@
                             <mainClass>com.meanmutton.mechgame.web.WebMain</mainClass>
                             <targetDirectory>${project.build.directory}/js</targetDirectory>
                             <targetFileName>hexfront.js</targetFileName>
+                            <jsModuleType>NONE</jsModuleType>
+                            <entryPointName>main</entryPointName>
+                            <minifying>true</minifying>
+                            <optimizationLevel>ADVANCED</optimizationLevel>
+                        </configuration>
+                    </execution>
+                    <!-- the online page: the same game plus WebSocket connections to the relay (release/Hexfront-online.html) -->
+                    <execution>
+                        <id>online</id>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                        <phase>process-classes</phase>
+                        <configuration>
+                            <mainClass>com.meanmutton.mechgame.web.WebOnlineMain</mainClass>
+                            <targetDirectory>${project.build.directory}/js</targetDirectory>
+                            <targetFileName>hexfront-online.js</targetFileName>
                             <jsModuleType>NONE</jsModuleType>
                             <entryPointName>main</entryPointName>
                             <minifying>true</minifying>

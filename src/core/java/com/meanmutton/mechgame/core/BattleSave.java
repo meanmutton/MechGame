@@ -69,6 +69,10 @@ public final class BattleSave {
         // hotseat battles: whose deployment it is, and who conceded (older builds ignore this line)
         if (b.hotseat) s.append("hotseat\t").append(b.deployTeam).append(',').append(b.conceded).append(',')
                 .append(b.game.hotseatEnemy == null ? "-" : b.game.hotseatEnemy.serialize()).append('\n');
+        // the dice's exact state (online battles, which both devices must roll alike) and the last move's undo
+        if (b.rnd instanceof Rng) s.append("rng\t").append(((Rng) b.rnd).state()).append('\n');
+        if (b.active != null && b.undoAvailable) s.append("undo\t").append(b.undoQ).append(',').append(b.undoR).append(',')
+                .append(b.undoFacing).append(',').append(b.undoMoved).append('\n');
         int from = Math.max(0, b.log.size() - 12);
         for (int i = from; i < b.log.size(); i++) s.append("log\t").append(b.log.get(i).replace('\n', ' ').replace('\t', ' ')).append('\n');
         return s.toString();
@@ -86,7 +90,8 @@ public final class BattleSave {
         try {
             Company c = null, rival = null;
             String[] battle = null;
-            String[] map = null, hot = null;
+            String[] map = null, hot = null, undo = null;
+            String rng = null;
             List<String> unitLines = new ArrayList<String>(), log = new ArrayList<String>();
             for (String line : Text.split(s, '\n')) {
                 int tab = line.indexOf('\t');
@@ -99,6 +104,8 @@ public final class BattleSave {
                 else if (key.equals("unit")) unitLines.add(val);
                 else if (key.equals("log")) log.add(val);
                 else if (key.equals("hotseat")) hot = Text.split(val, ',');
+                else if (key.equals("rng")) rng = val;
+                else if (key.equals("undo")) undo = Text.split(val, ',');
             }
             if (c == null || battle == null || map == null || unitLines.isEmpty()) return null;
             c.rival = rival;
@@ -160,7 +167,8 @@ public final class BattleSave {
                 rival.deployed.addAll(theirs);
                 rival.rival = c;
             }
-            Battle b = new Battle(game, units, m, new Random(), Integer.parseInt(battle[10]), hot != null);
+            Random dice = rng != null ? Rng.at(Long.parseLong(rng.trim())) : new Random();
+            Battle b = new Battle(game, units, m, dice, Integer.parseInt(battle[10]), hot != null);
             if (hot != null) {
                 b.deployTeam = Integer.parseInt(hot[0]);
                 b.conceded = Integer.parseInt(hot[1]);
@@ -183,6 +191,13 @@ public final class BattleSave {
             b.startValue[1] = Integer.parseInt(battle[9]);
             int act = Integer.parseInt(battle[11]);
             if (act >= 0 && act < units.size()) b.active = units.get(act);
+            if (undo != null && b.active != null) {
+                b.undoQ = Integer.parseInt(undo[0]);
+                b.undoR = Integer.parseInt(undo[1]);
+                b.undoFacing = Integer.parseInt(undo[2]);
+                b.undoMoved = Integer.parseInt(undo[3]);
+                b.undoAvailable = true;
+            }
             b.log.addAll(log);
             b.log("Battle resumed.");
             game.company = c;

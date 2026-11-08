@@ -1,6 +1,7 @@
 package com.meanmutton.mechgame.web;
 
 import com.meanmutton.mechgame.core.Game;
+import com.meanmutton.mechgame.core.Link;
 import com.meanmutton.mechgame.core.Platform;
 import com.meanmutton.mechgame.core.SoundSynth;
 
@@ -22,9 +23,28 @@ import java.util.Map;
 public final class WebMain implements Platform {
     private final Map<String, String> memory = new HashMap<String, String>();   // if local storage is unavailable
     private boolean audio;
+    /** Opens connections to the relay (only in the online page, WebOnlineMain), or null. */
+    private final Links links;
 
+    /** Network connections, for the online page only. */
+    interface Links {
+        Link open(String url);
+
+        /** Once a frame (tests watch the online game through this). */
+        void frame(Game game);
+    }
+
+    private WebMain(Links links) {
+        this.links = links;
+    }
+
+    /** The offline page (release/Hexfront.html): no network code at all. */
     public static void main(String[] args) {
-        WebMain platform = new WebMain();
+        run(null);
+    }
+
+    static void run(Links links) {
+        WebMain platform = new WebMain(links);
         platform.initAudio();
         Game game = new Game(platform, (long) (Math.random() * 1e15));
         CanvasGfx gfx = new CanvasGfx(canvas());
@@ -38,6 +58,7 @@ public final class WebMain implements Platform {
                 int w = canvasWidth(), h = canvasHeight();
                 if (w > 0 && h > 0) {
                     game.tick(dt, w, h);
+                    if (platform.links != null) platform.links.frame(game);
                     gfx.begin();
                     game.render(gfx);
                 }
@@ -119,6 +140,10 @@ public final class WebMain implements Platform {
 
     public void share(String subject, String text) {
         copyText(subject, text);
+    }
+
+    public Link openLink(String url) {
+        return links == null ? null : links.open(url);
     }
 
     public String buildInfo() {

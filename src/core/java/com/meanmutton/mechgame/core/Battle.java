@@ -44,8 +44,8 @@ public final class Battle {
     public Unit mover;
 
     // undo support for the human's move
-    private int undoQ, undoR, undoFacing, undoMoved;
-    private boolean undoAvailable;
+    int undoQ, undoR, undoFacing, undoMoved;
+    boolean undoAvailable;
 
     Ai.Turn aiTurn;
     volatile Ai.Planner aiPlanner;
@@ -60,6 +60,48 @@ public final class Battle {
     /** Hotseat: the side that conceded, or -1. */
     public int conceded = -1;
     public float aiDelay;
+    /**
+     * Online: the side this device plays, or -1 for a battle on one device. An online battle runs on both players'
+     * devices at once (hotseat rules, both sides human); each device gives orders only for its own side, sends them to
+     * the other through {@link #net}, and plays the other's orders as they arrive (see Online).
+     */
+    public int localTeam = -1;
+    /** Online: where this device's orders go. */
+    public Net net;
+    /** Applying an order from the other device (so it isn't sent back), or a step the battle takes on its own. */
+    boolean remote;
+
+    /** Receives every order given on this device in an online battle, encoded as text (see Online.apply). */
+    public interface Net {
+        void order(String order);
+
+        /** The game is waiting on the network: nothing on this device may give orders. */
+        boolean waiting();
+    }
+
+    public boolean online() {
+        return localTeam >= 0;
+    }
+
+    private Random aiNoise;
+
+    /**
+     * The computer's own dice for its planning. Online (tests) the computer plans on one device only, so it must not
+     * roll the battle's dice, which both devices keep in step; elsewhere it uses them as it always has.
+     */
+    Random aiDice() {
+        if (!online()) return rnd;
+        if (aiNoise == null) aiNoise = new Random(localTeam * 7919L + 13);
+        return aiNoise;
+    }
+
+    private void tell(String order) {
+        if (net != null && !remote) net.order(order);
+    }
+
+    private int idx(Unit u) {
+        return units.indexOf(u);
+    }
 
     public Battle(Game game, List<Unit> mine, List<Unit> theirs, HexMap map, Random rnd, int difficulty) {
         this(game, mine, theirs, map, rnd, difficulty, false);
@@ -132,7 +174,7 @@ public final class Battle {
 
     /** Hotseat deployment hides the other side's units, so neither player sees where the other set up. */
     public boolean hidden(Unit u) {
-        return hotseat && deploying && u.team != deployTeam;
+        return hotseat && deploying && u.team != (localTeam >= 0 ? localTeam : deployTeam);
     }
 
     /** Is the hex inside this side's home deployment zone (its own edge of the map)? */
@@ -157,6 +199,7 @@ public final class Battle {
 
     public void place(Unit u, int c, int r) {
         version++;
+        tell("P " + idx(u) + " " + c + " " + r);
         if (!canPlace(u, c, r)) return;
         u.q = c;
         u.r = r;
@@ -166,6 +209,7 @@ public final class Battle {
 
     public void finishDeployment() {
         version++;
+        tell("D " + deployTeam);
         if (!deploying) return;
         if (hotseat && deployTeam == PLAYER) {
             // Player 1 is done: Player 2 places their units next, without seeing Player 1's
@@ -399,6 +443,11 @@ public final class Battle {
     /** Starts animated movement along a path (list of hex indices, not including the start). */
     public void move(Unit u, int[] path) {
         version++;
+        if (net != null && !remote) {
+            StringBuilder o = new StringBuilder("M ").append(idx(u)).append(' ');
+            for (int i = 0; i < path.length; i++) o.append(i > 0 ? "," : "").append(path[i]);
+            tell(o.toString());
+        }
         if (path.length == 0) return;
         undoQ = u.q;
         undoR = u.r;
@@ -424,6 +473,7 @@ public final class Battle {
 
     public void undoMove(Unit u) {
         version++;
+        tell("U " + idx(u));
         if (!canUndo(u)) return;
         u.q = undoQ;
         u.r = undoR;
@@ -688,6 +738,11 @@ public final class Battle {
 
     public void fire(Unit a, Unit t, boolean[] use) {
         version++;
+        if (net != null && !remote) {
+            StringBuilder o = new StringBuilder("X ").append(idx(a)).append(' ').append(idx(t)).append(' ');
+            for (boolean x : use) o.append(x ? '1' : '0');
+            tell(o.toString());
+        }
         if (a.fired || a.destroyed) return;
         ledger = new java.util.LinkedHashMap<Unit, int[]>();
         ledger.put(t, new int[UnitType.locCount(t.type)]);
@@ -1069,6 +1124,7 @@ public final class Battle {
 
     public void turbo(Unit u) {
         version++;
+        tell("T " + idx(u));
         if (!canTurbo(u)) return;
         int s = u.equipSlot(Equip.TURBO);
         u.eqUses[s]--;
@@ -1089,6 +1145,7 @@ public final class Battle {
 
     public void useEquip(Unit u, int equipId) {
         version++;
+        tell("E " + idx(u) + " " + equipId);
         if (!canUse(u, equipId)) return;
         int s = u.equipSlot(equipId);
         u.eqUses[s]--;
@@ -1126,6 +1183,7 @@ public final class Battle {
 
     public void rotate(Unit u, int dir) {
         version++;
+        tell("R " + idx(u) + " " + dir);
         if (u != active || u.destroyed) return;
         u.facing = (u.facing + dir + 6) % 6;
         u.drawFacing = HexMap.DIR_ANGLE[u.facing];
@@ -1166,8 +1224,14 @@ public final class Battle {
         if (human(side) && onlyShutdownLeft(side)) {
             for (Unit u : units) {
                 if (u.team == side && !u.destroyed && !u.activated && u.shutdown) {
-                    beginActivation(u);
-                    endActivation(u);
+                    boolean was = remote;
+                    remote = true;   // both devices take this step themselves
+                    try {
+                        beginActivation(u);
+                        endActivation(u);
+                    } finally {
+                        remote = was;
+                    }
                     return;
                 }
             }
@@ -1182,6 +1246,7 @@ public final class Battle {
     /** Called when a unit starts its activation (selected by the human or the AI). */
     public void beginActivation(Unit u) {
         version++;
+        tell("B " + idx(u));
         if (u.team != side || u.activated || u.destroyed) return;
         active = u;
         u.moved = false;
@@ -1198,6 +1263,7 @@ public final class Battle {
 
     public void endActivation(Unit u) {
         version++;
+        tell("N " + idx(u));
         if (u != active) return;
         u.activated = true;
         if (u.shutdown) {
@@ -1252,13 +1318,83 @@ public final class Battle {
 
     public void withdraw() {
         if (hotseat) {
-            // the side whose turn it is concedes, and the other side wins
-            conceded = side;
-            result = side == PLAYER ? RESULT_LOSS : RESULT_WIN;
-            log(sideName(side) + " concedes.");
+            // the side whose turn it is concedes (online: this device's side), and the other side wins
+            concede(localTeam >= 0 ? localTeam : side);
             return;
         }
         result = RESULT_WITHDRAW;
+    }
+
+    /** Two players: this side gives up, and the other side wins. */
+    public void concede(int team) {
+        version++;
+        tell("W " + team);
+        if (result != RESULT_NONE) return;
+        conceded = team;
+        result = team == PLAYER ? RESULT_LOSS : RESULT_WIN;
+        log(sideName(team) + " concedes.");
+    }
+
+    /** Turns a unit to face a direction during its activation (the computer aims this way before it fires). */
+    public void face(Unit u, int facing) {
+        version++;
+        tell("A " + idx(u) + " " + facing);
+        if (u != active || u.destroyed) return;
+        u.facing = ((facing % 6) + 6) % 6;
+        u.drawFacing = HexMap.DIR_ANGLE[u.facing];
+    }
+
+    /** Picks a different unit to activate instead of the one picked, before it has done anything. */
+    public void switchTo(Unit u) {
+        version++;
+        tell("S " + idx(u));
+        Unit a = active;
+        if (a != null && (a == u || a.moved || a.fired || a.turboOn)) return;
+        boolean was = remote;
+        remote = true;
+        try {
+            active = null;
+            beginActivation(u);
+        } finally {
+            remote = was;
+        }
+    }
+
+    /**
+     * A fingerprint of everything that decides the battle (not its animations), to check that the two devices in an
+     * online battle still agree.
+     */
+    public int stateHash() {
+        int h = round;
+        h = h * 31 + side;
+        h = h * 31 + initiative;
+        h = h * 31 + (deploying ? 1 : 0);
+        h = h * 31 + deployTeam;
+        h = h * 31 + result;
+        h = h * 31 + conceded;
+        h = h * 31 + (active == null ? -1 : idx(active));
+        if (rnd instanceof Rng) {
+            long st = ((Rng) rnd).state();
+            h = h * 31 + (int) (st ^ (st >>> 32));
+        }
+        for (Unit u : units) {
+            h = h * 31 + u.q;
+            h = h * 31 + u.r;
+            h = h * 31 + u.facing;
+            h = h * 31 + Math.round(u.heat * 100);
+            h = h * 31 + (u.activated ? 1 : 0) + (u.shutdown ? 2 : 0) + (u.staggered ? 4 : 0) + (u.ionized ? 8 : 0)
+                    + (u.turboOn ? 16 : 0) + (u.fired ? 32 : 0) + (u.moved ? 64 : 0) + (u.destroyed ? 128 : 0);
+            h = h * 31 + u.movedHexes;
+            h = h * 31 + u.mpLost * 7 + u.sinksLost;
+            for (int v : u.armor) h = h * 31 + v;
+            for (int v : u.infra) h = h * 31 + v;
+            for (int v : u.ammo) h = h * 31 + v;
+            for (boolean v : u.wpnBroken) h = h * 31 + (v ? 1 : 0);
+            for (boolean v : u.eqBroken) h = h * 31 + (v ? 1 : 0);
+            for (int v : u.eqUses) h = h * 31 + v;
+        }
+        for (float v : map.smoke) h = h * 31 + Math.round(v);
+        return h;
     }
 
     // =====================================================================
@@ -1284,7 +1420,8 @@ public final class Battle {
         }
         if (fx.isEmpty()) fxClock = 0;
         for (Unit u : units) if (u.hitFlash > 0) u.hitFlash -= dt;
-        if (!deploying && result == RESULT_NONE && !human(side) && !busy()) {
+        if (!deploying && result == RESULT_NONE && !human(side) && !busy() && (localTeam < 0 || side == localTeam)
+                && (net == null || !net.waiting())) {
             aiDelay -= dt * game.settings.aiSpeedFactor();
             if (aiDelay <= 0) Ai.step(this);
         }

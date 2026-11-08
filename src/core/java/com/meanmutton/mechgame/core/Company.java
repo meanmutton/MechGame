@@ -14,6 +14,8 @@ public final class Company {
     public boolean quick;
     /** Two players on one device (a quick battle each builds a force for); not saved with the company. */
     public boolean hotseat;
+    /** Online: this device's force in an online quick battle (never saved; hotseat and quick are set too). */
+    public boolean online;
     /** Hotseat: 0 for Player 1, 1 for Player 2. */
     public int seatNo;
     /** Two-player campaign: the rival company is Player 2's, not the computer's (saved). */
