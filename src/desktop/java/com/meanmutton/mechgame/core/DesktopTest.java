@@ -1072,6 +1072,7 @@ public final class DesktopTest {
         FakePlatform p = new FakePlatform();
         Online.relayUrl = url;
         Online.autoplay = true;
+        Online.buildId = System.getProperty("hexfront.build", Online.buildId);   // to pair with a browser page's build
         Game g = new Game(p, 123);
         g.tick(0, W, H);
         if (how.startsWith("join:")) g.joinOnline(how.substring(5));
@@ -1169,6 +1170,26 @@ public final class DesktopTest {
                     if (gg.online.phase != Online.FAILED || !gg.online.problem.contains("no game")) throw new RuntimeException("a wrong code: " + gg.online.problem);
                     if (shots) shot(gg, "83_online_wrong_code");
                     gg.leaveOnline();
+                }
+                if (n == 0) {
+                    // different builds don't play each other, and both players are told why
+                    FakePlatform op = new FakePlatform(), np = new FakePlatform();
+                    op.relay = np.relay = relay;
+                    String keep = Online.buildId;
+                    Online.buildId = "aaa1111";
+                    Game old = new Game(op, 97);
+                    old.hostOnline(9000);
+                    for (int i = 0; i < frames && old.online.phase != Online.HOSTING; i++) old.tick(dt, W, H);
+                    Online.buildId = "bbb2222";
+                    Game nw = new Game(np, 96);
+                    nw.joinOnline(old.online.code);
+                    for (int i = 0; i < frames && (old.online.phase != Online.FAILED || nw.online.phase != Online.FAILED); i++) pump(old, nw, 1, dt);
+                    Online.buildId = keep;
+                    if (nw.online.phase != Online.FAILED || !nw.online.problem.contains("you: bbb2222, your friend: aaa1111"))
+                        throw new RuntimeException("the joining player should hear the versions differ: " + nw.online.problem);
+                    if (old.online.phase != Online.FAILED || !old.online.problem.contains("you: aaa1111, your friend: bbb2222"))
+                        throw new RuntimeException("the host should hear the versions differ: " + old.online.problem);
+                    if (shots) shot(nw, "83b_online_version");
                 }
                 gg.joinOnline(Text.lower(code));
                 for (int i = 0; i < frames && !(gh.screen() instanceof HqScreen && gg.screen() instanceof HqScreen); i++) pump(gh, gg, 1, dt);

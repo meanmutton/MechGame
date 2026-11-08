@@ -43,6 +43,7 @@ public class MainActivity extends Activity implements Platform {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         Online.relayUrl = Online.RELAY;   // the phone can play online once the relay is set up
+        Online.buildId = BuildInfo.COMMIT;   // online play pairs only the same build
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         if (Build.VERSION.SDK_INT >= 28) {

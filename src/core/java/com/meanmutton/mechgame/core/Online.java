@@ -26,6 +26,11 @@ public final class Online implements Battle.Net {
     public static final String RELAY = "";
     /** The relay in use: set by builds that support online play; empty hides the Online button. */
     public static String relayUrl = "";
+    /**
+     * The commit this build was made from (the phone's and the page's build stamp). Two devices only play each other
+     * on exactly the same build, so the battle rules are certain to match.
+     */
+    public static String buildId = "dev";
 
     public static final int CONNECTING = 0, HOSTING = 1, JOINING = 2, BUILDING = 3, READY = 4, BATTLE = 5, OVER = 6, FAILED = 7;
     private static final int CHUNK = 9000;   // characters per message part (the relay takes up to 32 KB a message)
@@ -82,7 +87,11 @@ public final class Online implements Battle.Net {
     private String theirForce;
     private boolean myForceReady;
 
+    /** This device's version (see version()), fixed when the game starts. */
+    private final String myVersion;
+
     private Online(Game game, boolean host) {
+        this.myVersion = version();
         this.game = game;
         this.host = host;
         this.team = host ? Battle.PLAYER : Battle.ENEMY;
@@ -104,7 +113,18 @@ public final class Online implements Battle.Net {
     }
 
     public static String version() {
-        return PROTOCOL + "-" + fingerprint();
+        return PROTOCOL + "-" + buildId.replace(' ', '_') + "-" + fingerprint();
+    }
+
+    /** The build part of a version, for telling the player which builds don't match. */
+    static String buildOf(String version) {
+        String[] p = Text.split(version, '-');
+        return p.length >= 3 ? p[1] : version;
+    }
+
+    private static String mismatch(String mine, String theirs) {
+        return "You and your friend have different versions of Hexfront (you: " + buildOf(mine) + ", your friend: " + buildOf(theirs)
+                + "). Online play needs the same version on both: reload the page or update the app, then try again.";
     }
 
     /**
@@ -200,7 +220,7 @@ public final class Online implements Battle.Net {
             everOpen = true;
             retries = 0;
             sinceHeard = 0;
-            if (token == null) sendNow(host ? "HOST " + version() : "JOIN " + code);
+            if (token == null) sendNow(host ? "HOST " + myVersion : "JOIN " + code);
             else sendNow("BACK " + code + " " + (host ? "h" : "g") + " " + token);   // back in the same room
         }
         for (String m = link.poll(); m != null; m = link.poll()) {
@@ -301,9 +321,9 @@ public final class Online implements Battle.Net {
         } else if (cmd.equals("JOINED")) {
             token = w[2];
             partnerHere = true;
-            if (!w[3].equals(version())) {
-                send("LEAVE version");
-                fail("Your friend has a different version of Hexfront. Both of you need the latest one.");
+            if (!w[3].equals(myVersion)) {
+                send("LEAVE version " + myVersion);
+                fail(mismatch(myVersion, w[3]));
                 return;
             }
             phase = JOINING;   // the host's setup message comes next
@@ -434,7 +454,7 @@ public final class Online implements Battle.Net {
             receiveBattle(rest, false);
         } else if (type.equals("LEAVE")) {
             partnerLeft = true;
-            if (rest.startsWith("version")) fail("Your friend has a different version of Hexfront. Both of you need the latest one.");
+            if (rest.startsWith("version")) fail(mismatch(myVersion, rest.length() > 8 ? rest.substring(8).trim() : "?"));
             else if (phase != BATTLE) fail("Your opponent left the game.");
         }
     }

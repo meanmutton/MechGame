@@ -16,6 +16,7 @@ public final class WebOnlineMain {
     public static void main(String[] args) {
         String relay = relayOverride();
         Online.relayUrl = relay != null && relay.length() > 0 ? relay : Online.RELAY;
+        Online.buildId = buildCommit();   // online play pairs only the same build
         final String test = autotest();
         if (test != null) Online.autoplay = true;
         WebMain.run(new WebMain.Links() {
@@ -38,6 +39,10 @@ public final class WebOnlineMain {
             }
         });
     }
+
+    /** The commit in the page's build stamp ("6bd22ff (2026-11-08)" gives "6bd22ff"). */
+    @JSBody(script = "var hfB = String(window.HEXFRONT_BUILD || 'dev'); return hfB.split(' ')[0];")
+    private static native String buildCommit();
 
     @JSBody(script = "return window.HEXFRONT_AUTOTEST || null;")
     private static native String autotest();
