@@ -101,8 +101,8 @@ public final class OnlineScreen extends Screen {
 
     public void render(Gfx g) {
         background(g);
-        Ui.title(g, "ONLINE BATTLE", w / 2f, h * 0.1f, u * 7);
         Online o = game.online;
+        Ui.title(g, o != null && o.campaign ? "ONLINE CAMPAIGN" : "ONLINE BATTLE", w / 2f, h * 0.1f, u * 7);
         float tx = w / 2f - u * 60, tw = u * 120;
         if (o == null) {
             Ui.wrap(g, "Play a friend on another phone, tablet or computer. One of you hosts and gets a six-letter code; the other "
