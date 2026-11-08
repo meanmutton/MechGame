@@ -22,6 +22,8 @@ public final class Company {
     public boolean pvp;
     /** Two-player campaign: whose turn it is at HQ, 0 for Player 1 and 1 for Player 2 (saved with Player 1's company). */
     public int pvpTurn;
+    /** Two-player campaign played online: Player 2 is a friend on another device (saved with Player 1's company). */
+    public boolean onlineCampaign;
 
     /** Two people play this: a hotseat quick battle or a two-player campaign. */
     public boolean twoPlayer() {
@@ -214,7 +216,7 @@ public final class Company {
                 .append(',').append(scheme == null ? "-" : scheme.serialize())
                 .append(',').append(merc ? 1 : 0).append(',').append(repString()).append(',').append(planet == null ? "-" : planet.serialize())
                 .append(',').append(contractString()).append(',').append(contract).append(',').append(offerChassis).append(':').append(offerItem)
-                .append(',').append(pvp ? 1 : 0).append(',').append(pvpTurn)
+                .append(',').append(pvp ? 1 : 0).append(',').append(pvpTurn).append(',').append(onlineCampaign ? 1 : 0)
                 .append('|');
         for (int i = 0; i < armoryW.length; i++) b.append(i > 0 ? "," : "").append(armoryW[i]);
         b.append('|');
@@ -266,6 +268,7 @@ public final class Company {
                     c.pvp = h[25].equals("1");
                     c.pvpTurn = Integer.parseInt(h[26]);
                 }
+                if (h.length >= 28) c.onlineCampaign = h[27].equals("1");
             }
             String[] aw = Text.split(p[2], ',');
             for (int i = 0; i < aw.length && i < c.armoryW.length; i++) c.armoryW[i] = Integer.parseInt(aw[i]);

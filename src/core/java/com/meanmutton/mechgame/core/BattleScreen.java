@@ -236,7 +236,10 @@ public final class BattleScreen extends Screen {
             Btn cw = new Btn(P_WITHDRAW, concede).set(x, y + bh * 3.6f, bw, bh).tint(0xFF8F5A2E);
             cw.enabled = b.online() ? b.result == Battle.RESULT_NONE : !(b.hotseat && b.deploying);
             overlay.add(cw);
-            overlay.add(new Btn(P_QUIT, b.online() ? "Concede and leave" : "Save and quit to menu").set(x, y + bh * 4.8f, bw, bh).tint(0xFF2E6D8F));
+            Btn quit = new Btn(P_QUIT, b.online() ? "Concede and leave" : "Save and quit to menu").set(x, y + bh * 4.8f, bw, bh).tint(0xFF2E6D8F);
+            // an online campaign's battle is settled when it ends: concede above, and leave from the results
+            quit.visible = !(b.online() && game.online != null && game.online.campaign);
+            overlay.add(quit);
         } else {
             overlay.add(new Btn(P_CONFIRM, b.hotseat ? "Yes, concede" : "Yes, withdraw").set(w / 2f - u * 32, h * 0.55f, u * 30, bh).tint(0xFF8F3A2E));
             overlay.add(new Btn(P_RESUME, "Keep fighting").set(w / 2f + u * 2, h * 0.55f, u * 30, bh).tint(0xFF2E7D4F));
@@ -346,7 +349,9 @@ public final class BattleScreen extends Screen {
             endTimer += dt;
             if (endTimer > 2f && !finished) {
                 finished = true;
-                if (b.hotseat && !game.company.pvp) game.finishHotseat(b);
+                if (b.online() && game.online != null && game.online.campaign) {
+                    if (game.online.host) game.finishBattle(b);   // the guest gets the results from the host
+                } else if (b.hotseat && !game.company.pvp) game.finishHotseat(b);
                 else game.finishBattle(b);   // a two-player campaign settles both companies there
                 return;
             }

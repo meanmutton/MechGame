@@ -86,6 +86,7 @@ if [ "${1:-}" = "test" ]; then
     $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest merc 8
     $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest resume
     $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest online 2
+    $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest onlinecampaign 6
     $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest monkey 1 3000
     $JAVA -Djava.awt.headless=true -cp "$OUT/desk" com.meanmutton.mechgame.core.DesktopTest shots "$OUT/shots"
     echo "== screenshots in $OUT/shots"

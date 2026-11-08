@@ -117,13 +117,13 @@ public final class HqScreen extends Screen {
             return;
         }
         boolean forfeit = !c.quick && !c.merc && c.deployed.isEmpty() && c.mustForfeit();
-        String go = c.online ? "Ready" : c.hotseat ? (c.seatNo == 0 ? "Done" : "Fight") : (c.pvp ? (pvpSeat() == 0 ? "Done" : "Fight") : (c.quick ? "Fight" : "Launch Mission"));
+        String go = c.online || onlineCampaign() ? "Ready" : c.hotseat ? (c.seatNo == 0 ? "Done" : "Fight") : (c.pvp ? (pvpSeat() == 0 ? "Done" : "Fight") : (c.quick ? "Fight" : "Launch Mission"));
         Btn launch = add(new Btn(LAUNCH, forfeit ? "Forfeit Mission" : go + " (" + c.deployed.size() + "/" + c.deployLimit() + ")")
                 .set(u * 12 + bbw * 3, h - u * 12, bbw, u * 9));
         launch.color = forfeit ? 0xFF8F3A2E : 0xFF2E7D4F;
         launch.enabled = !c.deployed.isEmpty() || forfeit;
         if (!c.quick && !forfeit && c.noneAllowed()) launch.sub = c.merc ? "this job allows none of your units" : "buy an allowed unit in the Market";
-        if (c.online) launch.sub = "the battle starts when you both are";
+        if (c.online || (onlineCampaign() && !forfeit)) launch.sub = "the battle starts when you both are";
         else if ((c.hotseat && c.seatNo == 0) || (c.pvp && pvpSeat() == 0 && !forfeit)) launch.sub = "then pass to Player 2";
         if (c.pvp && forfeit) launch.sub = "Player " + (2 - pvpSeat()) + " wins this one";
     }
@@ -131,6 +131,11 @@ public final class HqScreen extends Screen {
     /** Top of the filter row; the roster list starts below it and its header. */
     private float ctrlTop() {
         return c.quick ? h * 0.15f : h * 0.18f;
+    }
+
+    /** A two-player campaign against a friend online: each player's HQ is on their own device. */
+    private boolean onlineCampaign() {
+        return c.pvp && game.online != null && game.online.campaign;
     }
 
     /** Two-player campaign: 0 when Player 1 has the HQ, 1 when Player 2 has it. */
@@ -296,6 +301,10 @@ public final class HqScreen extends Screen {
                 game.sfx(Platform.SND_BUY, 0.7f);
                 game.saveCompany();
             }
+        } else if (id == LAUNCH && onlineCampaign()) {
+            game.online.ready(c);   // the host's battle starts here if Player 2 is already ready
+            if (game.screen() == this) game.setScreen(new OnlineScreen(game));
+            return;
         } else if (id == LAUNCH && c.pvp) {
             if (c.deployed.isEmpty()) game.pvpForfeit(pvpSeat());
             else if (pvpSeat() == 0) game.pvpHandToP2();

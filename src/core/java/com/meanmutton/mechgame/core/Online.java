@@ -40,6 +40,11 @@ public final class Online implements Battle.Net {
      * fights by itself, so a test can play a browser against another build without anyone tapping.
      */
     public static boolean autoplay;
+    /** Tests: in an online campaign, also use the HQ (buy and send units) and move on after each debrief, for this many turns. */
+    public static boolean autoplayCampaign;
+    public static int autoplayTurns = 3;
+    /** Campaign turns settled so far in this game (tests). */
+    public int turns;
 
     public static boolean available() {
         return relayUrl != null && relayUrl.length() > 0;
@@ -59,6 +64,14 @@ public final class Online implements Battle.Net {
     /** The other player left the game for good. */
     public boolean partnerLeft;
     public Battle battle;
+    /**
+     * An online two-player campaign (rather than a quick battle). The host keeps the campaign and its save; the guest
+     * plays Player 2's company. Each turn both HQs are open at once; the guest's company comes over on Ready, the
+     * host lays out the battle, and after it the host settles both companies and sends the results.
+     */
+    public boolean campaign;
+    /** Host: Player 2's company as the guest left their HQ, waiting for the host to be ready. */
+    private String theirHq;
     /** Each side's colors in the battle (team 0 and team 1). */
     public Scheme[] schemes;
     public Company mine;
@@ -115,6 +128,14 @@ public final class Online implements Battle.Net {
     public static Online hostGame(Game game, int budget) {
         Online o = new Online(game, true);
         o.budget = budget;
+        o.connect();
+        return o;
+    }
+
+    /** Opens a room for the two-player campaign the game has loaded. */
+    public static Online hostCampaign(Game game) {
+        Online o = new Online(game, true);
+        o.campaign = true;
         o.connect();
         return o;
     }
@@ -215,6 +236,7 @@ public final class Online implements Battle.Net {
         if (!linkUp()) return "Connection lost. Reconnecting...";
         if (!partnerHere) return "Waiting for your opponent to reconnect...";
         if (awaitingSnap) return "Re-syncing the battle with Player 1...";
+        if (campaign && !host && battle != null && battle.result != Battle.RESULT_NONE && !battle.busy()) return "Player 1's game is settling the battle...";
         return null;
     }
 
@@ -276,6 +298,23 @@ public final class Online implements Battle.Net {
 
     /** Tests: one step of playing by itself (see autoplay). */
     private void autoStep() {
+        if (campaign && autoplayCampaign) {
+            Screen s = game.screen();
+            if (s instanceof PvpDebriefScreen && turns < autoplayTurns) {
+                afterDebrief();
+                return;
+            }
+            if (s instanceof CampaignEndScreen && host && turns < autoplayTurns) {
+                game.nextPlanet(Scenario.ATTACKER);
+                return;
+            }
+            if (phase == BUILDING && !myForceReady && s instanceof HqScreen && game.company != null) {
+                autoBuild(game.company);
+                ready(game.company);
+                if (game.screen() == s) game.setScreen(new OnlineScreen(game));
+                return;
+            }
+        }
         if (phase == BUILDING && mine != null && !myForceReady && game.screen() instanceof HqScreen) {
             java.util.Random r = new java.util.Random(team * 31 + 7);
             for (int tries = 0; tries < 200 && mine.deployed.size() < 5; tries++) {
@@ -297,9 +336,34 @@ public final class Online implements Battle.Net {
         }
     }
 
-    /** Tests: the battle's fingerprint and result, to compare two devices. */
+    /** Tests: repair, send what may fight, and buy a few more units that may. */
+    private void autoBuild(Company c) {
+        java.util.Random r = new java.util.Random(team * 977 + c.mission * 31 + c.planets);
+        for (Unit u : c.roster) {
+            if (u.isDamaged() && c.cash >= u.repairCost()) {
+                c.cash -= u.repairCost();
+                u.repairFully();
+            }
+        }
+        for (Unit u : c.roster) if (!c.deployed.contains(u) && c.deployRefusal(u) == null) c.deployed.add(u);
+        for (int tries = 0; tries < 200 && c.deployed.size() < c.deployLimit(); tries++) {
+            Unit u = new Unit(Chassis.SHOP[r.nextInt(Chassis.SHOP.length)]);
+            if (u.value() > c.cash * 0.6f || !c.allowed(u) || c.deployRefusal(u) != null) continue;
+            c.cash -= u.value();
+            c.roster.add(u);
+            c.deployed.add(u);
+        }
+    }
+
+    /** Tests: the battle's fingerprint and result (and, in a campaign, the turns and both companies), to compare devices. */
     public String testState() {
-        return battle == null ? "none" : battle.result + " " + battle.stateHash() + " " + resyncs;
+        String s = battle == null ? "none" : battle.result + " " + battle.stateHash() + " " + resyncs;
+        if (campaign) {
+            Company c = game.campaignMain();
+            int h = c == null || c.rival == null ? 0 : (c.serialize() + "\n" + c.rival.serialize()).hashCode();
+            s += " T" + turns + " " + h;
+        }
+        return s;
     }
 
     private void reconnect(float dt) {
@@ -360,9 +424,15 @@ public final class Online implements Battle.Net {
         } else if (cmd.equals("GUEST")) {
             partnerHere = true;
             if (phase == HOSTING) {
-                send("SETUP " + budget);
                 phase = BUILDING;
-                game.onlineBuild();
+                if (campaign) {
+                    send("SETUP campaign");
+                    sendCampaign();
+                    game.onlineCampaignTurn();
+                } else {
+                    send("SETUP " + budget);
+                    game.onlineBuild();
+                }
             }
         } else if (cmd.equals("NOROOM")) {
             if (token == null) fail(host ? "The server lost the room. Try again." : "There's no game with the code " + code + ". Check it with your friend.");
@@ -497,10 +567,27 @@ public final class Online implements Battle.Net {
     private void message(String body) {
         String type = body.indexOf(' ') < 0 ? body : body.substring(0, body.indexOf(' '));
         String rest = body.indexOf(' ') < 0 ? "" : body.substring(body.indexOf(' ') + 1);
-        if (type.equals("SETUP") && !host) {
+        if (type.equals("SETUP") && !host && rest.startsWith("campaign")) {
+            campaign = true;   // the campaign itself comes next
+        } else if (type.equals("SETUP") && !host) {
             budget = Integer.parseInt(rest.trim());
             phase = BUILDING;
             game.onlineBuild();
+        } else if (type.equals("CAMPAIGN") && !host) {
+            String[] co = Text.split(rest, '\n');
+            Company p1 = Company.parse(co[0]), p2 = Company.parse(co[1]);
+            if (p1 == null || p2 == null) {
+                fail("The campaign didn't arrive in one piece.");
+                return;
+            }
+            phase = BUILDING;
+            myForceReady = false;
+            game.onlineCampaignGuest(p1, p2);
+        } else if (type.equals("HQ") && host) {
+            theirHq = rest;
+            if (myForceReady) campaignFight();
+        } else if (type.equals("RESULT") && !host) {
+            campaignResult(rest);
         } else if (type.equals("FORCE") && host) {
             theirForce = rest;
             if (myForceReady) startBattle();
@@ -554,6 +641,12 @@ public final class Online implements Battle.Net {
     public void ready(Company c) {
         myForceReady = true;
         phase = READY;
+        if (campaign) {
+            if (host) {
+                if (theirHq != null) campaignFight();
+            } else send("HQ " + c.serialize());
+            return;
+        }
         if (host) {
             if (theirForce != null) startBattle();
         } else {
@@ -585,6 +678,90 @@ public final class Online implements Battle.Net {
         game.setScreen(new BattleScreen(game, b));
     }
 
+    // =====================================================================
+    // Online campaign
+    // =====================================================================
+
+    /** Host: the campaign as it stands, for the guest to play Player 2's company from (and both HQs open). */
+    void sendCampaign() {
+        Company c = game.campaignMain();
+        myForceReady = false;
+        theirHq = null;
+        phase = BUILDING;
+        send("CAMPAIGN " + c.serialize() + "\n" + c.rival.serialize());
+    }
+
+    /** Host: both players are ready. Player 2's company as the guest left it, then the battle (or a forfeit). */
+    private void campaignFight() {
+        Company c = game.campaignMain();
+        Company rv = Company.parse(theirHq);
+        theirHq = null;
+        myForceReady = false;
+        if (rv == null) {
+            fail("Player 2's company didn't arrive in one piece.");
+            return;
+        }
+        rv.pvp = true;
+        rv.rival = c;
+        c.rival = rv;
+        c.pvpTurn = 0;
+        game.pvpMain = null;
+        game.company = c;
+        game.saveCompany();
+        Scheme their = rv.scheme != null ? rv.scheme : Scheme.ENEMY_DEFAULT;
+        game.hotseatEnemy = their;
+        schemes = new Scheme[]{c.scheme != null ? c.scheme : Scheme.PLAYER_DEFAULT, their};
+        // a player with nothing that may fight forfeits (the HQ only allows that when nothing affordable may)
+        if (c.deployed.isEmpty() || rv.deployed.isEmpty()) {
+            phase = BATTLE;
+            game.pvpForfeit(c.deployed.isEmpty() ? Battle.PLAYER : Battle.ENEMY);
+            return;
+        }
+        Battle b = game.onlineCampaignBattle();
+        attach(b);
+        send("START " + snapshot(b));
+        phase = BATTLE;
+        game.setScreen(new BattleScreen(game, b));
+    }
+
+    /** Host: the battle is settled (Game.settle); the guest gets both companies and the debrief. */
+    void campaignSettled(Game.Debrief d) {
+        Company c = game.campaignMain();
+        send("RESULT " + c.serialize() + "\n" + c.rival.serialize() + "\n" + d.serialize() + "\n" + d.p2.serialize());
+        turns++;
+        battle = null;
+        phase = BUILDING;
+        myForceReady = false;
+    }
+
+    /** Guest: the host's settlement of the battle, shown as the host sees it. */
+    private void campaignResult(String rest) {
+        String[] f = Text.split(rest, '\n', true);
+        Company p1 = Company.parse(f[0]), p2 = Company.parse(f[1]);
+        if (p1 == null || p2 == null || f.length < 4) {
+            fail("The battle's results didn't arrive in one piece.");
+            return;
+        }
+        Game.Debrief d = Game.Debrief.parse(f[2]);
+        d.p2 = Game.Debrief.parse(f[3]);
+        p1.rival = p2;
+        p2.rival = p1;
+        game.pvpMain = p1;
+        game.company = p2;
+        Battle b = d.forfeit ? null : battle;
+        battle = null;
+        turns++;
+        phase = BUILDING;
+        myForceReady = false;
+        game.setScreen(new PvpDebriefScreen(game, b, d));
+    }
+
+    /** Both: after the debrief, each goes to their own HQ (or the host picks the next planet). */
+    public void afterDebrief() {
+        if (host) game.onlineCampaignTurn();
+        else game.onlineCampaignGuest(game.campaignMain(), game.company);
+    }
+
     private void attach(Battle b) {
         battle = b;
         b.localTeam = team;
@@ -609,11 +786,12 @@ public final class Online implements Battle.Net {
             hostHad = Integer.parseInt(data.substring(0, nl).trim());
             data = data.substring(nl + 1);
         }
-        Company keep = game.company;
+        Company keep = game.company, keepMain = game.pvpMain;
         Scheme keepEnemy = game.hotseatEnemy;
         Battle b = BattleSave.read(game, data);
         Company hostCo = game.company;
         game.company = keep;
+        game.pvpMain = keepMain;
         if (b == null) {
             game.hotseatEnemy = keepEnemy;
             fail("The battle didn't arrive in one piece.");

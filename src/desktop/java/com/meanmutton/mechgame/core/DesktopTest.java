@@ -63,6 +63,7 @@ public final class DesktopTest {
         else if (mode.equals("merc")) merc(Integer.parseInt(args[1]));
         else if (mode.equals("pvp")) pvpCampaign(Integer.parseInt(args[1]), false);
         else if (mode.equals("onlineself")) onlineSelf(args[1], args[2]);
+        else if (mode.equals("onlinecampaign")) onlineCampaign(Integer.parseInt(args[1]), false, args.length > 2 ? args[2] : null);
         else if (mode.equals("online")) online(Integer.parseInt(args[1]), false, args.length > 2 ? args[2] : null);
         else if (mode.equals("resume")) resume();
         else if (mode.equals("monkey")) monkey(Integer.parseInt(args[1]), args.length > 2 ? Integer.parseInt(args[2]) : 30000, false);
@@ -933,6 +934,7 @@ public final class DesktopTest {
         // a two-player campaign: both HQs, the shared briefing, a battle, both settled
         pvpCampaign(3, true);
         online(1, true, null);
+        onlineCampaign(6, true, null);
         // weather variety on a smaller screen
         W = 1600;
         H = 900;
@@ -1071,11 +1073,12 @@ public final class DesktopTest {
     static void onlineSelf(String url, String how) throws Exception {
         FakePlatform p = new FakePlatform();
         Online.relayUrl = url;
-        Online.autoplay = true;
+        Online.autoplay = Online.autoplayCampaign = true;
         Online.buildId = System.getProperty("hexfront.build", Online.buildId);   // to pair with a browser page's build
         Game g = new Game(p, 123);
         g.tick(0, W, H);
         if (how.startsWith("join:")) g.joinOnline(how.substring(5));
+        else if (how.equals("campaign")) g.newOnlineCampaign(10000, Scenario.ATTACKER);
         else g.hostOnline(9000);
         boolean told = false;
         long until = System.currentTimeMillis() + 15 * 60 * 1000L;
@@ -1089,6 +1092,14 @@ public final class DesktopTest {
                 told = true;
             }
             if (o.phase == Online.FAILED) throw new RuntimeException("failed: " + o.problem);
+            if (o.campaign && o.turns >= Online.autoplayTurns && g.screen() instanceof PvpDebriefScreen) {
+                for (int i = 0; i < 60; i++) {   // the other device gets the last results meanwhile
+                    g.tick(1 / 20f, W, H);
+                    Thread.sleep(5);
+                }
+                System.out.println("DONE " + o.testState());
+                return;
+            }
             if (o.battle != null && o.battle.result != Battle.RESULT_NONE && !o.battle.busy() && g.screen() instanceof HotseatEndScreen) {
                 for (int i = 0; i < 100; i++) {
                     g.tick(1 / 20f, W, H);
@@ -1314,6 +1325,143 @@ public final class DesktopTest {
                     + ", " + totalResync + " re-syncs)");
         } finally {
             Online.relayUrl = saved;
+            pumpSleep = 0;
+        }
+    }
+
+    static void waitFor(Game a, Game b, float dt, int frames, java.util.concurrent.Callable<Boolean> cond) throws Exception {
+        for (int i = 0; i < frames && !cond.call(); i++) pump(a, b, 1, dt);
+    }
+
+    /**
+     * An online two-player campaign between two games: the host starts it from New Game, the friend joins from the
+     * main menu, both HQs are used at once, the battles are fought and settled on the host and shown on both, a
+     * decided planet moves on, the host leaves and continues later with a new code, and the guest never saves it.
+     */
+    static void onlineCampaign(int battles, boolean shots, String url) throws Exception {
+        MemRelay relay = new MemRelay();
+        final FakePlatform hp = new FakePlatform(), gp = new FakePlatform();
+        hp.relay = gp.relay = relay;
+        String saved = Online.relayUrl;
+        boolean savedAuto = Online.autoplay;
+        Online.relayUrl = url != null ? url : "mem:relay";
+        final float dt = 1 / 20f;
+        final int frames = url != null ? 3000 : 80;
+        pumpSleep = url != null ? 20 : 0;
+        try {
+            Game gh = new Game(hp, 301), gg = new Game(gp, 302);
+            pump(gh, gg, 2, dt);
+            gh.setScreen(new NewGameScreen(gh));
+            pump(gh, gg, 2, dt);
+            click(gh, 6);
+            click(gh, 6);   // vs Friend Online
+            pump(gh, gg, 2, dt);
+            if (shots) shot(gh, "90_online_campaign_new");
+            click(gh, 50);   // start as attacker
+            final Game fh = gh, fg = gg;
+            waitFor(gh, gg, dt, frames, () -> fh.online != null && fh.online.phase == Online.HOSTING);
+            if (gh.online == null || !gh.online.campaign || gh.online.phase != Online.HOSTING) throw new RuntimeException("the campaign should host a game");
+            if (!gh.saveIsOnlineCampaign()) throw new RuntimeException("the host should save an online campaign");
+            if (shots) shot(gh, "91_online_campaign_code");
+            gg.setScreen(new MenuScreen(gg));
+            pump(gh, gg, 2, dt);
+            if (shots) shot(gg, "92_menu_play_online");
+            click(gg, 7);   // Play Online
+            pump(gh, gg, 2, dt);
+            if (!(gg.screen() instanceof OnlineScreen)) throw new RuntimeException("Play Online should open the online screen");
+            gg.joinOnline(gh.online.code);
+            waitFor(gh, gg, dt, frames, () -> fh.screen() instanceof HqScreen && fg.screen() instanceof HqScreen);
+            if (!(gh.screen() instanceof HqScreen) || !(gg.screen() instanceof HqScreen)) throw new RuntimeException("both HQs should open");
+            if (gg.pvpMain == null || gg.company == gg.campaignMain() || gh.pvpMain != null) throw new RuntimeException("the guest should hold Player 2's company");
+            if (shots) shot(gg, "93_online_campaign_hq_p2");
+            Online.autoplay = true;   // deployment and battles play themselves
+            gh.headless = gg.headless = true;
+            relay.lossy = url == null;   // messages lost and overtaken now and then, as AWS may
+            Random r = new Random(77);
+            int fought = 0, planets = 0, forfeits = 0;
+            for (int turn = 0; fought + forfeits < battles; turn++) {
+                if (turn == 2) {
+                    // the host leaves and continues later: a new room, and the friend joins it
+                    click(gh, 1);   // Main Menu (from the HQ)
+                    waitFor(gh, gg, dt, frames, () -> fg.online != null && fg.online.phase == Online.FAILED);
+                    if (gg.online == null || gg.online.phase != Online.FAILED) throw new RuntimeException("the guest should hear the host left");
+                    gg.toMenu();
+                    gh = new Game(hp, 303);
+                    gh.headless = true;
+                    pump(gh, gg, 2, dt);
+                    if (!has(gh, 1) || !"Continue Online Campaign".equals(find(gh, 1).label)) throw new RuntimeException("the menu should offer the online campaign");
+                    click(gh, 1);
+                    final Game h2 = gh;
+                    waitFor(gh, gg, dt, frames, () -> h2.online != null && h2.online.phase == Online.HOSTING);
+                    gg.joinOnline(gh.online.code);
+                    final Game h3 = gh;
+                    waitFor(gh, gg, dt, frames, () -> h3.screen() instanceof HqScreen && fg.screen() instanceof HqScreen);
+                    if (!(gh.screen() instanceof HqScreen) || !(gg.screen() instanceof HqScreen)) throw new RuntimeException("the continued campaign should open both HQs");
+                }
+                Company p1 = gh.campaignMain(), p2 = gg.company;
+                if (!p1.serialize().equals(gg.campaignMain().serialize()) || !p1.rival.serialize().equals(p2.serialize()))
+                    throw new RuntimeException("the two devices should start the turn with the same campaign");
+                stockUp(p1, r);
+                stockUp(p2, r);
+                gh.setScreen(new HqScreen(gh));
+                gg.setScreen(new HqScreen(gg));
+                pump(gh, gg, 2, dt);
+                // whoever is ready first waits for the other
+                Game first = turn % 2 == 0 ? gg : gh, second = first == gg ? gh : gg;
+                if (turn == 3 && first != gg) {
+                    first = gg;
+                    second = gh;
+                }
+                if (turn == 3) {
+                    // Player 2 sends nothing: a forfeit, settled without a battle
+                    p2.deployed.clear();
+                    gg.online.ready(p2);
+                    gg.setScreen(new OnlineScreen(gg));
+                } else click(first, 4);
+                pump(gh, gg, 3, dt);
+                if (!(first.screen() instanceof OnlineScreen)) throw new RuntimeException("the first player ready should wait");
+                if (shots && turn == 0) shot(first, "94_online_campaign_waiting");
+                click(second, 4);
+                final Game h = gh;
+                waitFor(gh, gg, dt, url != null ? 200000 : 240000, () -> (h.screen() instanceof PvpDebriefScreen) && (fg.screen() instanceof PvpDebriefScreen)
+                        || h.online == null || h.online.phase == Online.FAILED);
+                if (!(gh.screen() instanceof PvpDebriefScreen) || !(gg.screen() instanceof PvpDebriefScreen))
+                    throw new RuntimeException("both should see the debrief: " + gh.screen().getClass().getSimpleName() + " / " + gg.screen().getClass().getSimpleName());
+                Company c = gh.campaignMain();
+                if (!c.serialize().equals(gg.campaignMain().serialize()) || !c.rival.serialize().equals(gg.company.serialize()))
+                    throw new RuntimeException("the debrief should leave both devices with the same campaign");
+                java.lang.reflect.Field fd = PvpDebriefScreen.class.getDeclaredField("d");
+                fd.setAccessible(true);
+                Game.Debrief dh = (Game.Debrief) fd.get(gh.screen()), dg = (Game.Debrief) fd.get(gg.screen());
+                if (!dh.serialize().equals(dg.serialize()) || !dh.p2.serialize().equals(dg.p2.serialize())) throw new RuntimeException("the debriefs differ");
+                if (dh.forfeit) forfeits++;
+                else fought++;
+                if (shots && turn == 0) shot(gg, "95_online_campaign_debrief_p2");
+                System.out.println("online campaign turn " + (turn + 1) + ": " + (dh.forfeit ? "forfeit by Player " + (dh.forfeitTeam + 1) : "result " + dh.result)
+                        + ", front " + dh.frontBefore + "->" + dh.frontAfter + ", P1 $" + c.cash + " (" + c.roster.size() + " units), P2 $" + c.rival.cash
+                        + " (" + c.rival.roster.size() + " units)" + (c.over != 0 ? ", planet decided" : ""));
+                click(gh, 1);
+                click(gg, 1);
+                pump(gh, gg, 3, dt);
+                if (c.over != 0) {
+                    planets++;
+                    if (!(gh.screen() instanceof CampaignEndScreen) || !(gg.screen() instanceof CampaignEndScreen)) throw new RuntimeException("both should see the planet decided");
+                    if (has(gg, 2)) throw new RuntimeException("only the host picks the next planet");
+                    if (shots && planets == 1) shot(gg, "96_online_campaign_end_p2");
+                    click(gh, 2);   // next: Player 1 attacks
+                    waitFor(gh, gg, dt, frames, () -> h.screen() instanceof HqScreen && fg.screen() instanceof HqScreen);
+                }
+                if (!(gh.screen() instanceof HqScreen) || !(gg.screen() instanceof HqScreen)) throw new RuntimeException("both HQs should open for the next turn");
+            }
+            if (gp.store.containsKey("company") || gp.store.containsKey("rival")) throw new RuntimeException("the guest should not save the host's campaign");
+            if (relay.lossy) System.out.println("  lossy relay: " + relay.dropped + " messages lost, " + relay.swapped + " overtaken");
+            System.out.println("online campaign OK (" + fought + " battles, " + forfeits + " forfeits, " + planets + " planets decided"
+                    + (url == null ? ", " + relay.messages + " messages" : " over " + url) + ")");
+            gh.toMenu();
+            gg.toMenu();
+        } finally {
+            Online.relayUrl = saved;
+            Online.autoplay = savedAuto;
             pumpSleep = 0;
         }
     }

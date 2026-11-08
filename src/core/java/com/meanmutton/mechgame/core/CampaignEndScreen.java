@@ -9,22 +9,28 @@ public final class CampaignEndScreen extends Screen {
         super(game);
     }
 
+    /** Online campaign, Player 2's device: Player 1 (the host) picks the next planet. */
+    private boolean guest() {
+        return game.online != null && game.online.campaign && !game.online.host;
+    }
+
     private boolean won() {
-        Company c = game.company;
+        Company c = game.campaignMain();
         return c.over == (c.side == Scenario.ATTACKER ? Scenario.OUT_ATTACKER : Scenario.OUT_DEFENDER);
     }
 
     protected void layout() {
         buttons.clear();
         float bw = u * 46;
-        boolean pvp = game.company.pvp;
+        add(new Btn(MENU, "Main Menu").set(u * 3, h - u * 12, u * 28, u * 9));
+        if (guest()) return;
+        boolean pvp = game.campaignMain().pvp;
         Btn a = add(new Btn(ATTACK, pvp ? "Next: Player 1 Attacks" : "Attack a New Planet").set(w / 2f - bw - u * 2, h * 0.66f, bw, u * 11));
         a.sub = pvp ? "Player 2 defends; both keep their companies" : "keep your company, units and money";
         a.color = 0xFF8F4A2E;
         Btn d = add(new Btn(DEFEND, pvp ? "Next: Player 1 Defends" : "Defend a New Planet").set(w / 2f + u * 2, h * 0.66f, bw, u * 11));
         d.sub = pvp ? "Player 2 attacks; both keep their companies" : "keep your company, units and money";
         d.color = 0xFF2E6D8F;
-        add(new Btn(MENU, "Main Menu").set(u * 3, h - u * 12, u * 28, u * 9));
     }
 
     public void update(float dt) {
@@ -45,7 +51,11 @@ public final class CampaignEndScreen extends Screen {
 
     public void render(Gfx g) {
         background(g);
-        Company c = game.company;
+        Company c = game.campaignMain();
+        if (guest()) {
+            float k = (float) Math.sin(t * 3) * 0.5f + 0.5f;
+            g.text("Player 1 is choosing the next planet...", w / 2f, h * 0.72f, u * 3, Col.alpha(Col.ACCENT, 0.5f + 0.5f * k), Gfx.ALIGN_CENTER, true);
+        }
         if (c.pvp && c.rival != null) {
             renderPvp(g, c);
             return;

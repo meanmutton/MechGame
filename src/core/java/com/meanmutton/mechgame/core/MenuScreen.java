@@ -2,10 +2,10 @@ package com.meanmutton.mechgame.core;
 
 /** Title screen. */
 public final class MenuScreen extends Screen {
-    private static final int CONTINUE = 1, NEW = 2, HELP = 3, SOUND = 4, SPEED = 5, QUIT = 6;
+    private static final int CONTINUE = 1, NEW = 2, HELP = 3, SOUND = 4, SPEED = 5, QUIT = 6, ONLINE = 7;
     private Btn sound, speed;
     private float t;
-    private final boolean hasSave, hasBattle, mercSave, pvpSave;
+    private final boolean hasSave, hasBattle, mercSave, pvpSave, onlineSave;
 
     public MenuScreen(Game game) {
         super(game);
@@ -13,12 +13,13 @@ public final class MenuScreen extends Screen {
         hasBattle = game.hasBattle();
         mercSave = hasSave && game.saveIsMerc();
         pvpSave = hasSave && game.saveIsPvp();
+        onlineSave = pvpSave && game.saveIsOnlineCampaign();
     }
 
     protected void layout() {
         buttons.clear();
         float bw = u * 50, bh = u * 10, x = w * 0.5f - bw / 2, y = h * 0.4f;
-        Btn c = add(new Btn(CONTINUE, hasBattle ? "Resume Battle" : (mercSave ? "Continue Mercenary" : (pvpSave ? "Continue Two-Player Campaign" : "Continue Campaign"))).set(x, y, bw, bh));
+        Btn c = add(new Btn(CONTINUE, hasBattle ? "Resume Battle" : (mercSave ? "Continue Mercenary" : (onlineSave ? "Continue Online Campaign" : (pvpSave ? "Continue Two-Player Campaign" : "Continue Campaign")))).set(x, y, bw, bh));
         c.enabled = hasSave || hasBattle;
         c.color = 0xFF2E6D8F;
         add(new Btn(NEW, "New Game").set(x, y + bh * 1.2f, bw, bh)).color = 0xFF2E7D4F;
@@ -27,6 +28,12 @@ public final class MenuScreen extends Screen {
         speed = add(new Btn(SPEED, "").set(x + bw * 0.51f, y + bh * 3.6f, bw * 0.49f, bh));
         sound.textSize = speed.textSize = u * 3f;
         if (game.platform.canExit()) add(new Btn(QUIT, "Quit").set(w - u * 26, h - u * 12, u * 23, u * 9));
+        if (Online.available()) {
+            // host or join a game with a friend (a friend's campaign is joined here too)
+            Btn o = add(new Btn(ONLINE, "Play Online").set(u * 3, h - u * 12, u * 30, u * 9));
+            o.color = 0xFF2E7D6F;
+            o.sub = "host or join a friend";
+        }
     }
 
     public void update(float dt) {
@@ -43,6 +50,7 @@ public final class MenuScreen extends Screen {
                 else game.continueCampaign();
                 break;
             case NEW: game.setScreen(new NewGameScreen(game)); break;
+            case ONLINE: game.setScreen(new OnlineScreen(game, Game.QUICK_BUDGETS[2], true)); break;
             case HELP: game.setScreen(new HelpScreen(game)); break;
             case SOUND:
                 game.settings.sound = !game.settings.sound;
